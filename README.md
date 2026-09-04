@@ -1,143 +1,829 @@
-# BMarket V21
+# BMarket
 
-Marketplace barang dan jasa khusus komunitas BINUS. V21 berfokus pada core stability dan transaction integrity: upload gambar dipulihkan, checkout memakai reservasi stok 15 menit, histori transaksi memakai snapshot listing, dan pembatalan setelah seller mengonfirmasi tidak lagi diperbolehkan secara langsung.
+Marketplace barang dan jasa khusus komunitas BINUS.
 
-## Struktur
+BMarket dirancang sebagai platform jual-beli antar Binusian dengan identitas kampus, komunikasi langsung antara buyer dan seller, sistem transaksi tercatat, escrow virtual, serta mekanisme serah-terima yang membantu transaksi menjadi lebih aman dan terstruktur.
+
+---
+
+## Tentang BMarket
+
+BMarket memungkinkan mahasiswa BINUS untuk:
+
+- menjual barang preloved;
+- menawarkan jasa;
+- mencari kebutuhan kuliah;
+- berkomunikasi langsung dengan seller;
+- melakukan transaksi melalui saldo virtual dan escrow;
+- melakukan meetup dengan kode serah-terima;
+- memberikan rating dan review setelah transaksi selesai;
+- menyimpan listing favorit;
+- melaporkan listing atau pengguna yang bermasalah;
+- membuka dispute jika terjadi kendala transaksi.
+
+BMarket menggunakan sistem post-moderation. Listing dapat langsung tampil di marketplace, tetapi pengguna dapat melaporkan konten yang mencurigakan untuk ditinjau oleh admin.
+
+---
+
+## Fitur Utama
+
+### Authentication & Account
+
+- Registrasi menggunakan email BINUS.
+- Verifikasi email menggunakan OTP 6 digit.
+- OTP memiliki batas waktu, resend cooldown, dan batas percobaan.
+- Login menggunakan JWT.
+- Forgot password dan reset password menggunakan OTP.
+- Session invalidation menggunakan `tokenVersion`.
+- Student dan Admin role.
+- Profile mahasiswa dengan nama, NIM, bio, avatar, saldo, dan statistik transaksi.
+
+### Marketplace
+
+- Listing barang dan jasa.
+- Kategori:
+  - Elektronik
+  - Buku
+  - Fashion
+  - Makanan
+  - Jasa
+  - Olahraga
+  - Lainnya
+- Upload 1–4 foto listing.
+- Cover image dan pengaturan urutan foto.
+- Kondisi barang dan manajemen stok.
+- Search listing.
+- Filter berdasarkan kategori, tipe, kondisi, dan metode penyerahan.
+- Sorting berdasarkan harga dan listing terbaru.
+- Pagination / load more.
+- Public seller profile.
+- Wishlist / produk favorit.
+- Recently viewed listing.
+
+### Seller Storefront
+
+Seller memiliki halaman khusus untuk mengelola seluruh listing.
+
+Informasi yang tersedia antara lain:
+
+- total listing;
+- listing aktif;
+- listing terjual;
+- listing yang dimoderasi;
+- transaksi selesai;
+- pendapatan seller;
+- search listing;
+- filter berdasarkan status;
+- edit dan nonaktifkan listing.
+
+### Transaction & Escrow
+
+BMarket menggunakan saldo virtual untuk mensimulasikan transaksi marketplace.
+
+Saat buyer melakukan checkout:
+
+1. Stok direservasi sementara.
+2. Buyer melakukan pembayaran menggunakan saldo BMarket.
+3. Dana dipindahkan ke escrow.
+4. Seller belum menerima dana selama transaksi belum selesai.
+5. Dana baru dilepas ke seller setelah proses serah-terima selesai.
+
+Reservasi checkout memiliki batas waktu. Jika buyer tidak melakukan pembayaran sampai batas waktu berakhir, transaksi dibatalkan dan stok dikembalikan.
+
+Transaction juga menyimpan snapshot informasi listing sehingga riwayat transaksi tidak berubah walaupun listing diedit setelah pembelian.
+
+---
+
+## Meetup Flow
+
+Untuk transaksi meetup, lokasi dan waktu tidak disimpan sebagai form terpisah.
+
+Buyer dan seller melakukan koordinasi melalui chat.
+
+Alurnya:
 
 ```text
-backend/        NestJS 12, Prisma, PostgreSQL, Socket.IO
-frontend/       Expo SDK 57, React Native, Expo Router, TypeScript
-legacy/flutter/ aplikasi Flutter lama sebagai referensi migrasi
-docs/           laporan teknis upgrade
+Seller membuat listing
+        ↓
+Buyer memilih listing
+        ↓
+Checkout
+        ↓
+Pembayaran
+        ↓
+Dana masuk escrow
+        ↓
+Buyer dan seller berdiskusi melalui chat
+        ↓
+Menentukan waktu dan lokasi meetup
+        ↓
+Buyer bertemu seller
+        ↓
+Buyer menerima dan memeriksa barang
+        ↓
+Buyer membuat kode serah-terima 6 digit
+        ↓
+Buyer memberikan kode kepada seller
+        ↓
+Seller memasukkan kode
+        ↓
+Kode diverifikasi
+        ↓
+Transaction COMPLETED
+        ↓
+Escrow dilepas
+        ↓
+Saldo seller bertambah
+        ↓
+Buyer dapat memberikan review
 ```
 
-## Menjalankan backend
+Kode serah-terima memiliki waktu berlaku terbatas dan dapat dibuat ulang jika telah kedaluwarsa.
 
-Prasyarat: PostgreSQL dan Node.js `24.15.0` (tersimpan di `.nvmrc`; jalur kompatibel lain: `^22.22.3` atau `>=26`).
+---
+
+## Instant Courier
+
+BMarket juga menyediakan flow kurir instan sebagai simulasi.
+
+Seller dapat memilih metode penyerahan:
+
+- Campus Meetup
+- Instant Courier
+- Keduanya
+
+Untuk Instant Courier, BMarket menyimpan informasi seperti:
+
+- provider kurir;
+- alamat tujuan;
+- nomor penerima;
+- ongkir;
+- tracking number.
+
+Integrasi kurir saat ini masih berupa simulasi dan belum terhubung ke API GoSend atau GrabExpress secara nyata.
+
+---
+
+## Chat
+
+BMarket memiliki real-time chat menggunakan Socket.IO.
+
+Chat digunakan untuk:
+
+- menanyakan kondisi barang;
+- berdiskusi sebelum membeli;
+- menentukan lokasi meetup;
+- menentukan waktu meetup;
+- berkomunikasi selama transaksi.
+
+Pada desktop, chat menggunakan layout dua kolom:
+
+```text
+Daftar percakapan | Percakapan aktif
+```
+
+Conversation tetap berada dalam shell BMarket tanpa berpindah ke layout halaman terpisah.
+
+Chat juga memiliki:
+
+- timestamp;
+- read status;
+- transaction context;
+- blocked-user protection.
+
+---
+
+## Rating & Review
+
+Setelah transaksi selesai, buyer dapat memberikan review kepada seller.
+
+Review terdiri dari:
+
+- rating 1–5;
+- komentar opsional.
+
+Satu transaksi hanya dapat menerima satu review.
+
+Public seller profile menampilkan:
+
+- rata-rata rating;
+- jumlah review;
+- transaksi selesai;
+- listing aktif;
+- bio seller;
+- review dari buyer.
+
+---
+
+## Wishlist & Discovery
+
+Pengguna dapat menyimpan listing ke wishlist.
+
+Wishlist disimpan di database, sehingga tidak hilang setelah browser atau aplikasi ditutup.
+
+BMarket juga mencatat recently viewed listing untuk membantu pengguna kembali ke produk yang sebelumnya dilihat.
+
+---
+
+## Dispute & Safety
+
+Jika terjadi masalah pada transaksi yang sudah dibayar, buyer atau seller dapat membuka dispute.
+
+Contoh alasan dispute:
+
+- barang tidak sesuai deskripsi;
+- barang rusak;
+- barang tidak diterima;
+- seller tidak datang saat meetup;
+- buyer tidak datang saat meetup;
+- alasan lainnya.
+
+Dispute dapat menyertakan:
+
+- deskripsi;
+- bukti gambar;
+- status pemeriksaan;
+- keputusan admin.
+
+Saat dispute aktif, dana escrow tetap ditahan sampai admin memberikan keputusan.
+
+Admin dapat:
+
+- refund dana ke buyer;
+- melepas dana ke seller;
+- menolak dispute.
+
+---
+
+## Report & Moderation
+
+Pengguna dapat melaporkan:
+
+- listing;
+- pengguna.
+
+Admin memiliki moderation dashboard untuk:
+
+- melihat laporan;
+- meninjau listing;
+- menyembunyikan listing;
+- menghapus listing;
+- mempertahankan listing;
+- mengaktifkan atau menonaktifkan akun pengguna;
+- menangani dispute.
+
+---
+
+## Block User
+
+Pengguna dapat memblokir pengguna lain.
+
+Jika salah satu pihak memblokir pihak lainnya:
+
+- chat baru tidak dapat dilakukan;
+- komunikasi antara kedua akun dibatasi.
+
+Block dapat dibatalkan kembali melalui sistem.
+
+---
+
+## Notifications
+
+BMarket memiliki notification center dengan unread badge.
+
+Notification digunakan untuk event seperti:
+
+- perubahan transaksi;
+- pesan;
+- review;
+- dispute;
+- system notification.
+
+Pengguna dapat:
+
+- membaca notification;
+- mark as read;
+- mark all as read.
+
+---
+
+## Wallet & Ledger
+
+Setiap user memiliki:
+
+- `balance`
+- `escrow`
+
+BMarket juga menyimpan wallet ledger untuk mencatat perubahan saldo secara auditable.
+
+Jenis ledger antara lain:
+
+```text
+TOPUP
+PURCHASE_HOLD
+REFUND
+ESCROW_RELEASE
+SELLER_PAYOUT
+```
+
+Setiap ledger menyimpan nilai perubahan saldo dan saldo setelah transaksi.
+
+---
+
+## Tech Stack
+
+### Backend
+
+- NestJS
+- TypeScript
+- Prisma ORM
+- PostgreSQL
+- Socket.IO
+- JWT Authentication
+- Passport
+- bcrypt
+- Nodemailer
+- Multer
+- Helmet
+- Express Rate Limit
+- Vitest
+
+### Frontend
+
+- Expo
+- React Native
+- TypeScript
+- Expo Router
+- React Query
+- Zustand
+- Axios
+- Socket.IO Client
+- Expo Secure Store
+- Expo Image Picker
+- React Native Reanimated
+
+---
+
+## Struktur Project
+
+```text
+BMarket/
+│
+├── .github/
+│   └── workflows/
+│
+├── backend/
+│   ├── prisma/
+│   │   ├── migrations/
+│   │   ├── schema.prisma
+│   │   └── seed.ts
+│   │
+│   ├── src/
+│   │   ├── activity/
+│   │   ├── admin/
+│   │   ├── auth/
+│   │   ├── chat/
+│   │   ├── complaints/
+│   │   ├── disputes/
+│   │   ├── listings/
+│   │   ├── notifications/
+│   │   ├── reviews/
+│   │   ├── safety/
+│   │   ├── transactions/
+│   │   ├── uploads/
+│   │   └── users/
+│   │
+│   ├── Dockerfile
+│   ├── package.json
+│   └── .env.example
+│
+├── frontend/
+│   ├── src/
+│   │   ├── app/
+│   │   ├── components/
+│   │   ├── constants/
+│   │   ├── lib/
+│   │   ├── store/
+│   │   └── types/
+│   │
+│   ├── assets/
+│   ├── package.json
+│   └── .env.example
+│
+├── .nvmrc
+└── README.md
+```
+
+---
+
+## Prerequisites
+
+Sebelum menjalankan project, pastikan sudah terinstall:
+
+- Node.js 24.15.0 atau runtime kompatibel;
+- npm;
+- PostgreSQL;
+- Git.
+
+Database default yang digunakan:
+
+```text
+PostgreSQL
+Database: bmarket
+Port: 5432
+```
+
+---
+
+# Menjalankan Project
+
+## 1. Clone Repository
+
+```bash
+git clone https://github.com/Geraldicky/BMarket.git
+cd BMarket
+```
+
+---
+
+## 2. Backend Setup
+
+Masuk ke folder backend:
 
 ```bash
 cd backend
+```
+
+Install dependency:
+
+```bash
 npm install
+```
+
+Buat `.env` dari template.
+
+PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+macOS / Linux:
+
+```bash
 cp .env.example .env
+```
+
+Contoh konfigurasi:
+
+```env
+PORT=3000
+NODE_ENV=development
+
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/bmarket?schema=public"
+
+JWT_SECRET="your_random_secret"
+JWT_EXPIRES_IN="7d"
+
+OTP_HASH_SECRET="your_random_otp_secret"
+
+CORS_ORIGIN="http://localhost:8081"
+
+UPLOAD_DIR="uploads"
+
+CHECKOUT_RESERVATION_MINUTES=15
+```
+
+Generate Prisma Client:
+
+```bash
 npm run db:generate
-npm run db:migrate
-npm run db:seed       # opsional
+```
+
+Apply migration:
+
+```bash
+npm run db:deploy
+```
+
+Optional development seed:
+
+```bash
+npm run db:seed
+```
+
+Jalankan backend:
+
+```bash
 npm run dev
 ```
 
-Isi `DATABASE_URL` dengan koneksi PostgreSQL dan gunakan `JWT_SECRET` acak minimal 32 karakter. API tersedia di `http://localhost:3000/api`, sedangkan health check ada di `http://localhost:3000/api/health`.
+Backend akan tersedia di:
 
-Registrasi menggunakan verifikasi OTP email BINUS. Untuk development tanpa SMTP, kode muncul di terminal backend. Untuk mengirim email sungguhan, isi konfigurasi `SMTP_*` dan `OTP_HASH_SECRET` sesuai `backend/.env.example`; Gmail memerlukan App Password, bukan password akun biasa.
+```text
+http://localhost:3000/api
+```
 
-## Menjalankan React Native
+---
+
+## 3. Frontend Setup
+
+Buka terminal baru:
 
 ```bash
 cd frontend
 npm install
+```
+
+Buat `.env`:
+
+PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+macOS / Linux:
+
+```bash
 cp .env.example .env
+```
+
+Untuk web atau emulator di komputer yang sama:
+
+```env
+EXPO_PUBLIC_API_URL=http://localhost:3000/api
+```
+
+Untuk perangkat fisik, gunakan IP LAN komputer:
+
+```env
+EXPO_PUBLIC_API_URL=http://192.168.1.10:3000/api
+```
+
+Pastikan komputer dan perangkat berada di jaringan yang sama.
+
+Jalankan Expo:
+
+```bash
 npm start
 ```
 
-Untuk perangkat fisik, ganti `EXPO_PUBLIC_API_URL` dengan IP LAN komputer, misalnya `http://192.168.1.10:3000/api`. Komputer dan perangkat harus berada di jaringan yang sama.
-
-Perintah lain:
+Atau:
 
 ```bash
+npm run web
 npm run android
 npm run ios
-npm run web
-npm run typecheck
 ```
 
-## Alur transaksi V21
-
-1. Seller menentukan apakah listing menerima **Meetup Kampus**, **Kurir Instan simulasi**, atau keduanya.
-2. Buyer mengatur jumlah/catatan, memilih metode penyerahan, lalu melengkapi detail checkout; stok langsung direservasi selama 15 menit (dapat diubah melalui `CHECKOUT_RESERVATION_MINUTES`).
-3. Meetup meminta kampus, titik temu, dan jadwal. Kurir meminta GoSend/GrabExpress simulasi, alamat, serta nomor penerima.
-4. Buyer membayar dari saldo BMarket; subtotal dan ongkir masuk escrow. Komisi 5% hanya dihitung dari subtotal barang/jasa, bukan ongkir.
-5. Seller mengonfirmasi meetup atau menyiapkan pengiriman. Kurir memperoleh nomor tracking simulasi.
-6. Untuk meetup, buyer membuat kode serah-terima enam digit yang berlaku 15 menit setelah barang/jasa diterima. Seller memasukkan kode tersebut untuk menyelesaikan transaksi.
-7. Untuk kurir, buyer menyelesaikan transaksi setelah kiriman benar-benar diterima.
-8. Setelah transaksi selesai, saldo virtual seller menerima subtotal setelah biaya layanan. Ongkir dianggap dibayarkan ke penyedia kurir simulasi.
-9. Pembatalan wajib memiliki alasan dan hanya dapat dilakukan saat `PENDING` atau `PAID`. Setelah seller mengubah transaksi menjadi `CONFIRMED`, direct-cancel ditutup agar buyer tidak dapat menerima barang sekaligus refund.
-
-Tidak tersedia COD tunai. Meetup tetap menggunakan pembayaran virtual BMarket sehingga escrow, riwayat transaksi, dan biaya layanan tidak dapat dilewati.
-
-Alur dasar yang tetap dipertahankan:
-
-1. Buyer memeriksa ringkasan checkout sebelum membuat pesanan; stok direservasi sementara dan otomatis kembali jika pembayaran melewati batas waktu.
-2. Satu buyer tidak dapat membuat beberapa transaksi aktif untuk listing yang sama.
-3. Setiap milestone menyimpan waktu pembayaran, konfirmasi, selesai, atau batal untuk ditampilkan sebagai timeline. V21 juga menyimpan snapshot judul, cover, tipe, dan kondisi listing agar riwayat pembelian tidak berubah saat listing diedit.
-
-Semua perubahan saldo, escrow, status, dan stok dijalankan dalam transaksi database `Serializable` untuk mencegah pembayaran ganda dan overselling. Pembatalan tidak dapat mengaktifkan kembali listing yang sedang disembunyikan atau dihapus admin.
-
-## Alur registrasi dan verifikasi
-
-1. Pengguna mendaftar menggunakan domain email BINUS yang diizinkan.
-2. Akun dibuat dalam keadaan belum terverifikasi dan belum menerima JWT.
-3. Kode OTP enam digit dikirim ke email, berlaku 10 menit, dan dapat diminta ulang setelah 60 detik.
-4. Setelah kode benar, OTP dihapus, akun ditandai terverifikasi, lalu aplikasi menyimpan JWT dan membuka beranda.
-5. Login dengan password benar tetap ditolak sampai email selesai diverifikasi.
-
-## Alur lupa password
-
-1. Dari halaman masuk, pengguna memilih **Lupa password?** dan memasukkan email BINUS.
-2. API selalu memberikan respons generik agar tidak membocorkan email mana yang terdaftar.
-3. Pengguna memasukkan OTP enam digit, lalu memperoleh izin reset terbatas yang hanya disimpan sementara di memori aplikasi.
-4. Password baru harus dikonfirmasi dan tidak boleh sama dengan password lama.
-5. Reset berhasil menghapus token reset dan menaikkan `tokenVersion`, sehingga JWT lama ditolak pada request dan koneksi baru. Pengguna kemudian masuk kembali.
-
-## Alur moderasi listing
-
-1. Listing baru atau perubahan listing langsung berstatus `ACTIVE` dan tampil di marketplace.
-2. Pengguna lain dapat melaporkan listing dengan alasan terstruktur serta detail tambahan.
-3. Satu pengguna hanya dapat membuat satu laporan untuk target yang sama dan tidak dapat melaporkan listing sendiri.
-4. Laporan masuk ke antrean admin. Admin dapat mempertahankan, menyembunyikan, atau menghapus listing.
-5. Saat listing disembunyikan atau dihapus, seluruh laporan terbuka untuk listing tersebut otomatis diselesaikan.
-
-Setelah mengambil versi yang menyertakan perubahan schema, jalankan `npm run db:migrate` di folder `backend` sebelum menyalakan server.
-
-## Alur listing dan foto
-
-1. Seller wajib menambahkan 1–4 foto JPG, PNG, atau WebP dengan ukuran maksimal 5 MB per foto.
-2. Foto pertama menjadi sampul. Di form edit, foto lama dan baru dapat dihapus, digeser, atau dijadikan sampul tanpa menghilangkan foto lain.
-3. Barang wajib memiliki kondisi dan stok; jasa tidak menyimpan atribut stok/kondisi barang.
-4. Galeri detail menampilkan seluruh foto dengan thumbnail, tombol navigasi, indikator urutan, cache lokal, dan fallback jika gambar gagal dimuat.
-5. Ketika total stok diedit, unit yang sudah masuk transaksi tetap direservasi dan tidak kembali menjadi stok tersedia.
-6. Seller wajib mengaktifkan minimal satu metode penyerahan pada form listing.
-
-## Upgrade dari V20 ke V21
-
-Setelah menimpa folder project lama dengan isi V21, jalankan:
+Untuk membersihkan cache:
 
 ```bash
-cd backend
-npm install
-npm run db:generate
-npm run db:migrate
-npm run db:seed       # opsional untuk database development baru
-npm run dev
-```
-
-Kemudian buka terminal kedua:
-
-```bash
-cd frontend
-npm install
 npm start -- --clear
 ```
 
-Migration V21 menambahkan `reservationExpiresAt` dan snapshot listing ke transaksi. Transaksi `PENDING` lama diberi batas 15 menit dari waktu pembuatannya; jika sudah lewat, service V21 akan mengubahnya menjadi `CANCELLED` dan mengembalikan stok.
+---
 
-## Akun seed
+# Email OTP
 
-Seed lama menyediakan akun admin dan student untuk development. Jangan gunakan password seed pada deployment publik; ubah atau hapus seluruh akun contoh setelah setup.
+Registrasi membutuhkan verifikasi email BINUS.
 
-## Verifikasi
+Domain yang diperbolehkan dikontrol melalui:
 
-```bash
-cd backend && npm test && npm run build
-cd frontend && npm run typecheck && npx expo-doctor
+```env
+SSO_ALLOWED_DOMAINS="@binus.ac.id,@student.binus.ac.id,@binus.edu"
 ```
 
-Detail arsitektur, keamanan, migration, dan batas pengujian ada di [docs/UPGRADE_REPORT.md](docs/UPGRADE_REPORT.md).
+Untuk development tanpa SMTP:
+
+```env
+OTP_DEV_LOG=true
+```
+
+OTP akan ditampilkan pada terminal backend.
+
+Untuk menggunakan email sungguhan, isi konfigurasi SMTP:
+
+```env
+SMTP_HOST="smtp.gmail.com"
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=""
+SMTP_PASS=""
+SMTP_FROM="BMarket <your-email@gmail.com>"
+```
+
+Jika menggunakan Gmail, gunakan App Password.
+
+---
+
+# Testing
+
+## Backend Type Check
+
+```bash
+cd backend
+npm run typecheck
+```
+
+## Core Flow Tests
+
+```bash
+npm run test:flows
+```
+
+## Full Test Suite
+
+```bash
+npm test
+```
+
+## Production Build Check
+
+```bash
+npm run build
+```
+
+Backend memiliki automated test untuk area seperti:
+
+- authentication;
+- listing;
+- transaction policy;
+- checkout;
+- stock reservation;
+- handover code;
+- review;
+- wishlist;
+- recently viewed;
+- dispute;
+- notification;
+- user blocking;
+- chat;
+- wallet ledger.
+
+---
+
+## Frontend Type Check
+
+```bash
+cd frontend
+npm run typecheck
+```
+
+Lint:
+
+```bash
+npm run lint
+```
+
+---
+
+# Useful Backend Commands
+
+```bash
+npm run dev
+npm run build
+npm run typecheck
+npm test
+npm run test:flows
+
+npm run db:validate
+npm run db:generate
+npm run db:deploy
+npm run db:studio
+npm run db:seed
+```
+
+---
+
+# Health Check
+
+Backend menyediakan health endpoint:
+
+```text
+GET /api/health
+```
+
+dan readiness check untuk memastikan service siap menerima request.
+
+---
+
+# Security
+
+Beberapa proteksi yang digunakan:
+
+- JWT authentication;
+- hashed password;
+- hashed OTP;
+- OTP expiration;
+- OTP attempt limit;
+- email domain restriction;
+- request validation;
+- Helmet;
+- CORS allowlist;
+- rate limiting;
+- account activation status;
+- token invalidation;
+- serialized transaction flow;
+- escrow;
+- duplicate transaction protection;
+- stock reservation;
+- user blocking;
+- dispute workflow.
+
+Jangan pernah commit file `.env` ke repository.
+
+Gunakan `.env.example` sebagai template konfigurasi.
+
+---
+
+# Scope Project
+
+BMarket saat ini menggunakan beberapa fitur simulasi untuk kebutuhan development dan demonstrasi.
+
+Yang masih bersifat simulasi:
+
+- top up saldo;
+- pembayaran;
+- escrow virtual;
+- Instant Courier;
+- tracking number;
+- ongkir.
+
+BMarket belum terhubung dengan:
+
+- payment gateway seperti Midtrans atau Xendit;
+- QRIS production;
+- GoSend API;
+- GrabExpress API.
+
+Tidak tersedia COD tunai pada flow utama BMarket.
+
+---
+
+# Main User Flow
+
+```text
+Register
+   ↓
+Verify Email OTP
+   ↓
+Login
+   ↓
+Browse Marketplace
+   ↓
+Open Listing
+   ↓
+Checkout
+   ↓
+Pay with BMarket Balance
+   ↓
+Escrow
+   ↓
+Chat Seller
+   ↓
+Meetup
+   ↓
+Buyer Receives Item
+   ↓
+Generate Handover Code
+   ↓
+Seller Verifies Code
+   ↓
+Transaction Completed
+   ↓
+Seller Receives Balance
+   ↓
+Buyer Reviews Seller
+```
+
+---
+
+# Admin Flow
+
+```text
+Admin Login
+   ↓
+Dashboard
+   ├── User Management
+   ├── Listing Moderation
+   ├── Reports
+   ├── Disputes
+   └── Commission Settings
+```
+
+---
+
+## Project Purpose
+
+BMarket dikembangkan sebagai marketplace komunitas kampus yang memprioritaskan:
+
+- trust antar pengguna;
+- komunikasi langsung;
+- transaksi yang tercatat;
+- pengalaman jual-beli yang sederhana;
+- mekanisme penyelesaian transaksi yang lebih aman;
+- moderasi berbasis komunitas.
+
+Project ini ditujukan untuk kebutuhan akademik, pengembangan produk, dan demonstrasi sistem marketplace end-to-end.
