@@ -1,0 +1,11 @@
+node_modules/
+dist/
+
+# Environment - JANGAN commit .env (berisi password)
+# .env.example BOLEH di-commit (hanya template tanpa nilai asli)
+.env
+.env.local
+.env.*.local
+
+/uploads/
+*.log

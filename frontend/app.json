@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "BMarket",
+    "slug": "bmarket",
+    "version": "2.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/bmarket-icon.png",
+    "scheme": "bmarket",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "icon": "./assets/images/bmarket-icon.png",
+      "bundleIdentifier": "id.ac.binus.bmarket",
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0057B8",
+        "foregroundImage": "./assets/images/bmarket-icon.png"
+      },
+      "predictiveBackGestureEnabled": true,
+      "package": "id.ac.binus.bmarket",
+      "blockedPermissions": ["android.permission.RECORD_AUDIO"]
+    },
+    "web": {
+      "output": "single",
+      "favicon": "./assets/images/bmarket-icon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      ["expo-image-picker", { "photosPermission": "BMarket memerlukan akses foto untuk mengunggah gambar listing." }],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0057B8",
+          "image": "./assets/images/bmarket-icon.png",
+          "imageWidth": 140
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
