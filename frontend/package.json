@@ -1,7 +1,7 @@
 {
   "name": "bmarket-mobile",
   "main": "expo-router/entry",
-  "version": "2.0.0",
+  "version": "2.6.0",
   "dependencies": {
     "@expo/ui": "~57.0.15",
     "@expo/vector-icons": "^15.1.1",
@@ -48,5 +48,8 @@
     "web": "expo start --web",
     "lint": "expo lint"
   },
-  "private": true
+  "private": true,
+  "engines": {
+    "node": "^22.22.3 || ^24.15.0 || >=26.0.0"
+  }
 }

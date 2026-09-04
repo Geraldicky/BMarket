@@ -1,8 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
-import { Alert, Image, StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, date, Empty, ErrorState, Loader, money, Screen, Title } from '@/components/ui';
+import { Button, Card, date, Empty, ErrorState, FeedbackDialog, Loader, money, Screen, Title } from '@/components/ui';
 import { endpoints, errorMessage } from '@/lib/api';
 import { colors, radius } from '@/constants/theme';
 import type { Complaint } from '@/types';
@@ -10,6 +10,8 @@ import type { Complaint } from '@/types';
 export default function ModerationScreen() {
   const client = useQueryClient();
   const [workingId, setWorkingId] = useState<string | null>(null);
+  const [pending, setPending] = useState<{ report: Complaint; action: 'KEEP_ACTIVE' | 'HIDE_LISTING' | 'REMOVE_LISTING' } | null>(null);
+  const [feedback, setFeedback] = useState<{ tone: 'success' | 'danger'; title: string; message: string } | null>(null);
   const query = useQuery({
     queryKey: ['reported-listings'],
     queryFn: () => endpoints.complaints({ targetType: 'LISTING', unresolved: true }),
@@ -35,27 +37,19 @@ export default function ModerationScreen() {
         client.invalidateQueries({ queryKey: ['admin-stats'] }),
         client.invalidateQueries({ queryKey: ['listings'] }),
       ]);
+      if (status === 'RESOLVED' || status === 'DISMISSED') {
+        setFeedback({ tone: 'success', title: 'Moderasi tersimpan', message: listingAction === 'KEEP_ACTIVE' ? 'Listing dipertahankan dan laporan ditutup.' : listingAction === 'HIDE_LISTING' ? 'Listing sudah disembunyikan dan laporan ditutup.' : listingAction === 'REMOVE_LISTING' ? 'Listing sudah dihapus dari marketplace dan laporan ditutup.' : 'Status laporan berhasil diperbarui.' });
+      }
+      setPending(null);
     } catch (error) {
-      Alert.alert('Aksi gagal', errorMessage(error));
+      setPending(null);
+      setFeedback({ tone: 'danger', title: 'Aksi moderasi belum berhasil', message: errorMessage(error) });
     } finally {
       setWorkingId(null);
     }
   };
 
-  const confirm = (
-    report: Complaint,
-    action: 'KEEP_ACTIVE' | 'HIDE_LISTING' | 'REMOVE_LISTING',
-  ) => {
-    const content = {
-      KEEP_ACTIVE: { title: 'Pertahankan listing?', message: 'Laporan ini akan ditolak dan listing tetap dapat dilihat pengguna.', button: 'Pertahankan', style: 'default' as const },
-      HIDE_LISTING: { title: 'Sembunyikan listing?', message: 'Listing tidak lagi muncul di etalase. Semua laporan terbuka untuk listing ini akan diselesaikan.', button: 'Sembunyikan', style: 'destructive' as const },
-      REMOVE_LISTING: { title: 'Hapus listing?', message: 'Listing ditandai melanggar aturan dan tidak dapat dikelola lagi oleh seller.', button: 'Hapus listing', style: 'destructive' as const },
-    }[action];
-    Alert.alert(content.title, content.message, [
-      { text: 'Batal', style: 'cancel' },
-      { text: content.button, style: content.style, onPress: () => update(report, action === 'KEEP_ACTIVE' ? 'DISMISSED' : 'RESOLVED', action) },
-    ]);
-  };
+  const confirm = (report: Complaint, action: 'KEEP_ACTIVE' | 'HIDE_LISTING' | 'REMOVE_LISTING') => setPending({ report, action });
 
   return (
     <Screen>
@@ -118,6 +112,8 @@ export default function ModerationScreen() {
           })}
         </View>
       )}
+      <FeedbackDialog visible={Boolean(pending)} tone={pending?.action === 'KEEP_ACTIVE' ? 'warning' : 'danger'} title={pending?.action === 'KEEP_ACTIVE' ? 'Pertahankan listing?' : pending?.action === 'HIDE_LISTING' ? 'Sembunyikan listing?' : 'Hapus listing?'} message={pending?.action === 'KEEP_ACTIVE' ? 'Laporan akan ditolak dan listing tetap dapat dilihat pengguna.' : pending?.action === 'HIDE_LISTING' ? 'Listing tidak lagi muncul di etalase. Laporan terbuka untuk listing ini akan diselesaikan.' : 'Listing ditandai melanggar aturan dan tidak dapat dikelola lagi oleh seller.'} primaryLabel={pending?.action === 'KEEP_ACTIVE' ? 'Pertahankan' : pending?.action === 'HIDE_LISTING' ? 'Sembunyikan' : 'Hapus listing'} secondaryLabel="Batal" loading={Boolean(pending && workingId === pending.report.id)} onClose={() => setPending(null)} onSecondary={() => setPending(null)} onPrimary={() => pending && update(pending.report, pending.action === 'KEEP_ACTIVE' ? 'DISMISSED' : 'RESOLVED', pending.action)} />
+      <FeedbackDialog visible={Boolean(feedback)} tone={feedback?.tone || 'success'} title={feedback?.title || ''} message={feedback?.message || ''} onClose={() => setFeedback(null)} />
     </Screen>
   );
 }
@@ -125,7 +121,7 @@ export default function ModerationScreen() {
 const styles = StyleSheet.create({
   stats: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
   stat: { minWidth: 180, flex: 1, minHeight: 108, justifyContent: 'space-between', padding: 18 },
-  statLabel: { fontFamily: 'PoppinsBold', fontSize: 10, letterSpacing: .65, color: colors.muted },
+  statLabel: { fontFamily: 'PoppinsBold', fontSize: 12, letterSpacing: .65, color: colors.muted },
   statValue: { fontFamily: 'PoppinsBold', fontSize: 29, color: colors.text },
   list: { gap: 14 },
   reportCard: { gap: 18 },
@@ -134,24 +130,24 @@ const styles = StyleSheet.create({
   reviewBadge: { backgroundColor: colors.warningSoft },
   statusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.danger },
   reviewDot: { backgroundColor: colors.warning },
-  statusText: { fontFamily: 'PoppinsBold', fontSize: 10, color: colors.textSoft },
-  date: { fontFamily: 'PoppinsRegular', fontSize: 11, color: colors.muted },
+  statusText: { fontFamily: 'PoppinsBold', fontSize: 12, color: colors.textSoft },
+  date: { fontFamily: 'PoppinsRegular', fontSize: 12, color: colors.muted },
   listingRow: { flexDirection: 'row', alignItems: 'center', gap: 15 },
   media: { width: 94, height: 78, borderRadius: 11, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   image: { width: '100%', height: '100%', resizeMode: 'cover' },
   listingBody: { flex: 1, gap: 2 },
-  listingLabel: { fontFamily: 'PoppinsBold', fontSize: 10, letterSpacing: .55, color: colors.muted },
+  listingLabel: { fontFamily: 'PoppinsBold', fontSize: 12, letterSpacing: .55, color: colors.muted },
   listingTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 16, color: colors.text },
-  listingMeta: { fontFamily: 'PoppinsRegular', fontSize: 11, lineHeight: 18, color: colors.textSoft },
+  listingMeta: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 18, color: colors.textSoft },
   listingStatus: { paddingHorizontal: 11, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: colors.successSoft },
   listingStatusDanger: { backgroundColor: colors.dangerSoft },
-  listingStatusText: { fontFamily: 'PoppinsBold', fontSize: 10, color: colors.textSoft },
+  listingStatusText: { fontFamily: 'PoppinsBold', fontSize: 12, color: colors.textSoft },
   reasonBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 13, padding: 15, borderRadius: radius.sm, backgroundColor: '#FFF8F8', borderWidth: 1, borderColor: '#F4DADA' },
   reasonIcon: { width: 40, height: 40, borderRadius: 10, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   reasonBody: { flex: 1, gap: 4 },
   reason: { fontFamily: 'PoppinsSemiBold', fontSize: 14, color: colors.text },
   description: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 19, color: colors.textSoft },
-  reporter: { fontFamily: 'PoppinsRegular', fontSize: 10, color: colors.muted, marginTop: 3 },
+  reporter: { fontFamily: 'PoppinsRegular', fontSize: 12, color: colors.muted, marginTop: 3 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   action: { minWidth: 150, flexGrow: 1 },
 });

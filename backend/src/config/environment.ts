@@ -6,10 +6,11 @@ export function validateEnvironment(config: Environment) {
   if (missing.length) throw new Error(`Environment variable wajib belum diisi: ${missing.join(', ')}`);
   if ((config.JWT_SECRET?.length ?? 0) < 32) throw new Error('JWT_SECRET minimal 32 karakter.');
   if (config.NODE_ENV === 'production') {
-    const missingMail = ['SMTP_USER', 'SMTP_PASS'].filter(key => !config[key]?.trim());
-    if (missingMail.length) {
-      throw new Error(`SMTP wajib dikonfigurasi pada production: ${missingMail.join(', ')}`);
-    }
+    const required = ['OTP_HASH_SECRET', 'SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'PUBLIC_BASE_URL', 'CORS_ORIGIN'];
+    const missingProduction = required.filter(key => !config[key]?.trim());
+    if (missingProduction.length) throw new Error(`Konfigurasi production wajib belum diisi: ${missingProduction.join(', ')}`);
+    if ((config.OTP_HASH_SECRET?.length ?? 0) < 32) throw new Error('OTP_HASH_SECRET minimal 32 karakter pada production.');
+    if (config.CORS_ORIGIN?.includes('*')) throw new Error('CORS_ORIGIN production tidak boleh menggunakan wildcard.');
   }
   return config;
 }

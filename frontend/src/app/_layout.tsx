@@ -32,6 +32,27 @@ function NavigationGate() {
   }, [bootstrap]);
 
   useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const id = 'bmarket-input-focus-reset';
+    if (document.getElementById(id)) return;
+    const style = document.createElement('style');
+    style.id = id;
+    style.textContent = `
+      input, textarea {
+        outline: none !important;
+        box-shadow: none;
+      }
+      input:focus, input:focus-visible,
+      textarea:focus, textarea:focus-visible {
+        outline: none !important;
+        box-shadow: none !important;
+      }
+    `;
+    document.head.appendChild(style);
+    return () => style.remove();
+  }, []);
+
+  useEffect(() => {
     if (!hydrated || !fontsLoaded) return;
 
     SplashScreen.hideAsync();

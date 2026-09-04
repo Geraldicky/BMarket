@@ -58,6 +58,8 @@ export class ListingsService {
     const where: any = { status: 'ACTIVE' };
     if (filter.category) where.category = filter.category;
     if (filter.type)     where.type     = filter.type;
+    if (filter.condition) where.condition = filter.condition;
+    if (filter.fulfillmentMethod) where.fulfillmentMethods = { has: filter.fulfillmentMethod };
     if (filter.keyword)  where.OR = [
       { title:       { contains: filter.keyword, mode: 'insensitive' } },
       { description: { contains: filter.keyword, mode: 'insensitive' } },
@@ -68,10 +70,16 @@ export class ListingsService {
       if (filter.maxPrice !== undefined) where.price.lte = filter.maxPrice;
     }
 
+    const orderBy = filter.sort === 'price_asc'
+      ? { price: 'asc' as const }
+      : filter.sort === 'price_desc'
+        ? { price: 'desc' as const }
+        : { createdAt: 'desc' as const };
+
     const [listings, total] = await Promise.all([
       this.prisma.listing.findMany({
         where, skip, take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         include: {
           seller: { select: { id: true, name: true, avatarUrl: true, isVerified: true } },
         },
@@ -139,6 +147,12 @@ export class ListingsService {
     }
 
     const nextType = dto.type ?? listing.type;
+    const allocatedUnits = listing.type === 'PRODUCT' && listing.stock !== null && listing.stockLeft !== null
+      ? Math.max(0, listing.stock - listing.stockLeft)
+      : 0;
+    if (listing.type === 'PRODUCT' && nextType === 'SERVICE' && allocatedUnits > 0) {
+      throw new BadRequestException('Tipe listing tidak dapat diubah menjadi jasa selama masih ada stok yang direservasi/transaksikan.');
+    }
     const nextCondition = nextType === 'PRODUCT' ? (dto.condition ?? listing.condition) : null;
     const nextStock = nextType === 'PRODUCT' ? (dto.stock ?? listing.stock) : null;
     const nextImages = dto.images ?? this.parseImages(listing.images);
@@ -155,13 +169,10 @@ export class ListingsService {
     if (nextType === 'SERVICE') {
       stockUpdate = { stock: null, stockLeft: null };
     } else if (dto.stock !== undefined || listing.type !== nextType) {
-      const alreadyAllocated = listing.type === 'PRODUCT' && listing.stock !== null && listing.stockLeft !== null
-        ? Math.max(0, listing.stock - listing.stockLeft)
-        : 0;
-      if (nextStock! < alreadyAllocated) {
-        throw new BadRequestException(`Stok tidak boleh kurang dari ${alreadyAllocated} karena sebagian unit sudah masuk transaksi.`);
+      if (nextStock! < allocatedUnits) {
+        throw new BadRequestException(`Stok tidak boleh kurang dari ${allocatedUnits} karena sebagian unit sudah masuk transaksi.`);
       }
-      stockUpdate = { stock: nextStock, stockLeft: nextStock! - alreadyAllocated };
+      stockUpdate = { stock: nextStock, stockLeft: nextStock! - allocatedUnits };
     }
 
     const updated = await this.prisma.listing.update({

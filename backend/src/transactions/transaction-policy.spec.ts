@@ -10,10 +10,11 @@ describe('transaction policy', () => {
   });
   it('buyer releases escrow after receiving the order', () => expect(canTransition('CONFIRMED', 'COMPLETED', 'buyer')).toBe(true));
   it('seller cannot release their own escrow', () => expect(canTransition('CONFIRMED', 'COMPLETED', 'seller')).toBe(false));
-  it('allows either participant to cancel an active order', () => {
+  it('allows cancellation only before seller confirmation', () => {
     expect(canTransition('PENDING', 'CANCELLED', 'buyer')).toBe(true);
     expect(canTransition('PAID', 'CANCELLED', 'seller')).toBe(true);
-    expect(canTransition('CONFIRMED', 'CANCELLED', 'buyer')).toBe(true);
+    expect(canTransition('CONFIRMED', 'CANCELLED', 'buyer')).toBe(false);
+    expect(canTransition('CONFIRMED', 'CANCELLED', 'seller')).toBe(false);
   });
   it('terminal statuses cannot transition', () => { expect(canTransition('COMPLETED', 'CANCELLED', 'buyer')).toBe(false); expect(canTransition('CANCELLED', 'CONFIRMED', 'seller')).toBe(false); });
 });

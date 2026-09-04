@@ -27,6 +27,9 @@ export class TransactionsController {
     return { success: true, message: `Topup Rp ${dto.amount.toLocaleString('id-ID')} berhasil!`, data };
   }
 
+  @Get('wallet/ledger')
+  async walletLedger(@CurrentUser() user: any) { return { success: true, data: await this.transactionsService.getWalletLedger(user.id) }; }
+
   @Get()
   async findAll(@CurrentUser() user: any, @Query('role') role?: 'buyer' | 'seller') {
     const data = await this.transactionsService.findByUserId(user.id, role);

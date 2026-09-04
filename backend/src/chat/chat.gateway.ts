@@ -19,6 +19,7 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChatService } from './chat.service';
 import { allowedOrigins } from '../config/environment';
+import { NotificationsService } from '../notifications/notifications.service';
 
 interface SocketWithUser extends Socket {
   user?: { id: string; name: string; avatarUrl: string | null };
@@ -36,6 +37,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private jwtService: JwtService,
     private prisma: PrismaService,
     private chatService: ChatService,
+    private notifications: NotificationsService,
   ) {}
 
   // Dipanggil otomatis saat client connect
@@ -90,6 +92,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const isMember = room.userAId === client.user.id || room.userBId === client.user.id;
     if (!isMember) { client.emit('error', { message: 'Akses ditolak.' }); return; }
 
+    const otherId = room.userAId === client.user.id ? room.userBId : room.userAId;
+    const blocked = await this.prisma.userBlock.count({ where: { OR: [{ blockerId: client.user.id, blockedId: otherId }, { blockerId: otherId, blockedId: client.user.id }] } });
+    if (blocked) { client.emit('error', { message: 'Pesan tidak dapat dikirim karena hubungan chat diblokir.' }); return; }
+
     // Pastikan sender sudah join room
     client.join(payload.roomId);
 
@@ -99,6 +105,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return created;
     });
 
+    const recipientId = room.userAId === client.user.id ? room.userBId : room.userAId;
+    await this.notifications.create(recipientId, 'CHAT', `Pesan baru dari ${client.user.name}`, payload.content.trim().slice(0, 140), 'CHAT_ROOM', payload.roomId).catch(() => undefined);
     // Broadcast ke semua member room (termasuk pengirim)
     this.server.to(payload.roomId).emit('new_message', message);
   }

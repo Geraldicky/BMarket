@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ListingsService } from '../listings/listings.service';
 import { ComplaintsService } from '../complaints/complaints.service';
 import { TransactionsService } from '../transactions/transactions.service';
+import { DisputesService } from '../disputes/disputes.service';
 
 @Injectable()
 export class AdminService {
@@ -13,6 +14,7 @@ export class AdminService {
     private listingsService: ListingsService,
     private complaintsService: ComplaintsService,
     private transactionsService: TransactionsService,
+    private disputesService: DisputesService,
   ) {}
 
   async getDashboardStats() {
@@ -113,6 +115,10 @@ export class AdminService {
     }
     return this.complaintsService.updateStatus(id, status, adminNote);
   }
+
+  // ── Disputes ──────────────────────────────
+  getDisputes(status?: any) { return this.disputesService.findAll(status); }
+  resolveDispute(id: string, adminId: string, action: 'START_REVIEW' | 'REFUND_BUYER' | 'RELEASE_SELLER' | 'REJECT', note?: string) { return this.disputesService.resolve(id, adminId, action, note); }
 
   // ── Commission ────────────────────────────
 

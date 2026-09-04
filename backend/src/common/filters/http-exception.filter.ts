@@ -9,7 +9,7 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
@@ -17,6 +17,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
+    const request = ctx.getRequest<Request & { requestId?: string }>();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = 'Terjadi kesalahan server.';
@@ -48,6 +49,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       success: false,
       message,
       statusCode: status,
+      ...(request.requestId ? { requestId: request.requestId } : {}),
       ...(code ? { code } : {}),
       ...(retryAfterSeconds ? { retryAfterSeconds } : {}),
     });

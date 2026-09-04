@@ -5,9 +5,9 @@ export const colors = {
   primarySoft: '#EAF3FF',
   accent: '#12805C',
   accentSoft: '#E8F8F2',
-  background: '#F5F7FA',
+  background: '#FFFFFF',
   surface: '#FFFFFF',
-  surfaceMuted: '#F8FAFC',
+  surfaceMuted: '#F7F9FC',
   text: '#172B3A',
   textSoft: '#4A6072',
   muted: '#728496',
@@ -58,6 +58,6 @@ export const shadowSoft = {
 };
 
 export const layout = {
-  contentMaxWidth: 1440,
+  contentMaxWidth: 1280,
   authMaxWidth: 1600,
 };

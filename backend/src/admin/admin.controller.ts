@@ -5,6 +5,7 @@ import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { AdminGuard } from '../common/guards/roles.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { ResolveDisputeDto } from '../disputes/dto/dispute.dto';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, AdminGuard) // Semua endpoint admin butuh JWT + role ADMIN
@@ -90,6 +91,15 @@ export class AdminController {
     if (listingAction && listingAction !== 'KEEP_ACTIVE' && status !== 'RESOLVED') throw new BadRequestException('Moderasi listing harus menyelesaikan laporan.');
     const data = await this.adminService.updateComplaintStatus(id, status, adminNote, listingAction);
     return { success: true, message: 'Laporan dan status listing berhasil diperbarui.', data };
+  }
+
+  // ── Disputes ──────────────────────────────
+  @Get('disputes')
+  async disputes(@Query('status') status?: any) { return { success: true, data: await this.adminService.getDisputes(status) }; }
+
+  @Patch('disputes/:id')
+  async resolveDispute(@Param('id') id: string, @CurrentUser() admin: any, @Body() dto: ResolveDisputeDto) {
+    return { success: true, message: 'Keputusan sengketa berhasil disimpan.', data: await this.adminService.resolveDispute(id, admin.id, dto.action, dto.note) };
   }
 
   // ── Commission ────────────────────────────

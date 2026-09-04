@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
@@ -13,11 +14,18 @@ import { allowedOrigins } from './config/environment';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.set('trust proxy', 1);
+  app.use((req: any, res: any, next: any) => {
+    const requestId = String(req.headers['x-request-id'] || randomUUID());
+    req.requestId = requestId; res.setHeader('X-Request-ID', requestId);
+    const started = Date.now();
+    res.on('finish', () => console.log(JSON.stringify({ level: 'info', event: 'http_request', requestId, method: req.method, path: req.originalUrl, status: res.statusCode, durationMs: Date.now() - started })));
+    next();
+  });
   app.setGlobalPrefix('api');
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   app.use(rateLimit({ windowMs: 15 * 60 * 1000, limit: 500, standardHeaders: 'draft-8', legacyHeaders: false }));
   app.use('/api/auth', rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false }));
-  app.enableCors({ origin: allowedOrigins(), methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization'], credentials: true });
+  app.enableCors({ origin: allowedOrigins(), methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'], exposedHeaders: ['X-Request-ID'], credentials: true });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true, transformOptions: { enableImplicitConversion: true } }));
   app.useGlobalFilters(new GlobalExceptionFilter());
   const uploadDir = resolve(process.env.UPLOAD_DIR || 'uploads'); mkdirSync(uploadDir, { recursive: true }); app.useStaticAssets(uploadDir, { prefix: '/uploads/' });

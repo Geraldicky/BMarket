@@ -16,16 +16,26 @@ const meetupCheckout = {
   listingId: listing.id,
   quantity: 1,
   fulfillmentMethod: 'CAMPUS_MEETUP' as const,
-  meetupCampus: 'BINUS @Kemanggisan',
-  meetupLocation: 'Lobby Anggrek',
-  meetupSchedule: 'Jumat, 13.00 WIB',
 };
+
+const notifications = {
+  create: vi.fn().mockResolvedValue({}),
+  createMany: vi.fn().mockResolvedValue({ count: 0 }),
+};
+
+function withLedgerMocks<T extends Record<string, any>>(tx: T): T {
+  tx.user ??= {};
+  tx.user.findUniqueOrThrow ??= vi.fn().mockResolvedValue({ balance: 0, escrow: 0 });
+  tx.walletLedger ??= { upsert: vi.fn().mockResolvedValue({}) };
+  return tx;
+}
 
 function serviceWithTransactionClient(tx: Record<string, unknown>) {
   const prisma = {
-    $transaction: vi.fn((operation: (client: unknown) => unknown) => operation(tx)),
+    transaction: { findMany: vi.fn().mockResolvedValue([]) },
+    $transaction: vi.fn((operation: (client: unknown) => unknown) => operation(withLedgerMocks(tx as Record<string, any>))),
   };
-  return new TransactionsService(prisma as never);
+  return new TransactionsService(prisma as never, notifications as never);
 }
 
 describe('TransactionsService checkout flow', () => {
@@ -68,6 +78,14 @@ describe('TransactionsService checkout flow', () => {
       where: expect.objectContaining({ stockLeft: { gte: 2 } }),
       data: { stockLeft: { decrement: 2 } },
     }));
+    expect(tx.transaction.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        reservationExpiresAt: expect.any(Date),
+        listingTitleSnapshot: listing.title,
+        listingImageSnapshot: 'http://localhost:3000/uploads/product.jpg',
+        listingTypeSnapshot: 'PRODUCT',
+      }),
+    }));
     expect(result.listing.images).toEqual(['http://localhost:3000/uploads/product.jpg']);
   });
 
@@ -109,9 +127,9 @@ describe('TransactionsService checkout flow', () => {
     }));
   });
 
-  it('completes a campus meetup only after seller enters the buyer handover code', async () => {
+  it('completes a paid campus meetup when seller enters the buyer handover code', async () => {
     const current: any = {
-      id: 'transaction-meetup', buyerId: 'buyer-1', sellerId: 'seller-1', status: 'CONFIRMED',
+      id: 'transaction-meetup', buyerId: 'buyer-1', sellerId: 'seller-1', status: 'PAID',
       fulfillmentMethod: 'CAMPUS_MEETUP', isEscrowHeld: true, grandTotal: 100000,
       sellerReceives: 95000, handoverCodeHash: null, handoverCodeExpiresAt: null,
     };
@@ -134,7 +152,8 @@ describe('TransactionsService checkout flow', () => {
       },
       $transaction: vi.fn((operation: (client: unknown) => unknown) => operation(tx)),
     };
-    const service = new TransactionsService(prisma as never);
+    withLedgerMocks(tx as Record<string, any>);
+    const service = new TransactionsService(prisma as never, notifications as never);
 
     const issued = await service.issueHandoverCode(current.id, current.buyerId);
     await service.confirmHandover(current.id, current.sellerId, issued.code);
@@ -146,6 +165,37 @@ describe('TransactionsService checkout flow', () => {
     expect(tx.user.update).toHaveBeenCalledWith(expect.objectContaining({
       data: { balance: { increment: 95000 } },
     }));
+  });
+
+  it('automatically expires an unpaid reservation and restores product stock', async () => {
+    const expiredAt = new Date(Date.now() - 60_000);
+    const current = {
+      id: 'expired-transaction', buyerId: 'buyer-1', sellerId: 'seller-1', status: 'PENDING',
+      listingId: listing.id, quantity: 1, reservationExpiresAt: expiredAt, isEscrowHeld: false,
+      listingTypeSnapshot: 'PRODUCT', listing: { type: 'PRODUCT', status: 'SOLD' },
+    };
+    const tx = {
+      transaction: {
+        findUnique: vi.fn().mockResolvedValue(current),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+      listing: { update: vi.fn().mockResolvedValue({}) },
+    };
+    const prisma = {
+      transaction: { findMany: vi.fn().mockResolvedValue([{ id: current.id }]) },
+      $transaction: vi.fn((operation: (client: unknown) => unknown) => operation(tx)),
+    };
+    withLedgerMocks(tx as Record<string, any>);
+    const service = new TransactionsService(prisma as never, notifications as never);
+
+    await expect(service.expirePendingReservations()).resolves.toBe(1);
+    expect(tx.transaction.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: 'CANCELLED', cancelledBy: 'SYSTEM' }),
+    }));
+    expect(tx.listing.update).toHaveBeenCalledWith({
+      where: { id: listing.id },
+      data: { stockLeft: { increment: 1 }, status: 'ACTIVE' },
+    });
   });
 
   it('requires a cancellation reason', async () => {

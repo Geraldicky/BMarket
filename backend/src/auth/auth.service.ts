@@ -484,7 +484,7 @@ export class AuthService {
         id: true, email: true, name: true, studentId: true,
         phone: true, bio: true, avatarUrl: true, role: true,
         isVerified: true, balance: true, escrow: true, createdAt: true,
-        _count: { select: { listings: true, buyerTransactions: true, reviewsReceived: true } },
+        _count: { select: { listings: true, buyerTransactions: true, sellerTransactions: true, reviewsReceived: true } },
       },
     });
     if (!user) throw new UnauthorizedException('User tidak ditemukan.');

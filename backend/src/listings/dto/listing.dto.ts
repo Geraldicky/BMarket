@@ -1,6 +1,6 @@
 // src/listings/dto/listing.dto.ts
 
-import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsString, IsNumber, IsEnum, IsOptional, Min, Max, MinLength, MaxLength, IsInt, IsUrl } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsString, IsNumber, IsEnum, IsOptional, Min, Max, MinLength, MaxLength, IsInt, IsUrl, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
 import { Category, ListingType, Condition, FulfillmentMethod } from '@prisma/client';
 
@@ -64,7 +64,10 @@ export class UpdateListingDto {
 export class ListingFilterDto {
   @IsOptional() @IsEnum(Category) category?: Category;
   @IsOptional() @IsEnum(ListingType) type?: ListingType;
-  @IsOptional() @IsString() keyword?: string;
+  @IsOptional() @IsEnum(Condition) condition?: Condition;
+  @IsOptional() @IsEnum(FulfillmentMethod) fulfillmentMethod?: FulfillmentMethod;
+  @IsOptional() @IsIn(['newest', 'price_asc', 'price_desc']) sort?: 'newest' | 'price_asc' | 'price_desc';
+  @IsOptional() @IsString() @MaxLength(120) keyword?: string;
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) minPrice?: number;
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) maxPrice?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;

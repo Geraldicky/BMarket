@@ -10,12 +10,14 @@ import { AdminService } from './admin.service';
 import { ListingsModule } from '../listings/listings.module';
 import { ComplaintsModule } from '../complaints/complaints.module';
 import { TransactionsModule } from '../transactions/transactions.module';
+import { DisputesModule } from '../disputes/disputes.module';
 
 @Module({
   imports: [
     ListingsModule,     // untuk moderate listing
     ComplaintsModule,   // untuk kelola pengaduan
     TransactionsModule, // untuk statistik transaksi & komisi
+    DisputesModule,     // untuk resolusi sengketa escrow
   ],
   controllers: [AdminController],
   providers: [AdminService],

@@ -1,21 +1,132 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Image, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '@/constants/theme';
 
-const benefits=[
-  {icon:'person-circle-outline' as const,title:'Kenali penjualnya',copy:'Profil menggunakan identitas komunitas BINUS.'},
-  {icon:'chatbubble-ellipses-outline' as const,title:'Sepakati lewat chat',copy:'Detail percakapan tersimpan di satu tempat.'},
-  {icon:'receipt-outline' as const,title:'Pantau transaksinya',copy:'Status jual-beli tidak mudah terlewat.'},
+const assurances = [
+  { icon: 'shield-checkmark-outline' as const, title: 'Akun BINUS', copy: 'Akses menggunakan identitas kampus.' },
+  { icon: 'chatbubble-ellipses-outline' as const, title: 'Chat tercatat', copy: 'Koordinasi buyer dan seller lebih jelas.' },
+  { icon: 'wallet-outline' as const, title: 'Transaksi aman', copy: 'Dana ditahan sampai serah-terima selesai.' },
 ];
 
-export function AuthShell({eyebrow,title,subtitle,children}:{eyebrow:string;title:string;subtitle:string;children:React.ReactNode}){
-  const{width,height}=useWindowDimensions();const desktop=width>=900;
-  return <SafeAreaView style={s.page} edges={['top','bottom']}><ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={[s.scroll,desktop&&s.scrollDesktop]}><View style={[s.shell,desktop&&s.shellDesktop,desktop&&{minHeight:height}]}>
-    {desktop?<View style={s.visual}><View style={s.gridOne}/><View style={s.gridTwo}/><View style={s.brand}><View style={s.logoTile}><Image source={require('../../assets/images/bmarket-icon.png')} style={s.logo}/></View><View><Text style={s.brandName}>BMarket</Text><Text style={s.brandCaption}>MARKETPLACE KOMUNITAS BINUS</Text></View></View><View style={s.visualContent}><Text style={s.kicker}>DARI BINUSIAN, UNTUK BINUSIAN</Text><Text style={s.visualTitle}>Temukan kebutuhan kampus tanpa terasa asing.</Text><Text style={s.visualCopy}>Beli barang preloved, tawarkan jasa, dan bertransaksi dengan orang-orang dari komunitas kampusmu.</Text><View style={s.benefits}>{benefits.map(item=><View key={item.title} style={s.benefit}><View style={s.benefitIcon}><Ionicons name={item.icon} size={20} color={colors.white}/></View><View><Text style={s.benefitTitle}>{item.title}</Text><Text style={s.benefitCopy}>{item.copy}</Text></View></View>)}</View></View><View style={s.visualFoot}><View style={s.people}><View style={[s.person,{backgroundColor:'#E9B872'}]}/><View style={[s.person,s.overlap,{backgroundColor:'#77A8D9'}]}/><View style={[s.person,s.overlap,{backgroundColor:'#9A83C8'}]}/></View><Text style={s.footText}>Dibuat untuk keseharian mahasiswa BINUS</Text></View></View>:<View style={s.mobileBrand}><Image source={require('../../assets/images/bmarket-icon.png')} style={s.mobileLogo}/><View><Text style={s.mobileName}>BMarket</Text><Text style={s.mobileCaption}>Marketplace komunitas BINUS</Text></View></View>}
-    <View style={[s.formPanel,!desktop&&s.formPanelMobile]}><View style={s.formContent}><Animated.View entering={FadeInDown.duration(180)} style={s.formHeader}><Text style={s.eyebrow}>{eyebrow}</Text><Text style={s.formTitle}>{title}</Text><Text style={s.formSubtitle}>{subtitle}</Text></Animated.View><Animated.View entering={FadeInDown.delay(60).duration(220)}>{children}</Animated.View><View style={s.divider}><View style={s.line}/><Text style={s.dividerText}>AKSES KHUSUS KOMUNITAS</Text><View style={s.line}/></View><View style={s.trust}><View style={s.trustIcon}><Ionicons name="shield-checkmark-outline" size={19} color={colors.success}/></View><View style={s.trustBody}><Text style={s.trustTitle}>Akun dan aktivitasmu terlindungi</Text><Text style={s.trustCopy}>Gunakan email BINUS dan jangan bagikan password ke siapa pun.</Text></View></View><Text style={s.copyright}>© 2026 BMarket · Community project</Text></View></View>
-  </View></ScrollView></SafeAreaView>;
+export function AuthShell({ eyebrow, title, subtitle, children }: { eyebrow: string; title: string; subtitle: string; children: React.ReactNode }) {
+  const { width, height } = useWindowDimensions();
+  const desktop = width >= 900;
+
+  return (
+    <SafeAreaView style={s.page} edges={['top', 'bottom']}>
+      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={[s.scroll, desktop && s.scrollDesktop]}>
+        <View style={[s.shell, desktop && s.shellDesktop, desktop && { minHeight: height }]}> 
+          {desktop ? (
+            <View style={s.visual}>
+              <View style={s.orbTop} />
+              <View style={s.orbBottom} />
+
+              <View style={s.brandWrap}>
+                <Text style={s.brandName}>BMarket</Text>
+                <Text style={s.brandCaption}>Marketplace komunitas BINUS</Text>
+              </View>
+
+              <View style={s.visualContent}>
+                <Text style={s.kicker}>DARI BINUSIAN, UNTUK BINUSIAN</Text>
+                <Text style={s.visualTitle}>Jual-beli kampus yang terasa lebih dekat.</Text>
+                <Text style={s.visualCopy}>Temukan barang dan jasa dari sesama mahasiswa, lalu koordinasikan transaksi langsung di BMarket.</Text>
+
+                <View style={s.assuranceList}>
+                  {assurances.map(item => (
+                    <View key={item.title} style={s.assuranceItem}>
+                      <View style={s.assuranceIcon}><Ionicons name={item.icon} size={18} color={colors.white} /></View>
+                      <View style={s.assuranceCopy}>
+                        <Text style={s.assuranceTitle}>{item.title}</Text>
+                        <Text style={s.assuranceText}>{item.copy}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              <View style={s.visualFoot}>
+                <View style={s.communityDot} />
+                <Text style={s.footText}>Khusus komunitas BINUS</Text>
+              </View>
+            </View>
+          ) : (
+            <View style={s.mobileBrand}>
+              <Text style={s.mobileName}>BMarket</Text>
+              <Text style={s.mobileCaption}>Marketplace komunitas BINUS</Text>
+            </View>
+          )}
+
+          <View style={[s.formPanel, !desktop && s.formPanelMobile]}>
+            <View style={s.formContent}>
+              <Animated.View entering={FadeInDown.duration(180)} style={s.formHeader}>
+                <View style={s.eyebrowPill}><Text style={s.eyebrow}>{eyebrow}</Text></View>
+                <Text style={s.formTitle}>{title}</Text>
+                <Text style={s.formSubtitle}>{subtitle}</Text>
+              </Animated.View>
+
+              <Animated.View entering={FadeInDown.delay(50).duration(210)}>{children}</Animated.View>
+
+              <View style={s.securityNote}>
+                <Ionicons name="shield-checkmark-outline" size={18} color={colors.success} />
+                <Text style={s.securityText}>Gunakan email BINUS dan jangan bagikan password atau kode OTP kepada siapa pun.</Text>
+              </View>
+
+              <Text style={s.copyright}>© 2026 BMarket</Text>
+            </View>
+          </View>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
 }
 
-const s=StyleSheet.create({page:{flex:1,backgroundColor:colors.surface},scroll:{flexGrow:1,padding:18,justifyContent:'center'},scrollDesktop:{padding:0},shell:{width:'100%'},shellDesktop:{flexDirection:'row'},visual:{width:'47%',minHeight:720,backgroundColor:colors.primaryDeep,paddingHorizontal:68,paddingVertical:50,justifyContent:'space-between',overflow:'hidden'},gridOne:{position:'absolute',width:480,height:480,borderRadius:240,left:-230,top:-200,borderWidth:1,borderColor:'rgba(255,255,255,.06)'},gridTwo:{position:'absolute',width:520,height:520,borderRadius:260,right:-300,bottom:-250,backgroundColor:'rgba(17,103,216,.20)'},brand:{zIndex:1,flexDirection:'row',alignItems:'center',gap:12},logoTile:{width:50,height:50,borderRadius:14,backgroundColor:colors.white,alignItems:'center',justifyContent:'center'},logo:{width:36,height:36,resizeMode:'contain'},brandName:{fontFamily:'PoppinsBold',fontSize:23,color:colors.white,lineHeight:28},brandCaption:{fontFamily:'PoppinsSemiBold',fontSize:10,letterSpacing:.65,color:'#AFC3D5'},visualContent:{zIndex:1,maxWidth:580,gap:14},kicker:{fontFamily:'PoppinsBold',fontSize:11,letterSpacing:1,color:'#76B5F4'},visualTitle:{fontFamily:'PoppinsBold',fontSize:40,lineHeight:52,color:colors.white},visualCopy:{fontFamily:'PoppinsRegular',fontSize:15,lineHeight:24,color:'#C0D1DF',maxWidth:530},benefits:{gap:15,marginTop:19},benefit:{flexDirection:'row',alignItems:'center',gap:13},benefitIcon:{width:44,height:44,borderRadius:12,backgroundColor:'rgba(17,103,216,.8)',alignItems:'center',justifyContent:'center'},benefitTitle:{fontFamily:'PoppinsSemiBold',fontSize:13,color:colors.white},benefitCopy:{fontFamily:'PoppinsRegular',fontSize:11,lineHeight:17,color:'#9EB4C7',marginTop:2},visualFoot:{zIndex:1,flexDirection:'row',alignItems:'center',gap:11},people:{flexDirection:'row'},person:{width:28,height:28,borderRadius:14,borderWidth:2,borderColor:colors.primaryDeep},overlap:{marginLeft:-7},footText:{fontFamily:'PoppinsRegular',fontSize:11,color:'#A9BDCE'},formPanel:{flex:1,minHeight:720,backgroundColor:colors.surface,padding:46,alignItems:'center',justifyContent:'center'},formPanelMobile:{minHeight:0,padding:24,borderRadius:16,borderWidth:1,borderColor:colors.border},formContent:{width:'100%',maxWidth:520,gap:26},formHeader:{gap:6},eyebrow:{fontFamily:'PoppinsBold',fontSize:11,letterSpacing:.85,color:colors.primary},formTitle:{fontFamily:'PoppinsBold',fontSize:35,lineHeight:44,color:colors.text},formSubtitle:{fontFamily:'PoppinsRegular',fontSize:14,lineHeight:22,color:colors.muted},divider:{flexDirection:'row',alignItems:'center',gap:11},line:{height:1,flex:1,backgroundColor:colors.border},dividerText:{fontFamily:'PoppinsSemiBold',fontSize:10,letterSpacing:.55,color:'#9AA8B5'},trust:{flexDirection:'row',alignItems:'center',gap:12,padding:16,borderRadius:12,backgroundColor:'#F6FAF8',borderWidth:1,borderColor:'#DCEBE4'},trustIcon:{width:42,height:42,borderRadius:11,backgroundColor:colors.successSoft,alignItems:'center',justifyContent:'center'},trustBody:{flex:1},trustTitle:{fontFamily:'PoppinsSemiBold',fontSize:12,color:colors.text},trustCopy:{fontFamily:'PoppinsRegular',fontSize:11,lineHeight:17,color:colors.muted},copyright:{fontFamily:'PoppinsRegular',fontSize:10,color:'#9AA8B5',textAlign:'center',marginTop:8},mobileBrand:{flexDirection:'row',alignItems:'center',justifyContent:'center',gap:11,marginBottom:20},mobileLogo:{width:48,height:48},mobileName:{fontFamily:'PoppinsBold',fontSize:23,color:colors.text},mobileCaption:{fontFamily:'PoppinsRegular',fontSize:11,color:colors.muted}});
+const s = StyleSheet.create({
+  page: { flex: 1, backgroundColor: colors.surface },
+  scroll: { flexGrow: 1, padding: 16, justifyContent: 'center' },
+  scrollDesktop: { padding: 0 },
+  shell: { width: '100%' },
+  shellDesktop: { flexDirection: 'row' },
+
+  visual: { width: '43%', minHeight: 700, backgroundColor: colors.primaryDeep, paddingHorizontal: 64, paddingVertical: 46, justifyContent: 'space-between', overflow: 'hidden' },
+  orbTop: { position: 'absolute', width: 360, height: 360, borderRadius: 180, left: -190, top: -150, borderWidth: 1, borderColor: 'rgba(255,255,255,.07)' },
+  orbBottom: { position: 'absolute', width: 430, height: 430, borderRadius: 215, right: -245, bottom: -250, backgroundColor: 'rgba(17,103,216,.24)' },
+
+  brandWrap: { zIndex: 1, gap: 1 },
+  brandName: { fontFamily: 'PoppinsBold', fontSize: 27, lineHeight: 32, color: colors.white },
+  brandCaption: { fontFamily: 'PoppinsMedium', fontSize: 11, color: '#AFC3D5' },
+
+  visualContent: { zIndex: 1, maxWidth: 520, gap: 11 },
+  kicker: { fontFamily: 'PoppinsBold', fontSize: 11, letterSpacing: .95, color: '#78B8F7' },
+  visualTitle: { fontFamily: 'PoppinsBold', fontSize: 38, lineHeight: 48, color: colors.white, maxWidth: 500 },
+  visualCopy: { fontFamily: 'PoppinsRegular', fontSize: 14, lineHeight: 23, color: '#C4D4E2', maxWidth: 500 },
+
+  assuranceList: { gap: 10, marginTop: 18 },
+  assuranceItem: { minHeight: 58, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, backgroundColor: 'rgba(255,255,255,.055)', borderWidth: 1, borderColor: 'rgba(255,255,255,.07)', flexDirection: 'row', alignItems: 'center', gap: 12 },
+  assuranceIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(17,103,216,.72)', alignItems: 'center', justifyContent: 'center' },
+  assuranceCopy: { flex: 1, gap: 1 },
+  assuranceTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 12.5, color: colors.white },
+  assuranceText: { fontFamily: 'PoppinsRegular', fontSize: 10.5, lineHeight: 16, color: '#AFC3D5' },
+
+  visualFoot: { zIndex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  communityDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#69D0A7' },
+  footText: { fontFamily: 'PoppinsMedium', fontSize: 11, color: '#A9BDCE' },
+
+  formPanel: { flex: 1, minHeight: 700, backgroundColor: colors.surface, paddingHorizontal: 56, paddingVertical: 46, alignItems: 'center', justifyContent: 'center' },
+  formPanelMobile: { minHeight: 0, padding: 22, borderRadius: 16, borderWidth: 1, borderColor: colors.border },
+  formContent: { width: '100%', maxWidth: 500, gap: 22 },
+  formHeader: { gap: 5, marginBottom: 2 },
+  eyebrowPill: { alignSelf: 'flex-start', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999, backgroundColor: colors.primarySoft },
+  eyebrow: { fontFamily: 'PoppinsBold', fontSize: 10.5, letterSpacing: .75, color: colors.primary },
+  formTitle: { fontFamily: 'PoppinsBold', fontSize: 32, lineHeight: 40, color: colors.text },
+  formSubtitle: { fontFamily: 'PoppinsRegular', fontSize: 13.5, lineHeight: 21, color: colors.muted, maxWidth: 470 },
+
+  securityNote: { flexDirection: 'row', alignItems: 'flex-start', gap: 9, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.border },
+  securityText: { flex: 1, fontFamily: 'PoppinsRegular', fontSize: 11.5, lineHeight: 18, color: colors.muted },
+  copyright: { fontFamily: 'PoppinsRegular', fontSize: 10, color: '#9AA8B5', textAlign: 'center' },
+
+  mobileBrand: { alignItems: 'center', marginBottom: 18 },
+  mobileName: { fontFamily: 'PoppinsBold', fontSize: 25, color: colors.primary },
+  mobileCaption: { fontFamily: 'PoppinsRegular', fontSize: 11, color: colors.muted },
+});

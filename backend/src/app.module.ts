@@ -29,6 +29,10 @@ import { ChatModule } from './chat/chat.module';
 import { ComplaintsModule } from './complaints/complaints.module';
 import { AdminModule } from './admin/admin.module';
 import { UploadsModule } from './uploads/uploads.module';
+import { ActivityModule } from './activity/activity.module';
+import { DisputesModule } from './disputes/disputes.module';
+import { SafetyModule } from './safety/safety.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { HealthController } from './health.controller';
 import { validateEnvironment } from './config/environment';
 
@@ -50,6 +54,10 @@ import { validateEnvironment } from './config/environment';
     ComplaintsModule,
     AdminModule,
     UploadsModule,
+    ActivityModule,
+    DisputesModule,
+    SafetyModule,
+    NotificationsModule,
   ],
   controllers: [HealthController],
 })

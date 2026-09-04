@@ -1,7 +1,7 @@
 import { create, isAxiosError } from 'axios';
 import Constants from 'expo-constants';
 import { getStoredValue } from './token-storage';
-import type { ApiEnvelope, ChatRoom, CheckoutOptions, Complaint, CourierProvider, FulfillmentMethod, Listing, Message, Page, Transaction, TransactionStatus, User } from '@/types';
+import type { ActivityListingEntry, ApiEnvelope, ChatRoom, CheckoutOptions, Complaint, CourierProvider, Dispute, DisputeReason, FulfillmentMethod, Listing, Message, Notification, Page, PublicProfile, Review, Transaction, TransactionStatus, User, WalletLedger } from '@/types';
 
 export type AuthResult = { user: User; token: string };
 export type VerificationPending = {
@@ -40,18 +40,38 @@ export const endpoints = {
   transactions: (role?: 'buyer' | 'seller') => api.get<ApiEnvelope<Transaction[]>>('/transactions', { params: role ? { role } : undefined }).then(unwrap),
   transaction: (id: string) => api.get<ApiEnvelope<Transaction>>(`/transactions/${id}`).then(unwrap),
   checkoutOptions: (listingId: string) => api.get<ApiEnvelope<CheckoutOptions>>(`/transactions/checkout-options/${listingId}`).then(unwrap),
-  buy: (body: { listingId: string; quantity: number; note?: string; fulfillmentMethod: FulfillmentMethod; meetupCampus?: string; meetupLocation?: string; meetupSchedule?: string; courierProvider?: CourierProvider; deliveryAddress?: string; recipientPhone?: string }) => api.post<ApiEnvelope<Transaction>>('/transactions', body).then(unwrap),
+  buy: (body: { listingId: string; quantity: number; note?: string; fulfillmentMethod: FulfillmentMethod; courierProvider?: CourierProvider; deliveryAddress?: string; recipientPhone?: string }) => api.post<ApiEnvelope<Transaction>>('/transactions', body).then(unwrap),
   pay: (id: string) => api.post<ApiEnvelope<Transaction>>(`/transactions/${id}/pay`).then(unwrap),
   issueHandoverCode: (id: string) => api.post<ApiEnvelope<{ code: string; expiresAt: string; expiresInSeconds: number }>>(`/transactions/${id}/handover-code`).then(unwrap),
   confirmHandover: (id: string, code: string) => api.post<ApiEnvelope<Transaction>>(`/transactions/${id}/confirm-handover`, { code }).then(unwrap),
   setTransactionStatus: (id: string, status: Exclude<TransactionStatus, 'PENDING' | 'PAID'>, cancellationReason?: string) => api.patch<ApiEnvelope<Transaction>>(`/transactions/${id}/status`, { status, cancellationReason }).then(unwrap),
   balance: () => api.get<ApiEnvelope<{ balance: number; escrow: number }>>('/transactions/balance').then(unwrap),
   topup: (amount: number) => api.post('/transactions/topup', { amount }),
+  walletLedger: () => api.get<ApiEnvelope<WalletLedger[]>>('/transactions/wallet/ledger').then(unwrap),
+  notifications: () => api.get<ApiEnvelope<Notification[]>>('/notifications').then(unwrap),
+  notificationCount: () => api.get<ApiEnvelope<{ count: number }>>('/notifications/unread-count').then(unwrap),
+  readNotification: (id: string) => api.patch(`/notifications/${id}/read`),
+  readAllNotifications: () => api.patch('/notifications/read-all'),
   rooms: () => api.get<ApiEnvelope<ChatRoom[]>>('/chat/rooms').then(unwrap),
   createRoom: (otherUserId: string) => api.post<ApiEnvelope<ChatRoom>>('/chat/rooms', { otherUserId }).then(unwrap),
   messages: (roomId: string) => api.get<ApiEnvelope<Message[]>>(`/chat/rooms/${roomId}/messages`).then(unwrap),
   updateProfile: (body: Pick<User, 'name' | 'phone' | 'bio'>) => api.put<ApiEnvelope<User>>('/users/me', body).then(unwrap),
+  userProfile: (id: string) => api.get<ApiEnvelope<PublicProfile>>(`/users/${id}`).then(unwrap),
+  createReview: (body: { transactionId: string; rating: number; comment?: string }) => api.post<ApiEnvelope<Review>>('/reviews', body).then(unwrap),
+  userReviews: (id: string) => api.get<{ success: boolean; reviews: Review[]; avgRating: number; totalReviews: number }>(`/reviews/user/${id}`).then(response => response.data),
+  wishlist: () => api.get<ApiEnvelope<ActivityListingEntry[]>>('/activity/wishlist').then(unwrap),
+  saveListing: (listingId: string) => api.post(`/activity/wishlist/${listingId}`),
+  unsaveListing: (listingId: string) => api.delete(`/activity/wishlist/${listingId}`),
+  savedStatus: (listingId: string) => api.get<ApiEnvelope<{ saved: boolean }>>(`/activity/wishlist/${listingId}/status`).then(unwrap),
+  recentListings: () => api.get<ApiEnvelope<ActivityListingEntry[]>>('/activity/recent').then(unwrap),
+  recordRecent: (listingId: string) => api.post(`/activity/recent/${listingId}`),
   report: (body: { targetType: 'USER' | 'LISTING'; targetId: string; reason: string; description?: string }) => api.post('/complaints', body),
+  createDispute: (body: { transactionId: string; reason: DisputeReason; description: string; evidenceUrls?: string[] }) => api.post<ApiEnvelope<Dispute>>('/disputes', body).then(unwrap),
+  myDisputes: () => api.get<ApiEnvelope<Dispute[]>>('/disputes/mine').then(unwrap),
+  blockStatus: (userId: string) => api.get<ApiEnvelope<{ blocked: boolean }>>(`/safety/blocks/${userId}/status`).then(unwrap),
+  blockUser: (userId: string) => api.post(`/safety/blocks/${userId}`),
+  unblockUser: (userId: string) => api.delete(`/safety/blocks/${userId}`),
+  blockedUsers: () => api.get<ApiEnvelope<{ id: string; blocked: Partial<User>; createdAt: string }[]>>('/safety/blocks').then(unwrap),
   upload: async (
     assets: { uri: string; fileName?: string | null; mimeType?: string | null; file?: File | null }[],
     onProgress?: (percent: number) => void,
@@ -79,6 +99,8 @@ export const endpoints = {
   adminUsers: () => api.get<ApiEnvelope<{ users: User[] }>>('/admin/users').then(unwrap),
   toggleUser: (id: string) => api.patch(`/admin/users/${id}/toggle`),
   complaints: (params?: { status?: string; targetType?: 'USER' | 'LISTING'; unresolved?: boolean }) => api.get<ApiEnvelope<Complaint[]>>('/admin/complaints', { params }).then(unwrap),
+  adminDisputes: (status?: string) => api.get<ApiEnvelope<Dispute[]>>('/admin/disputes', { params: status ? { status } : undefined }).then(unwrap),
+  resolveDispute: (id: string, action: 'START_REVIEW' | 'REFUND_BUYER' | 'RELEASE_SELLER' | 'REJECT', note?: string) => api.patch<ApiEnvelope<Dispute>>(`/admin/disputes/${id}`, { action, note }).then(unwrap),
   complaintStatus: (id: string, status: string, listingAction?: 'KEEP_ACTIVE' | 'HIDE_LISTING' | 'REMOVE_LISTING', adminNote?: string) => api.patch(`/admin/complaints/${id}`, { status, listingAction, adminNote }),
   commission: () => api.get<ApiEnvelope<{ rate: number }>>('/admin/commission').then(unwrap),
   setCommission: (rate: number) => api.patch('/admin/commission', { rate }),

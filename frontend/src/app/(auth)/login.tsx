@@ -1,9 +1,10 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { AuthShell } from '@/components/auth-shell';
 import { Button, Field, InlineAlert } from '@/components/ui';
-import { colors, spacing } from '@/constants/theme';
+import { colors, radius, spacing } from '@/constants/theme';
 import { errorCode, errorMessage } from '@/lib/api';
 import { useAuth } from '@/store/auth';
 
@@ -41,13 +42,10 @@ export default function LoginScreen() {
   };
 
   return (
-    <AuthShell
-      eyebrow="AKUN BINUS"
-      title="Masuk"
-      subtitle="Lanjutkan dengan email @binus.ac.id."
-    >
+    <AuthShell eyebrow="AKUN BINUS" title="Masuk ke BMarket" subtitle="Gunakan akun BINUS-mu untuk melanjutkan ke marketplace kampus.">
       <View style={styles.form}>
         {formError ? <InlineAlert message={formError} /> : null}
+
         <Field
           label="Email BINUS"
           value={email}
@@ -59,33 +57,51 @@ export default function LoginScreen() {
           placeholder="nama@binus.ac.id"
           error={errors.email}
         />
-        <Field
-          label="Password"
-          value={password}
-          onChangeText={value => { setPassword(value); setErrors(current => ({ ...current, password: undefined })); }}
-          secureTextEntry={!showPassword}
-          autoComplete="current-password"
-          icon="lock-closed-outline"
-          rightIcon={showPassword ? 'eye-off-outline' : 'eye-outline'}
-          onRightPress={() => setShowPassword(value => !value)}
-          placeholder="Masukkan password"
-          error={errors.password}
-          onSubmitEditing={submit}
-        />
-        <View style={styles.forgotRow}>
-          <Link href="/(auth)/forgot-password" style={styles.forgotLink}>Lupa password?</Link>
+
+        <View style={styles.passwordBlock}>
+          <Field
+            label="Password"
+            value={password}
+            onChangeText={value => { setPassword(value); setErrors(current => ({ ...current, password: undefined })); }}
+            secureTextEntry={!showPassword}
+            autoComplete="current-password"
+            icon="lock-closed-outline"
+            rightIcon={showPassword ? 'eye-off-outline' : 'eye-outline'}
+            onRightPress={() => setShowPassword(value => !value)}
+            placeholder="Masukkan password"
+            error={errors.password}
+            onSubmitEditing={submit}
+          />
+          <Pressable onPress={() => router.push('/(auth)/forgot-password')} style={({ pressed }) => [styles.forgotButton, pressed && { opacity: .65 }]}>
+            <Text style={styles.forgotLink}>Lupa password?</Text>
+          </Pressable>
         </View>
-        <Button title="Masuk" loading={loading} onPress={submit} />
+
+        <Button title="Masuk" icon="log-in-outline" loading={loading} onPress={submit} style={styles.primaryButton} />
+
+        <View style={styles.switchCard}>
+          <View style={styles.switchIcon}><Ionicons name="person-add-outline" size={18} color={colors.primary} /></View>
+          <View style={styles.switchCopy}>
+            <Text style={styles.switchTitle}>Belum punya akun?</Text>
+            <Text style={styles.switchText}>Daftar menggunakan email dan identitas BINUS.</Text>
+          </View>
+          <Link href="/(auth)/register" style={styles.switchAction}>Daftar</Link>
+        </View>
       </View>
-      <Text style={styles.switch}>Belum punya akun? <Link href="/(auth)/register" style={styles.link}>Daftar sekarang</Link></Text>
     </AuthShell>
   );
 }
 
 const styles = StyleSheet.create({
   form: { gap: spacing.md },
-  forgotRow: { alignItems: 'flex-end', marginTop: -4 },
-  forgotLink: { color: colors.primary, fontFamily: 'PoppinsSemiBold', fontSize: 13 },
-  switch: { textAlign: 'center', color: colors.muted, fontFamily: 'PoppinsRegular', fontSize: 13 },
-  link: { color: colors.primary, fontFamily: 'PoppinsSemiBold' },
+  passwordBlock: { gap: 5 },
+  forgotButton: { alignSelf: 'flex-end', minHeight: 30, justifyContent: 'center', paddingHorizontal: 2 },
+  forgotLink: { color: colors.primary, fontFamily: 'PoppinsSemiBold', fontSize: 12.5 },
+  primaryButton: { marginTop: 2 },
+  switchCard: { marginTop: 2, padding: 13, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: '#FBFDFF', flexDirection: 'row', alignItems: 'center', gap: 11 },
+  switchIcon: { width: 38, height: 38, borderRadius: 10, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  switchCopy: { flex: 1, gap: 1 },
+  switchTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 12.5, color: colors.text },
+  switchText: { fontFamily: 'PoppinsRegular', fontSize: 10.5, lineHeight: 16, color: colors.muted },
+  switchAction: { color: colors.primary, fontFamily: 'PoppinsSemiBold', fontSize: 12.5 },
 });

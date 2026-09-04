@@ -24,9 +24,6 @@ export class CreateTransactionDto {
   @IsEnum(FulfillmentMethod)
   fulfillmentMethod: FulfillmentMethod;
 
-  @IsOptional() @IsString() @MaxLength(100) meetupCampus?: string;
-  @IsOptional() @IsString() @MaxLength(160) meetupLocation?: string;
-  @IsOptional() @IsString() @MaxLength(120) meetupSchedule?: string;
   @IsOptional() @IsEnum(CourierProvider) courierProvider?: CourierProvider;
   @IsOptional() @IsString() @MaxLength(500) deliveryAddress?: string;
   @IsOptional() @IsString() @MaxLength(30) recipientPhone?: string;

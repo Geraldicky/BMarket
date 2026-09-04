@@ -62,7 +62,7 @@ async function main(): Promise<void> {
       condition: 'GOOD',
       status: 'ACTIVE',
       sellerId: student1.id,
-      images: '[]',
+      images: JSON.stringify(['https://placehold.co/1200x900/png?text=Asus+VivoBook+14']),
       stock: 3,
       stockLeft: 3,
     },
@@ -77,7 +77,7 @@ async function main(): Promise<void> {
       type: 'SERVICE',
       status: 'ACTIVE',
       sellerId: student1.id,
-      images: '[]',
+      images: JSON.stringify(['https://placehold.co/1200x900/png?text=Jasa+Edit+Video']),
       // Jasa tidak punya stock
     },
   });
@@ -92,7 +92,7 @@ async function main(): Promise<void> {
       condition: 'LIKE_NEW',
       status: 'ACTIVE',
       sellerId: student2.id,
-      images: '[]',
+      images: JSON.stringify(['https://placehold.co/1200x900/png?text=Buku+Algoritma']),
       stock: 5,
       stockLeft: 5,
     },
@@ -108,7 +108,9 @@ async function main(): Promise<void> {
       condition: 'LIKE_NEW',
       status: 'ACTIVE',
       sellerId: student2.id,
-      images: '[]',
+      images: JSON.stringify(['https://placehold.co/1200x900/png?text=Tas+Kuliah']),
+      stock: 2,
+      stockLeft: 2,
     },
   });
 

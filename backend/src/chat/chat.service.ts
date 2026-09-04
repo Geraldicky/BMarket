@@ -27,6 +27,9 @@ export class ChatService {
     const otherUser = await this.prisma.user.findUnique({ where: { id: otherUserId } });
     if (!otherUser) throw new NotFoundException('User tidak ditemukan.');
 
+    const blocked = await this.prisma.userBlock.count({ where: { OR: [{ blockerId: userId, blockedId: otherUserId }, { blockerId: otherUserId, blockedId: userId }] } });
+    if (blocked) throw new ForbiddenException('Chat tidak tersedia karena salah satu pengguna memblokir akun lainnya.');
+
     // Enforce ordering: ID terkecil selalu jadi userA
     const [userAId, userBId] = [userId, otherUserId].sort();
 

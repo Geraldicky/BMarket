@@ -47,6 +47,14 @@ model User {
   chatRoomsB         ChatRoom[]         @relation("UserB")
   emailVerification  EmailVerification?
   passwordReset      PasswordReset?
+  wishlistItems      Wishlist[]
+  recentlyViewed     RecentlyViewed[]
+  disputesOpened     Dispute[]         @relation("DisputesOpened")
+  disputesResolved   Dispute[]         @relation("DisputesResolved")
+  blocksInitiated    UserBlock[]       @relation("Blocker")
+  blocksReceived     UserBlock[]       @relation("Blocked")
+  notifications      Notification[]
+  walletLedger       WalletLedger[]
 
   @@map("users")
 }
@@ -118,7 +126,9 @@ model Listing {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
-  transactions Transaction[]
+  transactions   Transaction[]
+  wishlistedBy    Wishlist[]
+  recentlyViewed  RecentlyViewed[]
 
   @@index([status, createdAt])
   @@index([category, status])
@@ -172,7 +182,7 @@ enum Condition {
 // ─────────────────────────────────────────────
 // PENDING   = Menunggu pembayaran dari buyer
 // PAID      = Buyer sudah bayar, masuk escrow, menunggu konfirmasi seller
-// CONFIRMED = Seller konfirmasi, barang sedang diproses
+// CONFIRMED = Seller konfirmasi proses (dipakai untuk kurir; meetup langsung melewati tahap ini)
 // COMPLETED = Selesai, dana dilepas ke seller
 // CANCELLED = Dibatalkan, dana dikembalikan ke buyer
 model Transaction {
@@ -211,14 +221,24 @@ model Transaction {
   cancelledAt     DateTime?
   cancelledBy     String?
   cancellationReason String?
+  // V21: stok checkout hanya direservasi sementara sampai timestamp ini.
+  reservationExpiresAt DateTime?
+  // V21: snapshot immutable agar histori transaksi tidak berubah ketika listing diedit.
+  listingTitleSnapshot     String?
+  listingImageSnapshot     String?
+  listingTypeSnapshot      ListingType?
+  listingConditionSnapshot Condition?
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
-  review Review?
+  review  Review?
+  dispute      Dispute?
+  walletLedger WalletLedger[]
 
   @@index([buyerId, createdAt])
   @@index([sellerId, createdAt])
   @@index([status, createdAt])
+  @@index([status, reservationExpiresAt])
   @@index([fulfillmentMethod, status])
   @@index([listingId])
   @@map("transactions")
@@ -255,6 +275,37 @@ model CommissionSetting {
 }
 
 // ─────────────────────────────────────────────
+// SAVED & DISCOVERY (V23)
+// ─────────────────────────────────────────────
+model Wishlist {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listingId String
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, listingId])
+  @@index([userId, createdAt])
+  @@index([listingId])
+  @@map("wishlists")
+}
+
+model RecentlyViewed {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listingId String
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  viewedAt  DateTime @default(now())
+
+  @@unique([userId, listingId])
+  @@index([userId, viewedAt])
+  @@index([listingId])
+  @@map("recently_viewed")
+}
+
+// ─────────────────────────────────────────────
 // REVIEW
 // ─────────────────────────────────────────────
 model Review {
@@ -271,6 +322,124 @@ model Review {
 
   @@index([revieweeId, createdAt])
   @@map("reviews")
+}
+
+// ─────────────────────────────────────────────
+// DISPUTE & SAFETY (V24)
+// ─────────────────────────────────────────────
+model Dispute {
+  id            String            @id @default(uuid())
+  transactionId String            @unique
+  transaction   Transaction       @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  openedById    String
+  openedBy      User              @relation("DisputesOpened", fields: [openedById], references: [id])
+  reason        DisputeReason
+  description   String            @db.Text
+  evidenceUrls  String            @default("[]") @db.Text
+  status        DisputeStatus     @default(OPEN)
+  resolution    DisputeResolution?
+  resolutionNote String?          @db.Text
+  refundAmount  Decimal?          @db.Decimal(12, 2)
+  resolvedById  String?
+  resolvedBy    User?             @relation("DisputesResolved", fields: [resolvedById], references: [id])
+  resolvedAt    DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([status, createdAt])
+  @@index([openedById, createdAt])
+  @@map("disputes")
+}
+
+enum DisputeReason {
+  ITEM_NOT_AS_DESCRIBED
+  ITEM_DAMAGED
+  NOT_RECEIVED
+  SELLER_NO_SHOW
+  BUYER_NO_SHOW
+  OTHER
+}
+
+enum DisputeStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  REJECTED
+}
+
+enum DisputeResolution {
+  REFUND_BUYER
+  RELEASE_SELLER
+  REJECT_DISPUTE
+}
+
+model UserBlock {
+  id        String   @id @default(uuid())
+  blockerId String
+  blocker   User     @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blockedId String
+  blocked   User     @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
+  @@index([blockerId, createdAt])
+  @@index([blockedId])
+  @@map("user_blocks")
+}
+
+// ─────────────────────────────────────────────
+// NOTIFICATIONS & WALLET AUDIT (V25)
+// ─────────────────────────────────────────────
+model Notification {
+  id         String           @id @default(uuid())
+  userId     String
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       NotificationType
+  title      String
+  body       String           @db.Text
+  entityType String?
+  entityId   String?
+  isRead     Boolean          @default(false)
+  createdAt  DateTime         @default(now())
+
+  @@index([userId, isRead, createdAt])
+  @@map("notifications")
+}
+
+enum NotificationType {
+  TRANSACTION
+  CHAT
+  REVIEW
+  DISPUTE
+  SYSTEM
+}
+
+model WalletLedger {
+  id             String      @id @default(uuid())
+  userId         String
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactionId  String?
+  transaction    Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  type           LedgerType
+  balanceDelta   Decimal     @default(0.00) @db.Decimal(12, 2)
+  escrowDelta    Decimal     @default(0.00) @db.Decimal(12, 2)
+  balanceAfter   Decimal     @db.Decimal(12, 2)
+  escrowAfter    Decimal     @db.Decimal(12, 2)
+  description    String?     @db.Text
+  idempotencyKey String      @unique
+  createdAt      DateTime    @default(now())
+
+  @@index([userId, createdAt])
+  @@index([transactionId])
+  @@map("wallet_ledger")
+}
+
+enum LedgerType {
+  TOPUP
+  PURCHASE_HOLD
+  REFUND
+  ESCROW_RELEASE
+  SELLER_PAYOUT
 }
 
 // ─────────────────────────────────────────────

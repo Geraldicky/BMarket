@@ -5,7 +5,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { Button, Card, Field, InlineAlert, Loader, Screen, Title } from '@/components/ui';
+import { Button, Card, FeedbackDialog, Field, InlineAlert, Loader, Screen, Title } from '@/components/ui';
 import { colors, radius } from '@/constants/theme';
 import { endpoints, errorMessage } from '@/lib/api';
 import type { FulfillmentMethod } from '@/types';
@@ -53,6 +53,7 @@ export default function ListingFormScreen() {
   const [fulfillmentMethods, setFulfillmentMethods] = useState<FulfillmentMethod[]>(['CAMPUS_MEETUP', 'INSTANT_COURIER']);
   const [errors, setErrors] = useState<FormErrors>({});
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [feedback, setFeedback] = useState<{ tone: 'success' | 'danger'; title: string; message: string; listingId?: string } | null>(null);
 
   const existing = useQuery({
     queryKey: ['listing', id],
@@ -212,23 +213,12 @@ export default function ListingFormScreen() {
       client.setQueryData(['listing', listing.id], listing);
       client.invalidateQueries({ queryKey: ['my-listings'] });
       client.invalidateQueries({ queryKey: ['listings'] });
-      const successMessage = id ? 'Perubahan listing sudah tersimpan.' : 'Listing langsung tayang di etalase BMarket.';
-      const listingRoute = { pathname: '/(student)/listing/[id]' as const, params: { id: listing.id } };
-      if (Platform.OS === 'web') {
-        Alert.alert('Berhasil', successMessage);
-        router.replace(listingRoute);
-        return;
-      }
-      Alert.alert(
-        'Berhasil',
-        successMessage,
-        [{ text: 'Lihat listing', onPress: () => router.replace(listingRoute) }],
-      );
+      setFeedback({ tone: 'success', title: id ? 'Perubahan tersimpan' : 'Listing berhasil dipublikasikan', message: id ? 'Informasi listing sudah diperbarui.' : 'Listing langsung tayang di etalase BMarket dan dapat ditemukan oleh buyer.', listingId: listing.id });
     },
     onError: error => {
       setUploadProgress(null);
       if (error instanceof Error && error.message === 'Lengkapi bagian yang masih ditandai.') return;
-      Alert.alert('Belum berhasil', errorMessage(error));
+      setFeedback({ tone: 'danger', title: 'Listing belum tersimpan', message: errorMessage(error) });
     },
   });
 
@@ -319,7 +309,7 @@ export default function ListingFormScreen() {
             <View style={styles.deliveryGrid}>
               <Pressable onPress={() => toggleFulfillment('CAMPUS_MEETUP')} style={[styles.deliveryOption, fulfillmentMethods.includes('CAMPUS_MEETUP') && styles.deliveryOptionActive]}>
                 <View style={styles.deliveryIcon}><Ionicons name="people-outline" size={22} color={colors.primary} /></View>
-                <View style={styles.flex}><Text style={styles.deliveryTitle}>Meetup Kampus</Text><Text style={styles.deliveryCaption}>Serah-terima dengan kode keamanan</Text></View>
+                <View style={styles.flex}><Text style={styles.deliveryTitle}>Meetup langsung</Text><Text style={styles.deliveryCaption}>Waktu dan lokasi disepakati lewat chat</Text></View>
                 <Ionicons name={fulfillmentMethods.includes('CAMPUS_MEETUP') ? 'checkmark-circle' : 'ellipse-outline'} size={21} color={fulfillmentMethods.includes('CAMPUS_MEETUP') ? colors.primary : colors.borderStrong} />
               </Pressable>
               <Pressable onPress={() => toggleFulfillment('INSTANT_COURIER')} style={[styles.deliveryOption, fulfillmentMethods.includes('INSTANT_COURIER') && styles.deliveryOptionActive]}>
@@ -382,6 +372,7 @@ export default function ListingFormScreen() {
           <Text style={styles.reviewNote}>Listing langsung tayang. Pengguna lain tetap dapat melaporkan konten yang melanggar aturan komunitas.</Text>
         </View>
       </View>
+      <FeedbackDialog visible={Boolean(feedback)} tone={feedback?.tone || 'success'} title={feedback?.title || ''} message={feedback?.message || ''} primaryLabel={feedback?.listingId ? 'Lihat listing' : 'OK'} onClose={() => setFeedback(null)} onPrimary={() => { const listingId = feedback?.listingId; setFeedback(null); if (listingId) router.replace({ pathname: '/(student)/listing/[id]', params: { id: listingId } }); }} />
     </Screen>
   );
 }
@@ -407,19 +398,19 @@ const styles = StyleSheet.create({
   segmentActive: { borderColor: '#A8C8EF', backgroundColor: colors.primarySoft },
   segmentText: { fontFamily: 'PoppinsSemiBold', fontSize: 13, color: colors.textSoft },
   segmentTextActive: { color: colors.primary },
-  segmentCaption: { fontFamily: 'PoppinsRegular', fontSize: 10, color: colors.muted, marginTop: 1 },
+  segmentCaption: { fontFamily: 'PoppinsRegular', fontSize: 12, color: colors.muted, marginTop: 1 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { minHeight: 40, paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, justifyContent: 'center' },
   chipActive: { borderColor: '#A8C8EF', backgroundColor: colors.primarySoft },
   chipText: { fontFamily: 'PoppinsMedium', fontSize: 12, color: colors.textSoft },
   chipTextActive: { fontFamily: 'PoppinsSemiBold', color: colors.primary },
-  deliveryHelp: { fontFamily: 'PoppinsRegular', fontSize: 11, lineHeight: 18, color: colors.muted, marginTop: -4, marginBottom: 10 },
+  deliveryHelp: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 18, color: colors.muted, marginTop: -4, marginBottom: 10 },
   deliveryGrid: { gap: 9 },
   deliveryOption: { minHeight: 70, padding: 13, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 11 },
   deliveryOptionActive: { borderColor: '#A8C8EF', backgroundColor: colors.primarySoft },
   deliveryIcon: { width: 42, height: 42, borderRadius: 11, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   deliveryTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 13, color: colors.text },
-  deliveryCaption: { fontFamily: 'PoppinsRegular', fontSize: 10, lineHeight: 16, color: colors.muted, marginTop: 1 },
+  deliveryCaption: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 16, color: colors.muted, marginTop: 1 },
   errorText: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 18, color: colors.danger, marginTop: 6 },
   fieldRow: { flexDirection: 'row', gap: 14 },
   fieldRowMobile: { flexDirection: 'column' },
@@ -433,31 +424,31 @@ const styles = StyleSheet.create({
   uploadError: { borderColor: colors.danger, backgroundColor: colors.dangerSoft },
   uploadIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   uploadTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 14, color: colors.text, marginTop: 2 },
-  uploadCopy: { fontFamily: 'PoppinsRegular', fontSize: 11, lineHeight: 17, textAlign: 'center', color: colors.muted },
+  uploadCopy: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 17, textAlign: 'center', color: colors.muted },
   photos: { gap: 12 },
   photoTile: { position: 'relative', height: 184, borderRadius: 14, overflow: 'hidden', borderWidth: 2, borderColor: 'transparent', backgroundColor: colors.surfaceMuted },
   photoTileCover: { borderColor: colors.primary },
   photo: { width: '100%', height: 142 },
   photoTopRow: { position: 'absolute', left: 9, right: 9, top: 9, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   coverBadge: { minHeight: 28, paddingHorizontal: 9, borderRadius: radius.pill, backgroundColor: 'rgba(12,79,168,.92)', flexDirection: 'row', alignItems: 'center', gap: 5 },
-  coverBadgeText: { fontFamily: 'PoppinsSemiBold', fontSize: 10, color: colors.white },
+  coverBadgeText: { fontFamily: 'PoppinsSemiBold', fontSize: 12, color: colors.white },
   photoDelete: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(18,42,63,.78)', alignItems: 'center', justifyContent: 'center' },
   photoActions: { height: 40, paddingHorizontal: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.surface },
   photoAction: { width: 32, height: 30, borderRadius: 8, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' },
   photoActionDisabled: { opacity: 0.32 },
   coverAction: { flex: 1, alignItems: 'center' },
-  coverActionText: { fontFamily: 'PoppinsMedium', fontSize: 10, color: colors.textSoft },
+  coverActionText: { fontFamily: 'PoppinsMedium', fontSize: 12, color: colors.textSoft },
   tips: { backgroundColor: colors.primaryDeep, borderColor: colors.primaryDeep, gap: 13 },
   tipHeader: { flexDirection: 'row', alignItems: 'center', gap: 11, marginBottom: 2 },
   tipIcon: { width: 44, height: 44, borderRadius: 13, backgroundColor: 'rgba(255,255,255,.1)', alignItems: 'center', justifyContent: 'center' },
   tipTitle: { flex: 1, fontFamily: 'PoppinsBold', fontSize: 16, color: colors.white },
   tip: { flexDirection: 'row', alignItems: 'center', gap: 9 },
-  tipText: { flex: 1, fontFamily: 'PoppinsRegular', fontSize: 11, lineHeight: 18, color: '#CFDBE6' },
+  tipText: { flex: 1, fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 18, color: '#CFDBE6' },
   progressWrap: { gap: 8, padding: 14, borderRadius: 12, backgroundColor: colors.primarySoft },
   progressHeader: { flexDirection: 'row', justifyContent: 'space-between' },
-  progressLabel: { fontFamily: 'PoppinsMedium', fontSize: 11, color: colors.primaryDark },
-  progressValue: { fontFamily: 'PoppinsSemiBold', fontSize: 11, color: colors.primary },
+  progressLabel: { fontFamily: 'PoppinsMedium', fontSize: 12, color: colors.primaryDark },
+  progressValue: { fontFamily: 'PoppinsSemiBold', fontSize: 12, color: colors.primary },
   progressTrack: { height: 7, overflow: 'hidden', borderRadius: radius.pill, backgroundColor: '#CFE1F6' },
   progressBar: { height: '100%', borderRadius: radius.pill, backgroundColor: colors.primary },
-  reviewNote: { fontFamily: 'PoppinsRegular', fontSize: 11, lineHeight: 18, textAlign: 'center', color: colors.muted },
+  reviewNote: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 18, textAlign: 'center', color: colors.muted },
 });

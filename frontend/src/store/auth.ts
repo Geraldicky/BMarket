@@ -8,9 +8,9 @@ type AuthState = { user: User | null; hydrated: boolean; bootstrap: () => Promis
 export const useAuth = create<AuthState>(set => ({
   user: null, hydrated: false,
   bootstrap: async () => { const token = await getStoredValue(TOKEN_KEY); if (!token) return set({ hydrated: true }); try { set({ user: await endpoints.me(), hydrated: true }); } catch { await deleteStoredValue(TOKEN_KEY); set({ user: null, hydrated: true }); } },
-  login: async input => { const result = await endpoints.login({ ...input, email: input.email.trim().toLowerCase() }); await setStoredValue(TOKEN_KEY, result.token); set({ user: result.user }); },
+  login: async input => { const result = await endpoints.login({ ...input, email: input.email.trim().toLowerCase() }); await setStoredValue(TOKEN_KEY, result.token); try { set({ user: await endpoints.me() }); } catch (error) { await deleteStoredValue(TOKEN_KEY); set({ user: null }); throw error; } },
   register: async input => endpoints.register({ ...input, email: input.email.trim().toLowerCase(), name: input.name.trim() }),
-  verifyEmail: async input => { const result = await endpoints.verifyEmail({ ...input, email: input.email.trim().toLowerCase() }); await setStoredValue(TOKEN_KEY, result.token); set({ user: result.user }); },
+  verifyEmail: async input => { const result = await endpoints.verifyEmail({ ...input, email: input.email.trim().toLowerCase() }); await setStoredValue(TOKEN_KEY, result.token); try { set({ user: await endpoints.me() }); } catch (error) { await deleteStoredValue(TOKEN_KEY); set({ user: null }); throw error; } },
   refresh: async () => set({ user: await endpoints.me() }),
   logout: async () => { await deleteStoredValue(TOKEN_KEY); set({ user: null }); },
 }));

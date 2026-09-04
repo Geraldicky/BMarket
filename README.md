@@ -1,6 +1,6 @@
-# BMarket 2.0
+# BMarket V21
 
-Marketplace barang dan jasa khusus komunitas BINUS. Versi 2.0 mengganti aplikasi Flutter dengan React Native (Expo) dan memperkuat backend NestJS/PostgreSQL untuk autentikasi, moderasi, transaksi escrow, upload gambar, serta chat real-time.
+Marketplace barang dan jasa khusus komunitas BINUS. V21 berfokus pada core stability dan transaction integrity: upload gambar dipulihkan, checkout memakai reservasi stok 15 menit, histori transaksi memakai snapshot listing, dan pembatalan setelah seller mengonfirmasi tidak lagi diperbolehkan secara langsung.
 
 ## Struktur
 
@@ -13,7 +13,7 @@ docs/           laporan teknis upgrade
 
 ## Menjalankan backend
 
-Prasyarat: Node.js LTS dan PostgreSQL.
+Prasyarat: PostgreSQL dan Node.js `24.15.0` (tersimpan di `.nvmrc`; jalur kompatibel lain: `^22.22.3` atau `>=26`).
 
 ```bash
 cd backend
@@ -49,25 +49,25 @@ npm run web
 npm run typecheck
 ```
 
-## Alur transaksi V12
+## Alur transaksi V21
 
 1. Seller menentukan apakah listing menerima **Meetup Kampus**, **Kurir Instan simulasi**, atau keduanya.
-2. Buyer mengatur jumlah/catatan, memilih metode penyerahan, lalu melengkapi detail checkout; stok langsung direservasi.
+2. Buyer mengatur jumlah/catatan, memilih metode penyerahan, lalu melengkapi detail checkout; stok langsung direservasi selama 15 menit (dapat diubah melalui `CHECKOUT_RESERVATION_MINUTES`).
 3. Meetup meminta kampus, titik temu, dan jadwal. Kurir meminta GoSend/GrabExpress simulasi, alamat, serta nomor penerima.
 4. Buyer membayar dari saldo BMarket; subtotal dan ongkir masuk escrow. Komisi 5% hanya dihitung dari subtotal barang/jasa, bukan ongkir.
 5. Seller mengonfirmasi meetup atau menyiapkan pengiriman. Kurir memperoleh nomor tracking simulasi.
 6. Untuk meetup, buyer membuat kode serah-terima enam digit yang berlaku 15 menit setelah barang/jasa diterima. Seller memasukkan kode tersebut untuk menyelesaikan transaksi.
 7. Untuk kurir, buyer menyelesaikan transaksi setelah kiriman benar-benar diterima.
 8. Setelah transaksi selesai, saldo virtual seller menerima subtotal setelah biaya layanan. Ongkir dianggap dibayarkan ke penyedia kurir simulasi.
-9. Pembatalan wajib memiliki alasan dan mengembalikan seluruh pembayaran serta stok secara atomik.
+9. Pembatalan wajib memiliki alasan dan hanya dapat dilakukan saat `PENDING` atau `PAID`. Setelah seller mengubah transaksi menjadi `CONFIRMED`, direct-cancel ditutup agar buyer tidak dapat menerima barang sekaligus refund.
 
 Tidak tersedia COD tunai. Meetup tetap menggunakan pembayaran virtual BMarket sehingga escrow, riwayat transaksi, dan biaya layanan tidak dapat dilewati.
 
 Alur dasar yang tetap dipertahankan:
 
-1. Buyer memeriksa ringkasan checkout sebelum membuat pesanan; stok langsung direservasi.
+1. Buyer memeriksa ringkasan checkout sebelum membuat pesanan; stok direservasi sementara dan otomatis kembali jika pembayaran melewati batas waktu.
 2. Satu buyer tidak dapat membuat beberapa transaksi aktif untuk listing yang sama.
-3. Setiap milestone menyimpan waktu pembayaran, konfirmasi, selesai, atau batal untuk ditampilkan sebagai timeline.
+3. Setiap milestone menyimpan waktu pembayaran, konfirmasi, selesai, atau batal untuk ditampilkan sebagai timeline. V21 juga menyimpan snapshot judul, cover, tipe, dan kondisi listing agar riwayat pembelian tidak berubah saat listing diedit.
 
 Semua perubahan saldo, escrow, status, dan stok dijalankan dalam transaksi database `Serializable` untuk mencegah pembayaran ganda dan overselling. Pembatalan tidak dapat mengaktifkan kembali listing yang sedang disembunyikan atau dihapus admin.
 
@@ -85,7 +85,7 @@ Semua perubahan saldo, escrow, status, dan stok dijalankan dalam transaksi datab
 2. API selalu memberikan respons generik agar tidak membocorkan email mana yang terdaftar.
 3. Pengguna memasukkan OTP enam digit, lalu memperoleh izin reset terbatas yang hanya disimpan sementara di memori aplikasi.
 4. Password baru harus dikonfirmasi dan tidak boleh sama dengan password lama.
-5. Reset berhasil menghapus token reset dan membatalkan seluruh JWT serta koneksi chat lama. Pengguna kemudian masuk kembali.
+5. Reset berhasil menghapus token reset dan menaikkan `tokenVersion`, sehingga JWT lama ditolak pada request dan koneksi baru. Pengguna kemudian masuk kembali.
 
 ## Alur moderasi listing
 
@@ -106,15 +106,16 @@ Setelah mengambil versi yang menyertakan perubahan schema, jalankan `npm run db:
 5. Ketika total stok diedit, unit yang sudah masuk transaksi tetap direservasi dan tidak kembali menjadi stok tersedia.
 6. Seller wajib mengaktifkan minimal satu metode penyerahan pada form listing.
 
-## Upgrade dari V11 ke V12
+## Upgrade dari V20 ke V21
 
-Setelah menimpa folder project lama dengan isi ZIP V12, jalankan:
+Setelah menimpa folder project lama dengan isi V21, jalankan:
 
 ```bash
 cd backend
 npm install
 npm run db:generate
 npm run db:migrate
+npm run db:seed       # opsional untuk database development baru
 npm run dev
 ```
 
@@ -126,7 +127,7 @@ npm install
 npm start -- --clear
 ```
 
-Migration V12 mengisi transaksi lama dengan `grandTotal = totalPrice` dan mengaktifkan Meetup + Kurir pada listing lama, sehingga data V11 tetap dapat dibuka.
+Migration V21 menambahkan `reservationExpiresAt` dan snapshot listing ke transaksi. Transaksi `PENDING` lama diberi batas 15 menit dari waktu pembuatannya; jika sudah lewat, service V21 akan mengubahnya menjadi `CANCELLED` dan mengembalikan stok.
 
 ## Akun seed
 
