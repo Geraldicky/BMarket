@@ -18,7 +18,9 @@ const host = Constants.expoConfig?.hostUri?.split(':')[0];
 export const API_URL = process.env.EXPO_PUBLIC_API_URL || `http://${host || 'localhost'}:3000/api`;
 export const SOCKET_URL = API_URL.replace(/\/api\/?$/, '');
 export const TOKEN_KEY = 'bmarket_access_token';
-export const api = create({ baseURL: API_URL, timeout: 15000 });
+const configuredTimeout = Number(process.env.EXPO_PUBLIC_API_TIMEOUT_MS || 15000);
+export const API_TIMEOUT_MS = Number.isFinite(configuredTimeout) && configuredTimeout >= 5000 ? configuredTimeout : 15000;
+export const api = create({ baseURL: API_URL, timeout: API_TIMEOUT_MS });
 api.interceptors.request.use(async config => { const token = await getStoredValue(TOKEN_KEY); if (token) config.headers.Authorization = `Bearer ${token}`; return config; });
 const unwrap = <T>(response: { data: ApiEnvelope<T> }) => response.data.data;
 

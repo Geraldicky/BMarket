@@ -1,0 +1,54 @@
+services:
+  - type: web
+    name: bmarket-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm ci --include=dev && npm run db:generate && npm run build && npm prune --omit=dev
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: OTP_HASH_SECRET
+        sync: false
+      - key: OTP_TTL_MINUTES
+        value: 10
+      - key: OTP_RESEND_SECONDS
+        value: 60
+      - key: OTP_MAX_ATTEMPTS
+        value: 5
+      - key: PASSWORD_RESET_MIN_RESPONSE_MS
+        value: 350
+      - key: SSO_ALLOWED_DOMAINS
+        value: "@binus.ac.id,@student.binus.ac.id,@binus.edu"
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: 465
+      - key: SMTP_SECURE
+        value: true
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: OTP_DEV_LOG
+        value: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        value: bmarket-public
+      - key: CHECKOUT_RESERVATION_MINUTES
+        value: 15
