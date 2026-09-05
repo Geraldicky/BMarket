@@ -1,5 +1,5 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
-import nodemailer, { SendMailOptions, Transporter } from 'nodemailer';
+import nodemailer, { Transporter } from 'nodemailer';
 
 type CodeEmail = {
   email: string;
@@ -11,16 +11,27 @@ type CodeEmail = {
   devLabel: string;
 };
 
+type DeliverableEmail = {
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+};
+
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private readonly transporter: Transporter | null;
-  private readonly from: string;
+  private readonly smtpFrom: string;
+  private readonly brevoApiKey: string | null;
+  private readonly brevoFromEmail: string | null;
+  private readonly brevoFromName: string;
 
   constructor() {
     const user = process.env.SMTP_USER?.trim();
     const pass = process.env.SMTP_PASS?.trim();
-    this.from = process.env.SMTP_FROM?.trim() || `BMarket <${user || 'no-reply@localhost'}>`;
+
+    this.smtpFrom = process.env.SMTP_FROM?.trim() || `BMarket <${user || 'no-reply@localhost'}>`;
     this.transporter = user && pass
       ? nodemailer.createTransport({
           host: process.env.SMTP_HOST?.trim() || 'smtp.gmail.com',
@@ -29,6 +40,10 @@ export class EmailService {
           auth: { user, pass },
         })
       : null;
+
+    this.brevoApiKey = process.env.BREVO_API_KEY?.trim() || null;
+    this.brevoFromEmail = process.env.BREVO_FROM_EMAIL?.trim() || null;
+    this.brevoFromName = process.env.BREVO_FROM_NAME?.trim() || 'BMarket';
   }
 
   async sendVerificationCode(email: string, code: string, name: string): Promise<void> {
@@ -56,7 +71,7 @@ export class EmailService {
   }
 
   async sendPasswordChangedNotice(email: string, name: string): Promise<void> {
-    if (!this.transporter) {
+    if (!this.hasEmailProvider()) {
       if (this.mayLogOtp()) {
         this.logger.log(`Notifikasi development: password ${email} berhasil diubah.`);
         return;
@@ -66,7 +81,6 @@ export class EmailService {
 
     const safeName = this.escapeHtml(name);
     await this.deliver({
-      from: this.from,
       to: email,
       subject: 'Password BMarket kamu telah diubah',
       text: [
@@ -80,14 +94,14 @@ export class EmailService {
         'Password berhasil diubah',
         'Password akun BMarket kamu baru saja diperbarui. Semua sesi lama telah dikeluarkan. Jika bukan kamu yang melakukannya, segera hubungi administrator BMarket.',
       ),
-    }, email);
+    });
   }
 
   private async sendCodeEmail(input: CodeEmail): Promise<void> {
     const ttlMinutes = Number(process.env.OTP_TTL_MINUTES || 10);
-    if (!this.transporter) {
+    if (!this.hasEmailProvider()) {
       if (this.mayLogOtp()) {
-        this.logger.warn(`SMTP belum diatur. OTP development (${input.devLabel}) untuk ${input.email}: ${input.code}`);
+        this.logger.warn(`Email provider belum diatur. OTP development (${input.devLabel}) untuk ${input.email}: ${input.code}`);
         return;
       }
       throw new ServiceUnavailableException(
@@ -97,7 +111,6 @@ export class EmailService {
 
     const safeName = this.escapeHtml(input.name);
     await this.deliver({
-      from: this.from,
       to: input.email,
       subject: input.subject,
       text: [
@@ -113,7 +126,7 @@ export class EmailService {
         input.heading,
         `${input.description}<div style="font-size:34px;font-weight:700;letter-spacing:10px;text-align:center;background:#eef6ff;border-radius:12px;padding:20px;color:#1167d8;margin:22px 0">${input.code}</div><span style="font-size:13px;color:#64748b">Kode berlaku selama ${ttlMinutes} menit dan hanya dapat digunakan satu kali. Jika kamu tidak meminta kode ini, abaikan email ini.</span>`,
       ),
-    }, input.email);
+    });
   }
 
   private emailFrame(safeName: string, heading: string, content: string): string {
@@ -133,17 +146,60 @@ export class EmailService {
       </div>`;
   }
 
+  private hasEmailProvider(): boolean {
+    return Boolean((this.brevoApiKey && this.brevoFromEmail) || this.transporter);
+  }
+
   private mayLogOtp(): boolean {
     return process.env.NODE_ENV !== 'production' &&
       (process.env.OTP_DEV_LOG ?? 'true').toLowerCase() === 'true';
   }
 
-  private async deliver(options: SendMailOptions, email: string): Promise<void> {
+  private async deliver(message: DeliverableEmail): Promise<void> {
     try {
-      await this.transporter!.sendMail(options);
+      // Render Free blocks outbound SMTP ports. Prefer Brevo's HTTPS API when configured.
+      if (this.brevoApiKey && this.brevoFromEmail) {
+        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: {
+            accept: 'application/json',
+            'api-key': this.brevoApiKey,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            sender: {
+              email: this.brevoFromEmail,
+              name: this.brevoFromName,
+            },
+            to: [{ email: message.to }],
+            subject: message.subject,
+            htmlContent: message.html,
+            textContent: message.text,
+          }),
+        });
+
+        if (!response.ok) {
+          const details = await response.text().catch(() => '');
+          throw new Error(`Brevo API ${response.status}: ${details || response.statusText}`);
+        }
+        return;
+      }
+
+      if (this.transporter) {
+        await this.transporter.sendMail({
+          from: this.smtpFrom,
+          to: message.to,
+          subject: message.subject,
+          text: message.text,
+          html: message.html,
+        });
+        return;
+      }
+
+      throw new Error('Tidak ada email provider yang dikonfigurasi.');
     } catch (error) {
       this.logger.error(
-        `Gagal mengirim email ke ${email}`,
+        `Gagal mengirim email ke ${message.to}`,
         error instanceof Error ? error.stack : String(error),
       );
       throw new ServiceUnavailableException(

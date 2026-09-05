@@ -8,13 +8,12 @@ export function validateEnvironment(config: Environment) {
   if (config.NODE_ENV === 'production') {
     const required = [
       'OTP_HASH_SECRET',
-      'SMTP_HOST',
-      'SMTP_USER',
-      'SMTP_PASS',
       'CORS_ORIGIN',
       'SUPABASE_URL',
       'SUPABASE_SERVICE_ROLE_KEY',
       'SUPABASE_STORAGE_BUCKET',
+      'BREVO_API_KEY',
+      'BREVO_FROM_EMAIL',
     ];
     const missingProduction = required.filter(key => !config[key]?.trim());
     if (missingProduction.length) {
