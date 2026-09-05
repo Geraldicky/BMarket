@@ -57,25 +57,32 @@ export class UploadsService {
     const encodedPath = encodedStoragePath(objectPath);
     const endpoint = `${this.supabaseUrl}/storage/v1/object/${encodeURIComponent(this.bucket)}/${encodedPath}`;
 
-    // Node's Buffer uses ArrayBufferLike internally, while fetch's BodyInit typing
-    // expects a concrete ArrayBuffer. Create an exact ArrayBuffer view so TypeScript
-    // and the runtime agree without copying unrelated bytes from the pooled Buffer.
     const uploadBody = file.buffer.buffer.slice(
       file.buffer.byteOffset,
       file.buffer.byteOffset + file.buffer.byteLength,
     ) as ArrayBuffer;
 
+    const key = this.supabaseServiceRoleKey;
+
+    // Supabase's new sb_secret_* keys are API keys, not JWTs. They belong in the
+    // apikey header. Legacy service_role keys are JWTs and can additionally be
+    // sent as Authorization: Bearer <jwt>.
+    const headers: Record<string, string> = {
+      apikey: key,
+      'Content-Type': file.mimetype,
+      'Cache-Control': '3600',
+      'x-upsert': 'false',
+    };
+
+    if (!key.startsWith('sb_secret_')) {
+      headers.Authorization = `Bearer ${key}`;
+    }
+
     let response: Response;
     try {
       response = await fetch(endpoint, {
         method: 'POST',
-        headers: {
-          apikey: this.supabaseServiceRoleKey,
-          Authorization: `Bearer ${this.supabaseServiceRoleKey}`,
-          'Content-Type': file.mimetype,
-          'Cache-Control': '3600',
-          'x-upsert': 'false',
-        },
+        headers,
         body: uploadBody,
       });
     } catch (error) {
