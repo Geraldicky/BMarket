@@ -1,389 +1,188 @@
+<div align="center">
+
 # BMarket
 
-Marketplace barang dan jasa khusus komunitas BINUS.
+### A campus marketplace built for the BINUS community
 
-BMarket dirancang sebagai platform jual-beli antar Binusian dengan identitas kampus, komunikasi langsung antara buyer dan seller, sistem transaksi tercatat, escrow virtual, serta mekanisme serah-terima yang membantu transaksi menjadi lebih aman dan terstruktur.
+Buy, sell, pre-order, and coordinate transactions with other Binusians through one marketplace.
 
----
+[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![NestJS](https://img.shields.io/badge/NestJS-E0234E?logo=nestjs&logoColor=white)](https://nestjs.com/)
+[![Expo](https://img.shields.io/badge/Expo-000020?logo=expo&logoColor=white)](https://expo.dev/)
+[![Prisma](https://img.shields.io/badge/Prisma-2D3748?logo=prisma&logoColor=white)](https://www.prisma.io/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?logo=supabase&logoColor=white)](https://supabase.com/)
+[![Railway](https://img.shields.io/badge/Railway-0B0D0E?logo=railway&logoColor=white)](https://railway.com/)
+[![Vercel](https://img.shields.io/badge/Vercel-000000?logo=vercel&logoColor=white)](https://vercel.com/)
 
-## Tentang BMarket
+[Live App](https://b-market-hazel.vercel.app) · [API Health](https://bmarket-api-production.up.railway.app/api/health)
 
-BMarket memungkinkan mahasiswa BINUS untuk:
-
-- menjual barang preloved;
-- menawarkan jasa;
-- mencari kebutuhan kuliah;
-- berkomunikasi langsung dengan seller;
-- melakukan transaksi melalui saldo virtual dan escrow;
-- melakukan meetup dengan kode serah-terima;
-- memberikan rating dan review setelah transaksi selesai;
-- menyimpan listing favorit;
-- melaporkan listing atau pengguna yang bermasalah;
-- membuka dispute jika terjadi kendala transaksi.
-
-BMarket menggunakan sistem post-moderation. Listing dapat langsung tampil di marketplace, tetapi pengguna dapat melaporkan konten yang mencurigakan untuk ditinjau oleh admin.
+</div>
 
 ---
 
-## Fitur Utama
+## About
 
-### Authentication & Account
+BMarket is a marketplace designed specifically for the BINUS community. It provides a structured alternative to selling through class or cohort group chats by combining product discovery, campus identity, real-time communication, transaction tracking, escrow-style payments, pre-orders, and moderation in one system.
 
-- Registrasi menggunakan email BINUS.
-- Verifikasi email menggunakan OTP 6 digit.
-- OTP memiliki batas waktu, resend cooldown, dan batas percobaan.
-- Login menggunakan JWT.
-- Forgot password dan reset password menggunakan OTP.
-- Session invalidation menggunakan `tokenVersion`.
-- Student dan Admin role.
-- Profile mahasiswa dengan nama, NIM, bio, avatar, saldo, dan statistik transaksi.
+The platform supports both casual sellers listing personal items and student businesses that need reusable stock or campus pre-order workflows.
+
+## Key Features
 
 ### Marketplace
 
-- Listing barang dan jasa.
-- Kategori:
-  - Elektronik
-  - Buku
-  - Fashion
-  - Makanan
-  - Jasa
-  - Olahraga
-  - Lainnya
-- Upload 1–4 foto listing.
-- Cover image dan pengaturan urutan foto.
-- Kondisi barang dan manajemen stok.
-- Search listing.
-- Filter berdasarkan kategori, tipe, kondisi, dan metode penyerahan.
-- Sorting berdasarkan harga dan listing terbaru.
-- Pagination / load more.
-- Public seller profile.
-- Wishlist / produk favorit.
-- Recently viewed listing.
+- BINUS-only account registration with email verification.
+- Product and service listings with image uploads.
+- Search, category filters, sorting, pagination, wishlist, and recently viewed items.
+- Public seller profiles with ratings and reviews.
+- Campus meetup and simulated instant-courier fulfillment.
+- Real-time buyer-seller chat using Socket.IO.
 
-### Seller Storefront
+### Flexible Listing Models
 
-Seller memiliki halaman khusus untuk mengelola seluruh listing.
+BMarket supports multiple selling patterns instead of forcing every seller into the same inventory model.
 
-Informasi yang tersedia antara lain:
+| Mode | Use case | Behavior |
+| --- | --- | --- |
+| **One-off** | Preloved items, used electronics, books | Sold once, then marked as sold |
+| **Stocked** | Food, merchandise, repeatable products | Stock decreases per order and can be restocked |
+| **Pre-order** | Campus food PO, cohort merch, limited batches | Orders are collected until a deadline or quota |
+| **Service** | Design, tutoring, printing, and other services | Remains available without physical stock |
 
-- total listing;
-- listing aktif;
-- listing terjual;
-- listing yang dimoderasi;
-- transaksi selesai;
-- pendapatan seller;
-- search listing;
-- filter berdasarkan status;
-- edit dan nonaktifkan listing.
+Sellers can archive finished or inactive listings without removing historical transaction data.
+
+### Campus Pre-order
+
+Pre-order listings are designed for the common campus workflow where sellers collect orders through group chats.
+
+A pre-order can include:
+
+- closing date and time;
+- estimated ready date;
+- quota;
+- optional minimum order;
+- maximum quantity per buyer;
+- pickup location;
+- pickup notes;
+- seller order summary;
+- lifecycle status from open to ready and completed.
+
+Buyers receive a structured order record instead of relying on repeated promotional messages and manual chat lists.
 
 ### Transaction & Escrow
 
-BMarket menggunakan saldo virtual untuk mensimulasikan transaksi marketplace.
-
-Saat buyer melakukan checkout:
-
-1. Stok direservasi sementara.
-2. Buyer melakukan pembayaran menggunakan saldo BMarket.
-3. Dana dipindahkan ke escrow.
-4. Seller belum menerima dana selama transaksi belum selesai.
-5. Dana baru dilepas ke seller setelah proses serah-terima selesai.
-
-Reservasi checkout memiliki batas waktu. Jika buyer tidak melakukan pembayaran sampai batas waktu berakhir, transaksi dibatalkan dan stok dikembalikan.
-
-Transaction juga menyimpan snapshot informasi listing sehingga riwayat transaksi tidak berubah walaupun listing diedit setelah pembelian.
-
----
-
-## Meetup Flow
-
-Untuk transaksi meetup, lokasi dan waktu tidak disimpan sebagai form terpisah.
-
-Buyer dan seller melakukan koordinasi melalui chat.
-
-Alurnya:
+BMarket uses a virtual balance and escrow model for development and demonstration.
 
 ```text
-Seller membuat listing
-        ↓
-Buyer memilih listing
-        ↓
 Checkout
-        ↓
-Pembayaran
-        ↓
-Dana masuk escrow
-        ↓
-Buyer dan seller berdiskusi melalui chat
-        ↓
-Menentukan waktu dan lokasi meetup
-        ↓
-Buyer bertemu seller
-        ↓
-Buyer menerima dan memeriksa barang
-        ↓
-Buyer membuat kode serah-terima 6 digit
-        ↓
-Buyer memberikan kode kepada seller
-        ↓
-Seller memasukkan kode
-        ↓
-Kode diverifikasi
-        ↓
-Transaction COMPLETED
-        ↓
-Escrow dilepas
-        ↓
-Saldo seller bertambah
-        ↓
-Buyer dapat memberikan review
+   ↓
+Payment
+   ↓
+Funds held in escrow
+   ↓
+Buyer & seller coordinate fulfillment
+   ↓
+Buyer receives the item
+   ↓
+6-digit handover code
+   ↓
+Seller verifies the code
+   ↓
+Transaction completed
+   ↓
+Funds released to seller
 ```
 
-Kode serah-terima memiliki waktu berlaku terbatas dan dapat dibuat ulang jika telah kedaluwarsa.
-
----
-
-## Instant Courier
-
-BMarket juga menyediakan flow kurir instan sebagai simulasi.
-
-Seller dapat memilih metode penyerahan:
-
-- Campus Meetup
-- Instant Courier
-- Keduanya
-
-Untuk Instant Courier, BMarket menyimpan informasi seperti:
-
-- provider kurir;
-- alamat tujuan;
-- nomor penerima;
-- ongkir;
-- tracking number.
-
-Integrasi kurir saat ini masih berupa simulasi dan belum terhubung ke API GoSend atau GrabExpress secara nyata.
-
----
-
-## Chat
-
-BMarket memiliki real-time chat menggunakan Socket.IO.
-
-Chat digunakan untuk:
-
-- menanyakan kondisi barang;
-- berdiskusi sebelum membeli;
-- menentukan lokasi meetup;
-- menentukan waktu meetup;
-- berkomunikasi selama transaksi.
-
-Pada desktop, chat menggunakan layout dua kolom:
-
-```text
-Daftar percakapan | Percakapan aktif
-```
-
-Conversation tetap berada dalam shell BMarket tanpa berpindah ke layout halaman terpisah.
-
-Chat juga memiliki:
-
-- timestamp;
-- read status;
-- transaction context;
-- blocked-user protection.
-
----
-
-## Rating & Review
-
-Setelah transaksi selesai, buyer dapat memberikan review kepada seller.
-
-Review terdiri dari:
-
-- rating 1–5;
-- komentar opsional.
-
-Satu transaksi hanya dapat menerima satu review.
-
-Public seller profile menampilkan:
-
-- rata-rata rating;
-- jumlah review;
-- transaksi selesai;
-- listing aktif;
-- bio seller;
-- review dari buyer.
-
----
-
-## Wishlist & Discovery
-
-Pengguna dapat menyimpan listing ke wishlist.
-
-Wishlist disimpan di database, sehingga tidak hilang setelah browser atau aplikasi ditutup.
-
-BMarket juga mencatat recently viewed listing untuk membantu pengguna kembali ke produk yang sebelumnya dilihat.
-
----
-
-## Dispute & Safety
-
-Jika terjadi masalah pada transaksi yang sudah dibayar, buyer atau seller dapat membuka dispute.
-
-Contoh alasan dispute:
-
-- barang tidak sesuai deskripsi;
-- barang rusak;
-- barang tidak diterima;
-- seller tidak datang saat meetup;
-- buyer tidak datang saat meetup;
-- alasan lainnya.
-
-Dispute dapat menyertakan:
-
-- deskripsi;
-- bukti gambar;
-- status pemeriksaan;
-- keputusan admin.
-
-Saat dispute aktif, dana escrow tetap ditahan sampai admin memberikan keputusan.
-
-Admin dapat:
-
-- refund dana ke buyer;
-- melepas dana ke seller;
-- menolak dispute.
-
----
-
-## Report & Moderation
-
-Pengguna dapat melaporkan:
-
-- listing;
-- pengguna.
-
-Admin memiliki moderation dashboard untuk:
-
-- melihat laporan;
-- meninjau listing;
-- menyembunyikan listing;
-- menghapus listing;
-- mempertahankan listing;
-- mengaktifkan atau menonaktifkan akun pengguna;
-- menangani dispute.
-
----
-
-## Block User
-
-Pengguna dapat memblokir pengguna lain.
-
-Jika salah satu pihak memblokir pihak lainnya:
-
-- chat baru tidak dapat dilakukan;
-- komunikasi antara kedua akun dibatasi.
-
-Block dapat dibatalkan kembali melalui sistem.
-
----
-
-## Notifications
-
-BMarket memiliki notification center dengan unread badge.
-
-Notification digunakan untuk event seperti:
-
-- perubahan transaksi;
-- pesan;
-- review;
-- dispute;
-- system notification.
-
-Pengguna dapat:
-
-- membaca notification;
-- mark as read;
-- mark all as read.
-
----
-
-## Wallet & Ledger
-
-Setiap user memiliki:
-
-- `balance`
-- `escrow`
-
-BMarket juga menyimpan wallet ledger untuk mencatat perubahan saldo secara auditable.
-
-Jenis ledger antara lain:
-
-```text
-TOPUP
-PURCHASE_HOLD
-REFUND
-ESCROW_RELEASE
-SELLER_PAYOUT
-```
-
-Setiap ledger menyimpan nilai perubahan saldo dan saldo setelah transaksi.
+Checkout reservations expire automatically and reserved stock is returned when an unpaid transaction times out.
+
+### Trust & Safety
+
+- Report listings and users.
+- Transaction disputes with evidence.
+- Escrow hold while a dispute is active.
+- User blocking.
+- Listing moderation.
+- Seller reviews and ratings.
+- Notification center.
+- Auditable wallet ledger.
+
+### Admin Console
+
+The admin dashboard provides both reactive and proactive moderation.
+
+Admins can:
+
+- monitor marketplace health;
+- inspect **all listings**, even when no report exists;
+- search and filter listings by status and selling model;
+- hide, restore, approve, or remove listings;
+- review community reports;
+- resolve transaction disputes;
+- manage user access;
+- inspect report history;
+- configure the platform commission.
 
 ---
 
 ## Tech Stack
 
-### Backend
-
-- NestJS
-- TypeScript
-- Prisma ORM
-- PostgreSQL
-- Socket.IO
-- JWT Authentication
-- Passport
-- bcrypt
-- Nodemailer
-- Multer
-- Helmet
-- Express Rate Limit
-- Vitest
-
-### Frontend
-
-- Expo
-- React Native
-- TypeScript
-- Expo Router
-- React Query
-- Zustand
-- Axios
-- Socket.IO Client
-- Expo Secure Store
-- Expo Image Picker
-- React Native Reanimated
+| Layer | Technology |
+| --- | --- |
+| Frontend | Expo, React Native, Expo Router, TypeScript |
+| State & Data | TanStack React Query, Zustand, Axios |
+| Backend | NestJS, TypeScript |
+| Database | PostgreSQL on Supabase |
+| ORM | Prisma |
+| Realtime | Socket.IO |
+| Authentication | JWT, Passport, bcrypt |
+| File Storage | Supabase Storage |
+| Email | Brevo Transactional Email API |
+| Testing | Vitest |
+| Backend Hosting | Railway |
+| Frontend Hosting | Vercel |
 
 ---
 
-## Struktur Project
+## Architecture
+
+```text
+                         ┌──────────────────────┐
+                         │      Vercel          │
+                         │   Expo Web Client    │
+                         └──────────┬───────────┘
+                                    │ HTTPS / WebSocket
+                                    ▼
+                         ┌──────────────────────┐
+                         │      Railway         │
+                         │    NestJS Backend    │
+                         └──────┬─────┬─────┬───┘
+                                │     │     │
+                    ┌───────────┘     │     └───────────┐
+                    ▼                 ▼                 ▼
+          ┌─────────────────┐ ┌──────────────┐ ┌────────────────┐
+          │ Supabase        │ │ Supabase     │ │ Brevo          │
+          │ PostgreSQL      │ │ Storage      │ │ Email API      │
+          └─────────────────┘ └──────────────┘ └────────────────┘
+```
+
+---
+
+## Repository Structure
 
 ```text
 BMarket/
-│
-├── .github/
-│   └── workflows/
-│
 ├── backend/
 │   ├── prisma/
 │   │   ├── migrations/
 │   │   ├── schema.prisma
 │   │   └── seed.ts
-│   │
 │   ├── src/
 │   │   ├── activity/
 │   │   ├── admin/
 │   │   ├── auth/
 │   │   ├── chat/
 │   │   ├── complaints/
+│   │   ├── config/
 │   │   ├── disputes/
 │   │   ├── listings/
 │   │   ├── notifications/
@@ -392,7 +191,6 @@ BMarket/
 │   │   ├── transactions/
 │   │   ├── uploads/
 │   │   └── users/
-│   │
 │   ├── Dockerfile
 │   ├── package.json
 │   └── .env.example
@@ -405,62 +203,46 @@ BMarket/
 │   │   ├── lib/
 │   │   ├── store/
 │   │   └── types/
-│   │
 │   ├── assets/
 │   ├── package.json
-│   └── .env.example
+│   └── vercel.json
 │
-├── .nvmrc
+├── render.yaml
 └── README.md
 ```
 
 ---
 
-## Prerequisites
+## Getting Started
 
-Sebelum menjalankan project, pastikan sudah terinstall:
+### Prerequisites
 
-- Node.js 24.15.0 atau runtime kompatibel;
-- npm;
-- PostgreSQL;
-- Git.
+Install the following before running BMarket locally:
 
-Database default yang digunakan:
+- Node.js
+- npm
+- PostgreSQL or a Supabase PostgreSQL project
+- Git
 
-```text
-PostgreSQL
-Database: bmarket
-Port: 5432
-```
-
----
-
-# Menjalankan Project
-
-## 1. Clone Repository
+### Clone the Repository
 
 ```bash
 git clone https://github.com/Geraldicky/BMarket.git
 cd BMarket
 ```
 
----
-
-## 2. Backend Setup
-
-Masuk ke folder backend:
+### Backend
 
 ```bash
 cd backend
-```
-
-Install dependency:
-
-```bash
 npm install
 ```
 
-Buat `.env` dari template.
+Create the local environment file:
+
+```bash
+cp .env.example .env
+```
 
 PowerShell:
 
@@ -468,41 +250,28 @@ PowerShell:
 Copy-Item .env.example .env
 ```
 
-macOS / Linux:
-
-```bash
-cp .env.example .env
-```
-
-Contoh konfigurasi:
+Minimum development configuration:
 
 ```env
-PORT=3000
 NODE_ENV=development
+PORT=3000
 
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/bmarket?schema=public"
 
-JWT_SECRET="your_random_secret"
+JWT_SECRET="replace-with-a-random-secret-at-least-32-characters"
 JWT_EXPIRES_IN="7d"
-
-OTP_HASH_SECRET="your_random_otp_secret"
+OTP_HASH_SECRET="replace-with-a-different-random-secret"
 
 CORS_ORIGIN="http://localhost:8081"
 
-UPLOAD_DIR="uploads"
-
+OTP_DEV_LOG=true
 CHECKOUT_RESERVATION_MINUTES=15
 ```
 
-Generate Prisma Client:
+Generate the Prisma Client and apply migrations:
 
 ```bash
 npm run db:generate
-```
-
-Apply migration:
-
-```bash
 npm run db:deploy
 ```
 
@@ -512,64 +281,40 @@ Optional development seed:
 npm run db:seed
 ```
 
-Jalankan backend:
+Start the API:
 
 ```bash
 npm run dev
 ```
 
-Backend akan tersedia di:
+The local API is available at:
 
 ```text
 http://localhost:3000/api
 ```
 
----
+### Frontend
 
-## 3. Frontend Setup
-
-Buka terminal baru:
+Open another terminal:
 
 ```bash
 cd frontend
 npm install
 ```
 
-Buat `.env`:
-
-PowerShell:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-macOS / Linux:
-
-```bash
-cp .env.example .env
-```
-
-Untuk web atau emulator di komputer yang sama:
+Create `frontend/.env`:
 
 ```env
 EXPO_PUBLIC_API_URL=http://localhost:3000/api
 ```
 
-Untuk perangkat fisik, gunakan IP LAN komputer:
-
-```env
-EXPO_PUBLIC_API_URL=http://192.168.1.10:3000/api
-```
-
-Pastikan komputer dan perangkat berada di jaringan yang sama.
-
-Jalankan Expo:
+Start Expo:
 
 ```bash
 npm start
 ```
 
-Atau:
+Or run a specific target:
 
 ```bash
 npm run web
@@ -577,7 +322,7 @@ npm run android
 npm run ios
 ```
 
-Untuk membersihkan cache:
+To clear the Expo cache:
 
 ```bash
 npm start -- --clear
@@ -585,109 +330,54 @@ npm start -- --clear
 
 ---
 
-# Email OTP
+## Environment Configuration
 
-Registrasi membutuhkan verifikasi email BINUS.
+### Backend Production
 
-Domain yang diperbolehkan dikontrol melalui:
-
-```env
-SSO_ALLOWED_DOMAINS="@binus.ac.id,@student.binus.ac.id,@binus.edu"
-```
-
-Untuk development tanpa SMTP:
+The production backend requires these environment variables:
 
 ```env
-OTP_DEV_LOG=true
+NODE_ENV=production
+
+DATABASE_URL=
+
+JWT_SECRET=
+JWT_EXPIRES_IN=7d
+OTP_HASH_SECRET=
+
+CORS_ORIGIN=
+
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+SUPABASE_STORAGE_BUCKET=bmarket-public
+
+BREVO_API_KEY=
+BREVO_FROM_EMAIL=
+BREVO_FROM_NAME=BMarket
+
+OTP_DEV_LOG=false
+CHECKOUT_RESERVATION_MINUTES=15
 ```
 
-OTP akan ditampilkan pada terminal backend.
+`SUPABASE_SERVICE_ROLE_KEY`, `BREVO_API_KEY`, `DATABASE_URL`, `JWT_SECRET`, and `OTP_HASH_SECRET` are server-side secrets and must never be exposed in the frontend or committed to Git.
 
-Untuk menggunakan email sungguhan, isi konfigurasi SMTP:
+### Frontend Production
 
 ```env
-SMTP_HOST="smtp.gmail.com"
-SMTP_PORT=465
-SMTP_SECURE=true
-SMTP_USER=""
-SMTP_PASS=""
-SMTP_FROM="BMarket <your-email@gmail.com>"
+EXPO_PUBLIC_API_URL=https://bmarket-api-production.up.railway.app/api
 ```
 
-Jika menggunakan Gmail, gunakan App Password.
+Only variables prefixed with `EXPO_PUBLIC_` should be exposed to the Expo client.
 
 ---
 
-# Testing
+## Database
 
-## Backend Type Check
+BMarket uses Prisma with PostgreSQL.
 
-```bash
-cd backend
-npm run typecheck
-```
-
-## Core Flow Tests
+Useful commands:
 
 ```bash
-npm run test:flows
-```
-
-## Full Test Suite
-
-```bash
-npm test
-```
-
-## Production Build Check
-
-```bash
-npm run build
-```
-
-Backend memiliki automated test untuk area seperti:
-
-- authentication;
-- listing;
-- transaction policy;
-- checkout;
-- stock reservation;
-- handover code;
-- review;
-- wishlist;
-- recently viewed;
-- dispute;
-- notification;
-- user blocking;
-- chat;
-- wallet ledger.
-
----
-
-## Frontend Type Check
-
-```bash
-cd frontend
-npm run typecheck
-```
-
-Lint:
-
-```bash
-npm run lint
-```
-
----
-
-# Useful Backend Commands
-
-```bash
-npm run dev
-npm run build
-npm run typecheck
-npm test
-npm run test:flows
-
 npm run db:validate
 npm run db:generate
 npm run db:deploy
@@ -695,135 +385,123 @@ npm run db:studio
 npm run db:seed
 ```
 
+The repository uses a clean baseline migration so a new database can be initialized from the current Prisma schema.
+
+For hosted environments, BMarket currently uses Supabase PostgreSQL through the Supavisor session pooler.
+
 ---
 
-# Health Check
+## Email Verification
 
-Backend menyediakan health endpoint:
+Student registration requires a BINUS email address.
 
-```text
-GET /api/health
+Allowed domains are controlled by:
+
+```env
+SSO_ALLOWED_DOMAINS="@binus.ac.id,@student.binus.ac.id,@binus.edu"
 ```
 
-dan readiness check untuk memastikan service siap menerima request.
+In development, OTP codes can be printed to the backend terminal:
+
+```env
+OTP_DEV_LOG=true
+```
+
+Production email is delivered through the Brevo Transactional Email API.
 
 ---
 
-# Security
+## Image Storage
 
-Beberapa proteksi yang digunakan:
+Local development can use the backend upload directory.
 
-- JWT authentication;
-- hashed password;
-- hashed OTP;
-- OTP expiration;
-- OTP attempt limit;
-- email domain restriction;
-- request validation;
-- Helmet;
-- CORS allowlist;
-- rate limiting;
-- account activation status;
-- token invalidation;
-- serialized transaction flow;
+Production uploads are stored in Supabase Storage using the bucket configured by:
+
+```env
+SUPABASE_STORAGE_BUCKET=bmarket-public
+```
+
+Only the generated public object URL is persisted by the application.
+
+---
+
+## Testing
+
+### Backend
+
+```bash
+cd backend
+
+npm run typecheck
+npm test
+npm run test:flows
+npm run build
+```
+
+The test suite covers core areas including:
+
+- authentication;
+- listing and inventory behavior;
+- checkout and stock reservations;
+- transaction policy;
+- handover codes;
+- reviews;
+- disputes;
+- notifications;
+- chat;
+- safety and blocking;
+- wallet integrity.
+
+### Frontend
+
+```bash
+cd frontend
+
+npm run typecheck
+npm run lint
+```
+
+---
+
+## Deployment
+
+The current public deployment uses free-tier services:
+
+| Service | Purpose |
+| --- | --- |
+| Vercel | Expo Web frontend |
+| Railway | NestJS API and Socket.IO |
+| Supabase | PostgreSQL database and image storage |
+| Brevo | Transactional OTP email |
+
+Production endpoints:
+
+- Web: [https://b-market-hazel.vercel.app](https://b-market-hazel.vercel.app)
+- API: [https://bmarket-api-production.up.railway.app](https://bmarket-api-production.up.railway.app)
+- Health: [https://bmarket-api-production.up.railway.app/api/health](https://bmarket-api-production.up.railway.app/api/health)
+
+---
+
+## Project Scope
+
+BMarket is currently an academic and product-development project.
+
+The following features are simulated and are **not connected to real financial or logistics providers**:
+
+- BMarket balance top-up;
+- payment settlement;
 - escrow;
-- duplicate transaction protection;
-- stock reservation;
-- user blocking;
-- dispute workflow.
+- platform commission;
+- instant courier;
+- shipping fee and tracking.
 
-Jangan pernah commit file `.env` ke repository.
-
-Gunakan `.env.example` sebagai template konfigurasi.
+BMarket is not currently integrated with production payment gateways such as Midtrans/Xendit or courier APIs such as GoSend/GrabExpress.
 
 ---
 
-# Scope Project
+## Purpose
 
-BMarket saat ini menggunakan beberapa fitur simulasi untuk kebutuhan development dan demonstrasi.
+BMarket was created to make campus commerce more structured and easier to trust.
 
-Yang masih bersifat simulasi:
+Instead of relying on scattered group-chat promotions and manual coordination, students can discover listings, manage inventory, join pre-orders, communicate with sellers, complete transactions, and resolve issues through a single platform.
 
-- top up saldo;
-- pembayaran;
-- escrow virtual;
-- Instant Courier;
-- tracking number;
-- ongkir.
-
-BMarket belum terhubung dengan:
-
-- payment gateway seperti Midtrans atau Xendit;
-- QRIS production;
-- GoSend API;
-- GrabExpress API.
-
-Tidak tersedia COD tunai pada flow utama BMarket.
-
----
-
-# Main User Flow
-
-```text
-Register
-   ↓
-Verify Email OTP
-   ↓
-Login
-   ↓
-Browse Marketplace
-   ↓
-Open Listing
-   ↓
-Checkout
-   ↓
-Pay with BMarket Balance
-   ↓
-Escrow
-   ↓
-Chat Seller
-   ↓
-Meetup
-   ↓
-Buyer Receives Item
-   ↓
-Generate Handover Code
-   ↓
-Seller Verifies Code
-   ↓
-Transaction Completed
-   ↓
-Seller Receives Balance
-   ↓
-Buyer Reviews Seller
-```
-
----
-
-# Admin Flow
-
-```text
-Admin Login
-   ↓
-Dashboard
-   ├── User Management
-   ├── Listing Moderation
-   ├── Reports
-   ├── Disputes
-   └── Commission Settings
-```
-
----
-
-## Project Purpose
-
-BMarket dikembangkan sebagai marketplace komunitas kampus yang memprioritaskan:
-
-- trust antar pengguna;
-- komunikasi langsung;
-- transaksi yang tercatat;
-- pengalaman jual-beli yang sederhana;
-- mekanisme penyelesaian transaksi yang lebih aman;
-- moderasi berbasis komunitas.
-
-Project ini ditujukan untuk kebutuhan akademik, pengembangan produk, dan demonstrasi sistem marketplace end-to-end.
