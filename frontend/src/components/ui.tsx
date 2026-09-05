@@ -21,8 +21,10 @@ import { colors, layout, radius, shadowSoft, spacing } from '@/constants/theme';
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 export function Screen({ children, scroll = true, style, backgroundColor }: ViewProps & { scroll?: boolean; backgroundColor?: string }) {
-  const desktop = useWindowDimensions().width >= 960;
-  const content = <View style={[styles.content, desktop && styles.contentDesktop, style]}>{children}</View>;
+  const width = useWindowDimensions().width;
+  const desktop = width >= 960;
+  const mobile = width < 600;
+  const content = <View style={[styles.content, desktop && styles.contentDesktop, mobile && styles.contentMobile, style]}>{children}</View>;
   return (
     <SafeAreaView style={[styles.safe, backgroundColor ? { backgroundColor } : null]} edges={['top']}>
       {scroll ? (
@@ -35,10 +37,14 @@ export function Screen({ children, scroll = true, style, backgroundColor }: View
 }
 
 export function Title({ children, subtitle, eyebrow, action }: { children: React.ReactNode; subtitle?: string; eyebrow?: string; action?: React.ReactNode }) {
-  return <View style={styles.titleRow}><View style={styles.titleWrap}>{eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}<Text style={styles.title}>{children}</Text>{subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}</View>{action ? <View style={styles.titleAction}>{action}</View> : null}</View>;
+  const mobile = useWindowDimensions().width < 600;
+  return <View style={[styles.titleRow, mobile && styles.titleRowMobile]}><View style={styles.titleWrap}>{eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}<Text style={[styles.title, mobile && styles.titleMobile]}>{children}</Text>{subtitle ? <Text style={[styles.subtitle, mobile && styles.subtitleMobile]}>{subtitle}</Text> : null}</View>{action ? <View style={[styles.titleAction, mobile && styles.titleActionMobile]}>{action}</View> : null}</View>;
 }
 
-export function Card(props: ViewProps) { return <View {...props} style={[styles.card, props.style]} />; }
+export function Card(props: ViewProps) {
+  const mobile = useWindowDimensions().width < 600;
+  return <View {...props} style={[styles.card, mobile && styles.cardMobile, props.style]} />;
+}
 
 export function Field({ label, hint, error, icon, rightIcon, onRightPress, ...props }: TextInputProps & {
   label?: string; hint?: string; error?: string; icon?: IconName; rightIcon?: IconName; onRightPress?: () => void;
@@ -115,24 +121,25 @@ export function FeedbackDialog({
     warning: { icon: 'warning-outline', color: colors.warning, background: colors.warningSoft, label: 'PERLU KONFIRMASI' },
     danger: { icon: 'alert-circle-outline', color: colors.danger, background: colors.dangerSoft, label: 'PERHATIAN' },
   };
+  const mobile = useWindowDimensions().width < 420;
   const current = meta[tone];
   const close = () => { if (!loading) onClose?.(); };
   const primary = () => { if (!loading) (onPrimary || onClose)?.(); };
   const secondary = () => { if (!loading) (onSecondary || onClose)?.(); };
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={close}>
-      <View style={styles.feedbackBackdrop}>
-        <View style={styles.feedbackDialog}>
+      <View style={[styles.feedbackBackdrop, mobile && styles.feedbackBackdropMobile]}>
+        <View style={[styles.feedbackDialog, mobile && styles.feedbackDialogMobile]}>
           <View style={styles.feedbackHeader}>
             <View style={[styles.feedbackIcon, { backgroundColor: current.background }]}><Ionicons name={current.icon} size={25} color={current.color} /></View>
             {onClose ? <Pressable accessibilityLabel="Tutup dialog" disabled={loading} onPress={close} style={({ pressed }) => [styles.feedbackClose, pressed && { opacity: .6 }]}><Ionicons name="close" size={20} color={colors.textSoft} /></Pressable> : null}
           </View>
           <View style={styles.feedbackCopy}>
             <Text style={[styles.feedbackEyebrow, { color: current.color }]}>{eyebrow || current.label}</Text>
-            <Text style={styles.feedbackTitle}>{title}</Text>
+            <Text style={[styles.feedbackTitle, mobile && styles.feedbackTitleMobile]}>{title}</Text>
             <Text style={styles.feedbackMessage}>{message}</Text>
           </View>
-          <View style={styles.feedbackActions}>
+          <View style={[styles.feedbackActions, mobile && styles.feedbackActionsMobile]}>
             {secondaryLabel ? <Button title={secondaryLabel} variant="ghost" disabled={loading} onPress={secondary} style={styles.feedbackSecondary} /> : null}
             <Button title={primaryLabel} variant={tone === 'danger' ? 'danger' : 'primary'} loading={loading} onPress={primary} style={styles.feedbackPrimary} />
           </View>
@@ -160,28 +167,38 @@ export const date = (value: string | undefined) => value ? new Intl.DateTimeForm
 const styles = StyleSheet.create({
 
   feedbackBackdrop: { flex: 1, padding: 24, backgroundColor: 'rgba(10,26,41,.58)', alignItems: 'center', justifyContent: 'center' },
+  feedbackBackdropMobile: { padding: 12 },
   feedbackDialog: { width: '100%', maxWidth: 440, borderRadius: 18, padding: 22, gap: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, shadowColor: '#071727', shadowOpacity: .18, shadowRadius: 28, shadowOffset: { width: 0, height: 14 }, elevation: 8 },
+  feedbackDialogMobile: { borderRadius: 16, padding: 17, gap: 14 },
   feedbackHeader: { minHeight: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   feedbackIcon: { width: 46, height: 46, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   feedbackClose: { width: 38, height: 38, borderRadius: 11, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
   feedbackCopy: { gap: 5 },
   feedbackEyebrow: { fontFamily: 'PoppinsBold', fontSize: 11, letterSpacing: .75 },
   feedbackTitle: { fontFamily: 'PoppinsBold', fontSize: 22, lineHeight: 29, color: colors.text },
+  feedbackTitleMobile: { fontSize: 20, lineHeight: 27 },
   feedbackMessage: { fontFamily: 'PoppinsRegular', fontSize: 13.5, lineHeight: 21, color: colors.textSoft },
   feedbackActions: { flexDirection: 'row', gap: 10, marginTop: 2 },
+  feedbackActionsMobile: { flexDirection: 'column-reverse' },
   feedbackSecondary: { flex: 1 },
   feedbackPrimary: { flex: 1.25 },
   safe: { flex: 1, backgroundColor: colors.background },
   scroll: { flexGrow: 1 },
   content: { width: '100%', maxWidth: layout.contentMaxWidth, alignSelf: 'center', padding: spacing.md, gap: 22, flexGrow: 1 },
   contentDesktop: { paddingHorizontal: 28, paddingVertical: 30 },
+  contentMobile: { paddingHorizontal: 14, paddingTop: 16, paddingBottom: 28, gap: 16 },
   titleRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: spacing.lg, marginBottom: spacing.xs },
+  titleRowMobile: { alignItems: 'stretch', flexDirection: 'column', gap: 10 },
   titleWrap: { flex: 1, gap: 4 },
   titleAction: { alignSelf: 'center' },
+  titleActionMobile: { alignSelf: 'stretch' },
   eyebrow: { fontFamily: 'PoppinsBold', fontSize: 11, letterSpacing: .85, color: colors.primary },
   title: { fontFamily: 'PoppinsBold', fontSize: 30, lineHeight: 38, color: colors.text },
+  titleMobile: { fontSize: 24, lineHeight: 31 },
   subtitle: { fontFamily: 'PoppinsRegular', fontSize: 14, color: colors.muted, lineHeight: 22, textAlign: 'left' },
+  subtitleMobile: { fontSize: 12.5, lineHeight: 19 },
   card: { backgroundColor: colors.surface, borderRadius: 14, padding: 20, gap: 10, borderWidth: 1, borderColor: colors.border, ...shadowSoft },
+  cardMobile: { borderRadius: 12, padding: 14 },
   fieldWrap: { gap: 7 },
   label: { fontFamily: 'PoppinsMedium', color: colors.textSoft, fontSize: 14 },
   inputShell: { minHeight: 52, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, gap: 11, backgroundColor: colors.surface, borderColor: colors.borderStrong, borderWidth: 1, borderRadius: radius.md },

@@ -13,10 +13,11 @@ const assurances = [
 export function AuthShell({ eyebrow, title, subtitle, children }: { eyebrow: string; title: string; subtitle: string; children: React.ReactNode }) {
   const { width, height } = useWindowDimensions();
   const desktop = width >= 900;
+  const compactMobile = width < 480;
 
   return (
     <SafeAreaView style={s.page} edges={['top', 'bottom']}>
-      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={[s.scroll, desktop && s.scrollDesktop]}>
+      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={[s.scroll, desktop && s.scrollDesktop, !desktop && s.scrollMobile, compactMobile && s.scrollCompact]}>
         <View style={[s.shell, desktop && s.shellDesktop, desktop && { minHeight: height }]}> 
           {desktop ? (
             <View style={s.visual}>
@@ -58,11 +59,11 @@ export function AuthShell({ eyebrow, title, subtitle, children }: { eyebrow: str
             </View>
           )}
 
-          <View style={[s.formPanel, !desktop && s.formPanelMobile]}>
+          <View style={[s.formPanel, !desktop && s.formPanelMobile, compactMobile && s.formPanelCompact]}>
             <View style={s.formContent}>
               <Animated.View entering={FadeInDown.duration(180)} style={s.formHeader}>
                 <View style={s.eyebrowPill}><Text style={s.eyebrow}>{eyebrow}</Text></View>
-                <Text style={s.formTitle}>{title}</Text>
+                <Text style={[s.formTitle, compactMobile && s.formTitleCompact]}>{title}</Text>
                 <Text style={s.formSubtitle}>{subtitle}</Text>
               </Animated.View>
 
@@ -86,6 +87,8 @@ const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.surface },
   scroll: { flexGrow: 1, padding: 16, justifyContent: 'center' },
   scrollDesktop: { padding: 0 },
+  scrollMobile: { justifyContent: 'flex-start', padding: 14 },
+  scrollCompact: { padding: 10 },
   shell: { width: '100%' },
   shellDesktop: { flexDirection: 'row' },
 
@@ -114,19 +117,21 @@ const s = StyleSheet.create({
   footText: { fontFamily: 'PoppinsMedium', fontSize: 11, color: '#A9BDCE' },
 
   formPanel: { flex: 1, minHeight: 700, backgroundColor: colors.surface, paddingHorizontal: 56, paddingVertical: 46, alignItems: 'center', justifyContent: 'center' },
-  formPanelMobile: { minHeight: 0, padding: 22, borderRadius: 16, borderWidth: 1, borderColor: colors.border },
+  formPanelMobile: { minHeight: 0, padding: 20, borderRadius: 16, borderWidth: 1, borderColor: colors.border },
+  formPanelCompact: { padding: 15, borderRadius: 14 },
   formContent: { width: '100%', maxWidth: 500, gap: 22 },
   formHeader: { gap: 5, marginBottom: 2 },
   eyebrowPill: { alignSelf: 'flex-start', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999, backgroundColor: colors.primarySoft },
   eyebrow: { fontFamily: 'PoppinsBold', fontSize: 10.5, letterSpacing: .75, color: colors.primary },
   formTitle: { fontFamily: 'PoppinsBold', fontSize: 32, lineHeight: 40, color: colors.text },
+  formTitleCompact: { fontSize: 26, lineHeight: 33 },
   formSubtitle: { fontFamily: 'PoppinsRegular', fontSize: 13.5, lineHeight: 21, color: colors.muted, maxWidth: 470 },
 
   securityNote: { flexDirection: 'row', alignItems: 'flex-start', gap: 9, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.border },
   securityText: { flex: 1, fontFamily: 'PoppinsRegular', fontSize: 11.5, lineHeight: 18, color: colors.muted },
   copyright: { fontFamily: 'PoppinsRegular', fontSize: 10, color: '#9AA8B5', textAlign: 'center' },
 
-  mobileBrand: { alignItems: 'center', marginBottom: 18 },
+  mobileBrand: { alignItems: 'flex-start', marginBottom: 14, paddingHorizontal: 2 },
   mobileName: { fontFamily: 'PoppinsBold', fontSize: 25, color: colors.primary },
   mobileCaption: { fontFamily: 'PoppinsRegular', fontSize: 11, color: colors.muted },
 });

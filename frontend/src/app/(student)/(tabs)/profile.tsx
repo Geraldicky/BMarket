@@ -11,7 +11,9 @@ import { useAuth } from '@/store/auth';
 type Feedback = { tone: 'success' | 'warning' | 'danger'; title: string; message: string } | null;
 
 export default function ProfileScreen() {
-  const desktop = useWindowDimensions().width >= 960;
+  const width = useWindowDimensions().width;
+  const desktop = width >= 960;
+  const mobile = width < 600;
   const user = useAuth(state => state.user);
   const logout = useAuth(state => state.logout);
   const [amount, setAmount] = useState('');
@@ -44,29 +46,29 @@ export default function ProfileScreen() {
 
   return <Screen>
     <Title eyebrow="PUSAT AKUN" subtitle="Kelola identitas, saldo, dan keamanan akun BMarket.">Profil</Title>
-    <View style={styles.hero}>
+    <View style={[styles.hero, mobile && styles.heroMobile]}>
       <View style={styles.heroGlow} />
-      <View style={styles.avatar}><Text style={styles.initial}>{initials}</Text></View>
-      <View style={styles.identity}>
-        <View style={styles.nameRow}><Text style={styles.name}>{user?.name || 'Binusian'}</Text><View style={styles.verified}><Ionicons name="checkmark-circle" size={14} color={colors.success} /><Text style={styles.verifiedText}>Terverifikasi</Text></View></View>
+      <View style={[styles.avatar, mobile && styles.avatarMobile]}><Text style={styles.initial}>{initials}</Text></View>
+      <View style={[styles.identity, mobile && styles.identityMobile]}>
+        <View style={styles.nameRow}><Text style={[styles.name, mobile && styles.nameMobile]}>{user?.name || 'Binusian'}</Text><View style={styles.verified}><Ionicons name="checkmark-circle" size={14} color={colors.success} /><Text style={styles.verifiedText}>Terverifikasi</Text></View></View>
         <Text style={styles.email}>{user?.email || ''}</Text>
         <Text style={styles.member}>Anggota komunitas BINUS</Text>
       </View>
-      <View style={styles.metrics}>
+      <View style={[styles.metrics, mobile && styles.metricsMobile]}>
         <View style={styles.metric}><Text style={styles.metricValue}>{user?._count?.listings || 0}</Text><Text style={styles.metricLabel}>Listing</Text></View>
         <View style={styles.metricDivider} />
         <View style={styles.metric}><Text style={styles.metricValue}>{(user?._count?.buyerTransactions || 0) + (user?._count?.sellerTransactions || 0)}</Text><Text style={styles.metricLabel}>Transaksi</Text></View>
       </View>
-      <Pressable onPress={() => router.push('/(student)/profile/edit')} style={({ pressed }) => [styles.edit, pressed && styles.pressed]}><Ionicons name="create-outline" size={18} color={colors.primary} /><Text style={styles.editText}>Edit profil</Text></Pressable>
+      <Pressable onPress={() => router.push('/(student)/profile/edit')} style={({ pressed }) => [styles.edit, mobile && styles.editMobile, pressed && styles.pressed]}><Ionicons name="create-outline" size={18} color={colors.primary} /><Text style={styles.editText}>Edit profil</Text></Pressable>
     </View>
 
     <View style={[styles.columns, !desktop && styles.columnsMobile]}>
       <Card style={[styles.info, !desktop && styles.fullWidth]}>
         <View style={styles.cardHead}><View><Text style={styles.section}>Informasi pribadi</Text><Text style={styles.sectionCopy}>Data yang terlihat pada profil penjualmu.</Text></View><Ionicons name="person-circle-outline" size={23} color={colors.muted} /></View>
-        <View style={styles.detailRow}><Text style={styles.detailLabel}>Nama lengkap</Text><Text style={styles.detailValue}>{user?.name || '-'}</Text></View>
-        <View style={styles.detailRow}><Text style={styles.detailLabel}>NIM</Text><Text style={styles.detailValue}>{user?.studentId || '-'}</Text></View>
-        <View style={styles.detailRow}><Text style={styles.detailLabel}>Email BINUS</Text><Text style={styles.detailValue}>{user?.email || '-'}</Text></View>
-        <View style={[styles.detailRow, styles.detailLast]}><Text style={styles.detailLabel}>Tentang kamu</Text><Text style={[styles.detailValue, styles.bio]}>{user?.bio || 'Belum ada bio.'}</Text></View>
+        <View style={[styles.detailRow, mobile && styles.detailRowMobile]}><Text style={styles.detailLabel}>Nama lengkap</Text><Text style={styles.detailValue}>{user?.name || '-'}</Text></View>
+        <View style={[styles.detailRow, mobile && styles.detailRowMobile]}><Text style={styles.detailLabel}>NIM</Text><Text style={styles.detailValue}>{user?.studentId || '-'}</Text></View>
+        <View style={[styles.detailRow, mobile && styles.detailRowMobile]}><Text style={styles.detailLabel}>Email BINUS</Text><Text style={styles.detailValue}>{user?.email || '-'}</Text></View>
+        <View style={[styles.detailRow, mobile && styles.detailRowMobile, styles.detailLast]}><Text style={styles.detailLabel}>Tentang kamu</Text><Text style={[styles.detailValue, styles.bio]}>{user?.bio || 'Belum ada bio.'}</Text></View>
       </Card>
 
       <View style={[styles.side, !desktop && styles.fullWidth]}>
@@ -91,22 +93,28 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   pressed: { opacity: .7 },
   hero: { minHeight: 168, borderRadius: 16, backgroundColor: colors.primaryDeep, padding: 26, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 24, overflow: 'hidden' },
+  heroMobile: { padding: 18, gap: 14, alignItems: 'flex-start' },
   heroGlow: { position: 'absolute', right: -90, top: -130, width: 390, height: 390, borderRadius: 195, backgroundColor: '#173F64' },
   avatar: { width: 84, height: 84, borderRadius: 20, backgroundColor: '#E8F2FE', alignItems: 'center', justifyContent: 'center' },
+  avatarMobile: { width: 68, height: 68, borderRadius: 18 },
   initial: { fontFamily: 'PoppinsBold', fontSize: 29, color: colors.primary },
   identity: { minWidth: 250, flex: 1 },
+  identityMobile: { minWidth: 0, width: '100%' },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 11, flexWrap: 'wrap' },
   name: { fontFamily: 'PoppinsBold', fontSize: 24, color: colors.white },
+  nameMobile: { fontSize: 20, lineHeight: 27 },
   verified: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, backgroundColor: colors.successSoft },
   verifiedText: { fontFamily: 'PoppinsSemiBold', fontSize: 12, color: colors.success },
   email: { fontFamily: 'PoppinsRegular', fontSize: 13, color: '#C2D1DF', marginTop: 3 },
   member: { fontFamily: 'PoppinsMedium', fontSize: 12, color: '#88A7C3', marginTop: 9 },
   metrics: { zIndex: 1, flexDirection: 'row', alignItems: 'center', gap: 20 },
+  metricsMobile: { width: '100%', justifyContent: 'flex-start' },
   metric: { minWidth: 78 },
   metricValue: { fontFamily: 'PoppinsBold', fontSize: 24, color: colors.white },
   metricLabel: { fontFamily: 'PoppinsRegular', fontSize: 12, color: '#AFC1D2' },
   metricDivider: { width: 1, height: 42, backgroundColor: 'rgba(255,255,255,.18)' },
   edit: { zIndex: 1, minHeight: 46, paddingHorizontal: 17, borderRadius: 12, backgroundColor: colors.white, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  editMobile: { width: '100%', justifyContent: 'center' },
   editText: { fontFamily: 'PoppinsSemiBold', fontSize: 13, color: colors.primary },
   columns: { flexDirection: 'row', flexWrap: 'wrap', gap: 18, alignItems: 'flex-start' },
   columnsMobile: { flexDirection: 'column' },
@@ -117,6 +125,7 @@ const styles = StyleSheet.create({
   section: { fontFamily: 'PoppinsBold', fontSize: 19, color: colors.text },
   sectionCopy: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 19, color: colors.muted, marginTop: 3 },
   detailRow: { minHeight: 70, flexDirection: 'row', alignItems: 'center', gap: 22, borderBottomWidth: 1, borderBottomColor: colors.border },
+  detailRowMobile: { flexDirection: 'column', alignItems: 'flex-start', gap: 4, paddingVertical: 12 },
   detailLast: { borderBottomWidth: 0 },
   detailLabel: { width: 130, fontFamily: 'PoppinsMedium', fontSize: 13, color: colors.muted },
   detailValue: { flex: 1, fontFamily: 'PoppinsMedium', fontSize: 14, color: colors.text },

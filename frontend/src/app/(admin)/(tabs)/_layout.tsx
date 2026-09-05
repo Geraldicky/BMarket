@@ -3,6 +3,7 @@ import { Tabs, router, useSegments } from 'expo-router';
 import type { ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions, type ColorValue } from 'react-native';
 import { colors, shadowSoft } from '@/constants/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/store/auth';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -24,15 +25,17 @@ const icon = (name: IconName) => function TabIcon({ color, size }: TabBarIconPro
   return <Ionicons name={name} size={size} color={color as string} />;
 };
 
-function Screens({ desktop }: { desktop: boolean }) {
+function Screens({ desktop, narrow = false, bottomInset = 0 }: { desktop: boolean; narrow?: boolean; bottomInset?: number }) {
   return (
     <Tabs screenOptions={{
       headerShown: false,
       tabBarActiveTintColor: colors.primary,
       tabBarInactiveTintColor: colors.muted,
-      tabBarIconStyle: { marginTop: 3 },
-      tabBarLabelStyle: { fontFamily: 'PoppinsMedium', fontSize: 11.5 },
-      tabBarStyle: desktop ? { display: 'none' } : { height: 74, paddingTop: 7, paddingBottom: 9, borderTopColor: colors.border, backgroundColor: colors.surface },
+      tabBarIconStyle: { marginTop: narrow ? 0 : 3 },
+      tabBarShowLabel: !narrow,
+      tabBarLabelStyle: { fontFamily: 'PoppinsMedium', fontSize: 10.5 },
+      tabBarItemStyle: narrow ? { minWidth: 42 } : undefined,
+      tabBarStyle: desktop ? { display: 'none' } : { height: (narrow ? 54 : 64) + Math.max(bottomInset, 6), paddingTop: narrow ? 5 : 6, paddingBottom: Math.max(bottomInset, 6), borderTopColor: colors.border, backgroundColor: colors.surface },
     }}>
       <Tabs.Screen name="index" options={{ title: 'Dashboard', tabBarIcon: icon('grid-outline') }} />
       <Tabs.Screen name="products" options={{ title: 'Listing', tabBarIcon: icon('storefront-outline') }} />
@@ -46,13 +49,16 @@ function Screens({ desktop }: { desktop: boolean }) {
 }
 
 export default function AdminTabs() {
-  const desktop = useWindowDimensions().width >= 1024;
+  const width = useWindowDimensions().width;
+  const insets = useSafeAreaInsets();
+  const desktop = width >= 1024;
+  const narrow = width < 430;
   const segments = useSegments().map(String);
   const user = useAuth(state => state.user);
   const current = navItems.find(item => item.segment && segments.includes(item.segment))?.segment;
   const initial = user?.name?.trim()?.[0]?.toUpperCase() || 'A';
 
-  if (!desktop) return <Screens desktop={false} />;
+  if (!desktop) return <Screens desktop={false} narrow={narrow} bottomInset={insets.bottom} />;
 
   return (
     <View style={styles.root}>

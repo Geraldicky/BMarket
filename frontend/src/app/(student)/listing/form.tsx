@@ -423,7 +423,7 @@ export default function ListingFormScreen() {
           </View>
         </Card>
 
-        <View style={styles.side}>
+        <View style={[styles.side, !desktop && styles.sideMobile]}>
           <Card style={styles.photoCard}>
             <View style={styles.photoHeader}>
               <View style={styles.flex}><Text style={styles.cardTitle}>Foto listing</Text><Text style={styles.cardCopy}>Foto pertama menjadi sampul etalase.</Text></View>
@@ -492,6 +492,7 @@ const styles = StyleSheet.create({
   columnsMobile: { flexDirection: 'column' },
   formCard: { flex: 1.55, width: '100%', gap: 22 },
   side: { flex: 1, width: '100%', minWidth: 320, gap: 14 },
+  sideMobile: { minWidth: 0 },
   cardTitle: { fontFamily: 'PoppinsBold', fontSize: 21, color: colors.text },
   cardCopy: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 19, color: colors.muted, marginTop: 3 },
   label: { fontFamily: 'PoppinsMedium', fontSize: 14, color: colors.textSoft, marginBottom: 8 },
@@ -503,6 +504,7 @@ const styles = StyleSheet.create({
   segmentCaption: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 17, color: colors.muted, marginTop: 1 },
   modeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   modeItem: { width: '48.8%', minWidth: 245, minHeight: 84, borderRadius: 12, borderWidth: 1, borderColor: colors.border, padding: 13, flexDirection: 'row', alignItems: 'center', gap: 11 },
+  modeItemMobile: { width: '100%', minWidth: 0 },
   modeIcon: { width: 42, height: 42, borderRadius: 11, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' },
   modeIconActive: { backgroundColor: colors.surface },
   preorderBox: { gap: 13, padding: 15, borderRadius: 13, borderWidth: 1, borderColor: '#B7D3F3', backgroundColor: '#F7FBFF' },

@@ -64,6 +64,7 @@ export default function TransactionsScreen() {
   const user = useAuth(state => state.user);
   const { width } = useWindowDimensions();
   const mobile = width < 720;
+  const compactMobile = width < 480;
   const [role, setRole] = useState<RoleFilter>('ALL');
   const [status, setStatus] = useState<StatusFilter>('ALL');
   const [keyword, setKeyword] = useState('');
@@ -124,9 +125,9 @@ export default function TransactionsScreen() {
 
       <View style={styles.sectionHead}>
         <View><Text style={styles.heading}>{status === 'ALL' ? 'Daftar transaksi' : stats.find(item => item.filter === status)?.label}</Text><Text style={styles.copy}>{visibleItems.length} dari {roleItems.length} transaksi ditampilkan</Text></View>
-        <View style={styles.sectionActions}>
+        <View style={[styles.sectionActions, mobile && styles.sectionActionsMobile]}>
           <View style={styles.searchWrap}><Field value={keyword} onChangeText={setKeyword} icon="search-outline" placeholder="Cari produk atau pengguna..." /></View>
-          <View style={styles.filters}>
+          <View style={[styles.filters, mobile && styles.filtersMobile]}>
             {([['ALL', 'Semua'], ['ACTION', 'Perlu tindakan'], ['PROCESS', 'Diproses'], ['COMPLETED', 'Selesai'], ['CANCELLED', 'Dibatalkan']] as const).map(([value, label]) => (
               <Pressable key={value} onPress={() => setStatus(value)} style={[styles.filter, status === value && styles.filterActive]}><Text style={[styles.filterText, status === value && styles.filterActiveText]}>{label}</Text></Pressable>
             ))}
@@ -147,10 +148,10 @@ export default function TransactionsScreen() {
             return (
               <Pressable key={transaction.id} onPress={() => router.push({ pathname: '/(student)/transaction/[id]', params: { id: transaction.id } })} style={({ pressed }) => [pressed && styles.pressed]}>
                 <Card style={[styles.item, mobile && styles.itemMobile, action && styles.itemAction]}>
-                  <View style={styles.product}>
+                  <View style={[styles.product, compactMobile && styles.productCompact]}>
                     {transaction.listing.images?.[0] ? <Image source={transaction.listing.images[0]} style={styles.productImage} contentFit="cover" transition={140} cachePolicy="memory-disk" /> : <Ionicons name={transaction.listing.type === 'SERVICE' ? 'construct-outline' : 'cube-outline'} size={26} color={colors.primary} />}
                   </View>
-                  <View style={styles.itemBody}>
+                  <View style={[styles.itemBody, mobile && styles.itemBodyMobile]}>
                     <View style={styles.itemEyebrowRow}>
                       <Text style={styles.role}>{buyer ? 'PEMBELIAN' : 'PENJUALAN'}</Text>
                       <Text style={styles.dot}>•</Text><Text style={styles.orderId}>#{transaction.id.slice(0, 8).toUpperCase()}</Text>
@@ -160,7 +161,7 @@ export default function TransactionsScreen() {
                     <View style={styles.badgeRow}><View style={[styles.statusBadge, { backgroundColor: meta.tint }]}><Ionicons name={meta.icon} size={14} color={meta.color} /><Text style={[styles.statusText, { color: meta.color }]}>{meta.label}</Text></View><Text style={styles.orderDate}>{date(transaction.createdAt)}</Text></View>
                   </View>
                   <View style={[styles.itemEnd, mobile && styles.itemEndMobile]}>
-                    <View style={styles.priceBlock}><Text style={styles.totalLabel}>{buyer ? 'TOTAL BAYAR' : 'NILAI PESANAN'}</Text><Text style={styles.price}>{money(buyer ? (transaction.grandTotal || transaction.totalPrice) : transaction.totalPrice)}</Text></View>
+                    <View style={[styles.priceBlock, mobile && styles.priceBlockMobile]}><Text style={styles.totalLabel}>{buyer ? 'TOTAL BAYAR' : 'NILAI PESANAN'}</Text><Text style={styles.price}>{money(buyer ? (transaction.grandTotal || transaction.totalPrice) : transaction.totalPrice)}</Text></View>
                     <View style={[styles.detailAction, action && styles.detailActionUrgent]}><Text style={[styles.detailActionText, action && styles.detailActionTextUrgent]}>{actionLabel(transaction, user?.id)}</Text><Ionicons name="arrow-forward" size={14} color={action ? colors.white : colors.primary} /></View>
                   </View>
                 </Card>
@@ -187,6 +188,8 @@ const styles = StyleSheet.create({
   roleCountTextActive: { color: colors.primary },
   metrics: { flexDirection: 'row', flexWrap: 'wrap' },
   metric: { minWidth: 210, minHeight: 82, flex: 1, paddingHorizontal: 16, paddingVertical: 13, borderRightWidth: 1, borderRightColor: colors.border, flexDirection: 'row', alignItems: 'center', gap: 11 },
+  metricMobile: { minWidth: 0, flexBasis: '47%' },
+  metricCompact: { flexBasis: '100%', borderRightWidth: 0, borderBottomWidth: 1, borderBottomColor: colors.border },
   metricActive: { backgroundColor: '#F8FBFF' },
   metricIcon: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   metricCopy: { flex: 1 },
@@ -196,8 +199,10 @@ const styles = StyleSheet.create({
   heading: { fontFamily: 'PoppinsBold', fontSize: 20, color: colors.text },
   copy: { marginTop: 2, fontFamily: 'PoppinsRegular', fontSize: 12.5, lineHeight: 19, color: colors.muted },
   sectionActions: { flex: 1, minWidth: 320, alignItems: 'flex-end', gap: 9 },
+  sectionActionsMobile: { width: '100%', minWidth: 0, alignItems: 'stretch' },
   searchWrap: { width: '100%', maxWidth: 360 },
   filters: { flexDirection: 'row', gap: 7, flexWrap: 'wrap', justifyContent: 'flex-end' },
+  filtersMobile: { justifyContent: 'flex-start' },
   filter: { minHeight: 35, paddingHorizontal: 12, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, justifyContent: 'center' },
   filterActive: { borderColor: '#B7D3F3', backgroundColor: colors.primarySoft },
   filterText: { fontFamily: 'PoppinsMedium', fontSize: 11.5, color: colors.textSoft },
@@ -207,8 +212,10 @@ const styles = StyleSheet.create({
   itemMobile: { flexWrap: 'wrap', alignItems: 'flex-start' },
   itemAction: { borderColor: '#A9CCF4', backgroundColor: '#FCFEFF' },
   product: { width: 88, height: 88, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  productCompact: { width: 72, height: 72 },
   productImage: { width: '100%', height: '100%' },
   itemBody: { minWidth: 220, flex: 1, gap: 5 },
+  itemBodyMobile: { minWidth: 0, flexBasis: 180 },
   itemEyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   role: { fontFamily: 'PoppinsBold', fontSize: 10.5, letterSpacing: .65, color: colors.primary },
   dot: { color: colors.borderStrong },
@@ -224,6 +231,7 @@ const styles = StyleSheet.create({
   itemEnd: { minWidth: 190, alignItems: 'flex-end', justifyContent: 'center', gap: 9 },
   itemEndMobile: { width: '100%', minWidth: 0, paddingTop: 11, borderTopWidth: 1, borderTopColor: colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' },
   priceBlock: { alignItems: 'flex-end' },
+  priceBlockMobile: { alignItems: 'flex-start' },
   totalLabel: { fontFamily: 'PoppinsBold', fontSize: 10.5, letterSpacing: .55, color: colors.muted },
   price: { marginTop: 1, fontFamily: 'PoppinsBold', fontSize: 18, color: colors.text },
   detailAction: { minHeight: 37, paddingHorizontal: 12, borderRadius: 9, backgroundColor: colors.primarySoft, flexDirection: 'row', alignItems: 'center', gap: 7 },

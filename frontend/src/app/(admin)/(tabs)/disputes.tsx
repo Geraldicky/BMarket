@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { AdminEmptyState, AdminInfoRow, AdminStatCard, AdminStatusPill } from '@/components/admin-ui';
 import { Button, Card, ErrorState, FeedbackDialog, Field, Loader, money, Screen, Title } from '@/components/ui';
 import { colors, radius } from '@/constants/theme';
@@ -17,6 +17,7 @@ const actionCopy: Record<Exclude<ResolveAction, 'START_REVIEW'>, { title: string
 };
 
 export default function AdminDisputes() {
+  const mobile = useWindowDimensions().width < 700;
   const client = useQueryClient();
   const [selected, setSelected] = useState<Dispute | null>(null);
   const [note, setNote] = useState('');
@@ -49,10 +50,10 @@ export default function AdminDisputes() {
       </View>
       <Card style={styles.toolbar}><Field icon="search-outline" value={search} onChangeText={setSearch} placeholder="Cari ID transaksi, pengguna, atau listing..." /></Card>
       {query.isLoading ? <Loader /> : query.isError ? <ErrorState message={errorMessage(query.error)} retry={() => query.refetch()} /> : <View style={styles.workspace}>
-        <Card style={styles.caseArea}>
+        <Card style={[styles.caseArea, mobile && styles.caseAreaMobile]}>
           {!active.length ? <AdminEmptyState title="Tidak ada sengketa aktif" message="Semua transaksi berjalan tanpa sengketa yang perlu ditangani." /> : !visible.length ? <AdminEmptyState compact icon="search-outline" title="Sengketa tidak ditemukan" message="Coba gunakan kata kunci pencarian yang berbeda." /> : <View style={styles.list}>{visible.map(item => <Pressable key={item.id} onPress={() => { setSelected(item); setNote(''); }} style={({ pressed }) => pressed ? styles.pressed : undefined}><View style={[styles.caseCard, selected?.id === item.id && styles.active]}><View style={styles.head}><View style={styles.warn}><Ionicons name="warning-outline" size={20} color={colors.warning} /></View><View style={styles.flex}><Text style={styles.reason}>{reasonLabel[item.reason] || item.reason}</Text><Text style={styles.title}>{item.transaction?.listingTitleSnapshot || item.transaction?.listing?.title || 'Transaksi BMarket'}</Text><Text style={styles.meta}>{item.openedBy?.name || 'Binusian'} · {item.id.slice(0, 8)}</Text></View><AdminStatusPill label={item.status === 'OPEN' ? 'Menunggu tinjauan' : 'Sedang ditinjau'} tone={item.status === 'OPEN' ? 'warning' : 'primary'} /><Text style={styles.amount}>{money(item.transaction?.grandTotal)}</Text></View><Text numberOfLines={2} style={styles.desc}>{item.description}</Text></View></Pressable>)}</View>}
         </Card>
-        <View style={styles.side}>
+        <View style={[styles.side, mobile && styles.sideMobile]}>
           {selected ? <Card style={styles.panel}><Text style={styles.panelTitle}>Keputusan admin</Text><Text style={styles.panelCopy}>Tinjau bukti, tulis dasar keputusan, lalu pilih hasil yang sesuai.</Text>{selected.evidenceUrls?.length ? <View style={styles.evidenceWrap}><View style={styles.evidence}><Ionicons name="images-outline" size={18} color={colors.primary} /><Text style={styles.evidenceText}>{selected.evidenceUrls.length} bukti foto terlampir</Text></View><View style={styles.evidenceGrid}>{selected.evidenceUrls.map((url, index) => <Image key={`${url}-${index}`} source={{ uri: url }} style={styles.evidenceImage} />)}</View></View> : null}<Field label="Catatan keputusan" multiline value={note} onChangeText={setNote} placeholder="Jelaskan dasar keputusan..." hint="Catatan membantu buyer dan seller memahami hasil review." />{selected.status === 'OPEN' ? <Button title="Mulai review" variant="secondary" icon="eye-outline" loading={resolve.isPending} onPress={() => resolve.mutate('START_REVIEW')} /> : null}<Button title="Refund buyer" icon="return-down-back-outline" disabled={resolve.isPending} onPress={() => setPendingAction('REFUND_BUYER')} /><Button title="Release ke seller" icon="wallet-outline" disabled={resolve.isPending} onPress={() => setPendingAction('RELEASE_SELLER')} /><Button title="Tolak sengketa" variant="danger" icon="close-circle-outline" disabled={resolve.isPending} onPress={() => setPendingAction('REJECT')} /></Card> : <Card style={styles.rules}><Text style={styles.rulesTitle}>Aturan penyelesaian</Text><AdminInfoRow icon="documents-outline" title="1. Kumpulkan bukti" message="Tinjau bukti dari kedua pihak secara objektif dan menyeluruh." /><AdminInfoRow icon="analytics-outline" title="2. Analisis & evaluasi" message="Pastikan bukti sesuai dengan aturan dan kebijakan BMarket." /><AdminInfoRow icon="checkmark-done-outline" title="3. Ambil keputusan" message="Putuskan ke mana dana escrow dilepas berdasarkan evaluasi." /><AdminInfoRow icon="notifications-outline" title="4. Notifikasi hasil" message="Hasil keputusan akan terlihat oleh kedua pihak." /></Card>}
         </View>
       </View>}
@@ -67,7 +68,9 @@ const styles = StyleSheet.create({
   toolbar: { padding: 14 },
   workspace: { flexDirection: 'row', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap' },
   caseArea: { flex: 1, minWidth: 520, padding: 0, overflow: 'hidden' },
+  caseAreaMobile: { minWidth: 0, width: '100%', flexBasis: '100%' },
   side: { width: 360, maxWidth: '100%' },
+  sideMobile: { width: '100%', minWidth: 0 },
   list: { padding: 12, gap: 9 },
   pressed: { opacity: .72 },
   caseCard: { padding: 15, gap: 9, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },

@@ -80,6 +80,7 @@ export default function SellScreen() {
   const client = useQueryClient();
   const { width } = useWindowDimensions();
   const desktop = width >= 860;
+  const compactMobile = width < 480;
   const query = useQuery({ queryKey: ['my-listings'], queryFn: endpoints.myListings });
   const sellerTransactions = useQuery({ queryKey: ['transactions', 'seller'], queryFn: () => endpoints.transactions('seller') });
   const items = query.data || [];
@@ -199,26 +200,26 @@ export default function SellScreen() {
     <Title eyebrow="ETALASE PENJUAL" subtitle="Kelola listing, pantau status, dan lihat performa penjualanmu." action={create}>Etalase saya</Title>
 
     <View style={styles.statsGrid}>
-      <View style={[styles.statCard, !desktop && styles.statCardMobile]}>
+      <View style={[styles.statCard, !desktop && styles.statCardMobile, compactMobile && styles.statCardCompact]}>
         <View style={[styles.statIcon, { backgroundColor: colors.primarySoft }]}><Ionicons name="albums-outline" size={20} color={colors.primary} /></View>
         <View style={styles.statCopy}><Text style={styles.statValue}>{counts.total}</Text><Text style={styles.statLabel}>Total listing</Text></View>
       </View>
-      <View style={[styles.statCard, !desktop && styles.statCardMobile]}>
+      <View style={[styles.statCard, !desktop && styles.statCardMobile, compactMobile && styles.statCardCompact]}>
         <View style={[styles.statIcon, { backgroundColor: colors.successSoft }]}><Ionicons name="checkmark-circle-outline" size={20} color={colors.success} /></View>
         <View style={styles.statCopy}><Text style={styles.statValue}>{counts.active}</Text><Text style={styles.statLabel}>Sedang aktif</Text></View>
       </View>
-      <View style={[styles.statCard, !desktop && styles.statCardMobile]}>
+      <View style={[styles.statCard, !desktop && styles.statCardMobile, compactMobile && styles.statCardCompact]}>
         <View style={[styles.statIcon, { backgroundColor: colors.warningSoft }]}><Ionicons name="bag-check-outline" size={20} color={colors.warning} /></View>
         <View style={styles.statCopy}><Text style={styles.statValue}>{counts.outOfStock}</Text><Text style={styles.statLabel}>Stok habis</Text></View>
       </View>
-      <View style={[styles.statCard, !desktop && styles.statCardMobile]}>
+      <View style={[styles.statCard, !desktop && styles.statCardMobile, compactMobile && styles.statCardCompact]}>
         <View style={[styles.statIcon, { backgroundColor: colors.dangerSoft }]}><Ionicons name="shield-outline" size={20} color={colors.danger} /></View>
         <View style={styles.statCopy}><Text style={styles.statValue}>{counts.preorder}</Text><Text style={styles.statLabel}>Pre-order</Text></View>
       </View>
     </View>
 
     <View style={[styles.performance, !desktop && styles.performanceMobile]}>
-      <View style={styles.performanceLead}>
+      <View style={[styles.performanceLead, !desktop && styles.performanceLeadMobile]}>
         <View style={styles.performanceIcon}><Ionicons name="trending-up-outline" size={21} color={colors.primary} /></View>
         <View><Text style={styles.performanceEyebrow}>PERFORMA PENJUALAN</Text><Text style={styles.performanceTitle}>Ringkasan transaksi selesai</Text></View>
       </View>
@@ -261,7 +262,7 @@ export default function SellScreen() {
           {(item.images?.length || 0) > 1 ? <View style={styles.imageCount}><Ionicons name="images-outline" size={11} color={colors.white} /><Text style={styles.imageCountText}>{item.images.length}</Text></View> : null}
         </Pressable>
 
-        <View style={styles.itemBody}>
+        <View style={[styles.itemBody, !desktop && styles.itemBodyMobile]}>
           <View style={styles.metaRow}>
             <Text style={styles.itemType}>{modeLabel[item.mode] || (item.type === 'SERVICE' ? 'JASA' : 'BARANG')}</Text>
             <View style={styles.metaDot} />
@@ -281,7 +282,7 @@ export default function SellScreen() {
             <View style={[styles.badgeDot, (item.status === 'ACTIVE' || item.status === 'PENDING') && styles.badgeDotActive, item.status === 'SOLD' && styles.badgeDotSold, moderated && styles.badgeDotDanger]} />
             <Text style={styles.badgeText}>{label}</Text>
           </View>
-          <View style={styles.actions}>
+          <View style={[styles.actions, !desktop && styles.actionsMobile]}>
             <Pressable onPress={() => router.push({ pathname: '/(student)/listing/[id]', params: { id: item.id } })} style={({ pressed }) => [styles.actionGhost, pressed && styles.pressed]}><Ionicons name="eye-outline" size={17} color={colors.textSoft} /><Text style={styles.actionGhostText}>Lihat</Text></Pressable>
             {item.mode === 'PREORDER' ? <Pressable onPress={() => setOrdersTarget(item)} style={({ pressed }) => [styles.actionGhost, pressed && styles.pressed]}><Ionicons name="people-outline" size={17} color={colors.primary} /><Text style={[styles.actionGhostText, { color: colors.primary }]}>Pesanan PO</Text></Pressable> : null}
             {item.mode === 'STOCKED' && !moderated ? <Pressable onPress={() => { setRestockTarget({ id: item.id, title: item.title }); setRestockQty('10'); }} style={({ pressed }) => [styles.edit, pressed && styles.pressed]}><Ionicons name="add-circle-outline" size={17} color={colors.primary} /><Text style={styles.editText}>+ Stok</Text></Pressable> : null}
@@ -358,7 +359,8 @@ const styles = StyleSheet.create({
   pressed: { opacity: .67 },
   statsGrid: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
   statCard: { flex: 1, minWidth: 190, minHeight: 96, paddingHorizontal: 18, paddingVertical: 16, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 13 },
-  statCardMobile: { flexBasis: '47%' },
+  statCardMobile: { minWidth: 0, flexBasis: '47%', paddingHorizontal: 14 },
+  statCardCompact: { flexBasis: '100%' },
   statIcon: { width: 46, height: 46, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   statCopy: { gap: 1 },
   statValue: { fontFamily: 'PoppinsBold', fontSize: 23, lineHeight: 28, color: colors.text },
@@ -367,6 +369,7 @@ const styles = StyleSheet.create({
   performance: { minHeight: 88, paddingHorizontal: 18, paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: '#CFE1F6', backgroundColor: '#F7FAFE', flexDirection: 'row', alignItems: 'center', gap: 24 },
   performanceMobile: { flexWrap: 'wrap', alignItems: 'flex-start', gap: 14 },
   performanceLead: { flex: 1, minWidth: 270, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  performanceLeadMobile: { minWidth: 0, width: '100%' },
   performanceIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   performanceEyebrow: { fontFamily: 'PoppinsBold', fontSize: 10.5, letterSpacing: .65, color: colors.primary },
   performanceTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 13, color: colors.text, marginTop: 1 },
@@ -402,6 +405,7 @@ const styles = StyleSheet.create({
   imageCount: { position: 'absolute', right: 5, bottom: 5, minHeight: 22, paddingHorizontal: 6, borderRadius: 11, backgroundColor: 'rgba(16,42,67,.82)', flexDirection: 'row', alignItems: 'center', gap: 3 },
   imageCountText: { fontFamily: 'PoppinsSemiBold', fontSize: 10.5, color: colors.white },
   itemBody: { flex: 1, minWidth: 220, gap: 3 },
+  itemBodyMobile: { minWidth: 0, flexBasis: 180 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   itemType: { fontFamily: 'PoppinsBold', fontSize: 10.5, letterSpacing: .55, color: colors.primary },
   metaDot: { width: 3, height: 3, borderRadius: 2, backgroundColor: colors.borderStrong },
@@ -415,7 +419,7 @@ const styles = StyleSheet.create({
   moderationText: { fontFamily: 'PoppinsRegular', fontSize: 11, color: colors.danger },
 
   itemRight: { minWidth: 235, alignSelf: 'stretch', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 },
-  itemRightMobile: { width: '100%', minWidth: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 2 },
+  itemRightMobile: { width: '100%', minWidth: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 4, flexWrap: 'wrap', gap: 8 },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: colors.warningSoft },
   badgeActive: { backgroundColor: colors.successSoft },
   badgeSold: { backgroundColor: '#FFF4E2' },
@@ -426,6 +430,7 @@ const styles = StyleSheet.create({
   badgeDotDanger: { backgroundColor: colors.danger },
   badgeText: { fontFamily: 'PoppinsSemiBold', fontSize: 11.5, color: colors.textSoft },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  actionsMobile: { flexWrap: 'wrap', justifyContent: 'flex-end', flex: 1 },
   actionGhost: { minHeight: 38, paddingHorizontal: 11, borderRadius: 9, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 5 },
   actionGhostText: { fontFamily: 'PoppinsSemiBold', fontSize: 11.5, color: colors.textSoft },
   archive: { minHeight: 38, paddingHorizontal: 11, borderRadius: 9, borderWidth: 1, borderColor: '#F2C3C3', backgroundColor: colors.dangerSoft, flexDirection: 'row', alignItems: 'center', gap: 5 },
@@ -433,8 +438,8 @@ const styles = StyleSheet.create({
   edit: { minHeight: 38, paddingHorizontal: 11, borderRadius: 9, backgroundColor: colors.primarySoft, flexDirection: 'row', alignItems: 'center', gap: 5 },
   editText: { fontFamily: 'PoppinsSemiBold', fontSize: 11.5, color: colors.primary },
   power: { width: 38, height: 38, borderRadius: 9, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
-  modalBackdrop: { flex: 1, padding: 18, backgroundColor: 'rgba(10,26,41,.55)', alignItems: 'center', justifyContent: 'center' },
-  ordersModal: { width: '100%', maxWidth: 720, maxHeight: '86%', gap: 15, padding: 20 },
+  modalBackdrop: { flex: 1, padding: 12, backgroundColor: 'rgba(10,26,41,.55)', alignItems: 'center', justifyContent: 'center' },
+  ordersModal: { width: '100%', maxWidth: 720, maxHeight: '88%', gap: 15, padding: 16 },
   ordersHeader: { flexDirection: 'row', alignItems: 'center', gap: 11 },
   modalClose: { width: 36, height: 36, borderRadius: 9, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
   ordersStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
@@ -457,7 +462,7 @@ const styles = StyleSheet.create({
   orderEnd: { alignItems: 'flex-end', gap: 1 },
   orderAmount: { fontFamily: 'PoppinsSemiBold', fontSize: 11.5, color: colors.text },
   orderStatus: { fontFamily: 'PoppinsMedium', fontSize: 10, color: colors.primary },
-  restockModal: { width: '100%', maxWidth: 460, gap: 16, padding: 20 },
+  restockModal: { width: '100%', maxWidth: 460, gap: 16, padding: 16 },
   restockHeader: { flexDirection: 'row', alignItems: 'center', gap: 11 },
   restockIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   restockTitle: { fontFamily: 'PoppinsBold', fontSize: 18, color: colors.text },

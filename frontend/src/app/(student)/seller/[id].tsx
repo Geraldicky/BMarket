@@ -18,6 +18,7 @@ export default function SellerProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const me = useAuth(state => state.user);
   const width = useWindowDimensions().width;
+  const mobile = width < 600;
   const columns = width >= 1180 ? 4 : width >= 820 ? 3 : width >= 560 ? 2 : 1;
   const client = useQueryClient();
   const [pendingAction, setPendingAction] = useState<'BLOCK' | 'UNBLOCK' | 'REPORT' | null>(null);
@@ -58,17 +59,17 @@ export default function SellerProfileScreen() {
   return <Screen>
     <Pressable onPress={() => router.back()} style={styles.back}><Ionicons name="arrow-back" size={18} color={colors.primary} /><Text style={styles.backText}>Kembali</Text></Pressable>
 
-    <Card style={styles.hero}>
+    <Card style={[styles.hero, mobile && styles.heroMobile]}>
       <View style={styles.avatar}>
         {profile.avatarUrl ? <Image source={profile.avatarUrl} style={styles.avatarImage} contentFit="cover" /> : <Text style={styles.avatarText}>{profile.name?.[0]?.toUpperCase() || 'B'}</Text>}
       </View>
-      <View style={styles.identity}>
+      <View style={[styles.identity, mobile && styles.identityMobile]}>
         <View style={styles.nameRow}><Text style={styles.name}>{profile.name}</Text>{profile.isVerified ? <View style={styles.verified}><Ionicons name="checkmark-circle" size={15} color={colors.success} /><Text style={styles.verifiedText}>BINUSIAN TERVERIFIKASI</Text></View> : null}</View>
         <View style={styles.ratingRow}><Stars rating={profile.avgRating} /><Text style={styles.ratingValue}>{profile.totalReviews ? profile.avgRating.toFixed(1) : 'Belum ada rating'}</Text>{profile.totalReviews ? <Text style={styles.ratingCount}>({profile.totalReviews} review)</Text> : null}</View>
         <Text style={styles.member}>Bergabung {memberSince}</Text>
         <Text style={styles.bio}>{profile.bio || 'Seller belum menambahkan deskripsi profil.'}</Text>
       </View>
-      {id !== me?.id ? <View style={styles.safetyActions}><Button title={blockStatus.data?.blocked ? 'Buka blokir' : 'Chat seller'} icon={blockStatus.data?.blocked ? 'lock-open-outline' : 'chatbubble-outline'} onPress={blockStatus.data?.blocked ? () => setPendingAction('UNBLOCK') : chat} style={styles.chatButton} />{!blockStatus.data?.blocked ? <Pressable disabled={toggleBlock.isPending} onPress={() => setPendingAction('BLOCK')} style={styles.smallAction}><Ionicons name="ban-outline" size={18} color={colors.textSoft}/><Text style={styles.smallActionText}>Block</Text></Pressable> : null}<Pressable disabled={report.isPending} onPress={() => setPendingAction('REPORT')} style={styles.smallAction}><Ionicons name="flag-outline" size={18} color={colors.danger}/><Text style={[styles.smallActionText,{color:colors.danger}]}>Laporkan</Text></Pressable></View> : null}
+      {id !== me?.id ? <View style={[styles.safetyActions, mobile && styles.safetyActionsMobile]}><Button title={blockStatus.data?.blocked ? 'Buka blokir' : 'Chat seller'} icon={blockStatus.data?.blocked ? 'lock-open-outline' : 'chatbubble-outline'} onPress={blockStatus.data?.blocked ? () => setPendingAction('UNBLOCK') : chat} style={styles.chatButton} />{!blockStatus.data?.blocked ? <Pressable disabled={toggleBlock.isPending} onPress={() => setPendingAction('BLOCK')} style={styles.smallAction}><Ionicons name="ban-outline" size={18} color={colors.textSoft}/><Text style={styles.smallActionText}>Block</Text></Pressable> : null}<Pressable disabled={report.isPending} onPress={() => setPendingAction('REPORT')} style={styles.smallAction}><Ionicons name="flag-outline" size={18} color={colors.danger}/><Text style={[styles.smallActionText,{color:colors.danger}]}>Laporkan</Text></Pressable></View> : null}
     </Card>
 
     <View style={styles.metrics}>
@@ -91,10 +92,12 @@ const styles = StyleSheet.create({
   back: { alignSelf: 'flex-start', minHeight: 38, flexDirection: 'row', alignItems: 'center', gap: 7 },
   backText: { fontFamily: 'PoppinsSemiBold', fontSize: 12, color: colors.primary },
   hero: { minHeight: 190, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 20, padding: 24 },
+  heroMobile: { padding: 16, gap: 14, alignItems: 'flex-start' },
   avatar: { width: 92, height: 92, borderRadius: 24, overflow: 'hidden', backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   avatarImage: { width: '100%', height: '100%' },
   avatarText: { fontFamily: 'PoppinsBold', fontSize: 31, color: colors.primary },
   identity: { flex: 1, minWidth: 250, gap: 6 },
+  identityMobile: { minWidth: 0, width: '100%', flexBasis: '100%' },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 9, flexWrap: 'wrap' },
   name: { fontFamily: 'PoppinsBold', fontSize: 25, color: colors.text },
   verified: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 18, backgroundColor: colors.successSoft },
@@ -106,6 +109,7 @@ const styles = StyleSheet.create({
   member: { fontFamily: 'PoppinsRegular', fontSize: 12, color: colors.muted },
   bio: { maxWidth: 720, marginTop: 4, fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 20, color: colors.textSoft },
   safetyActions: { minWidth: 180, gap: 8 },
+  safetyActionsMobile: { minWidth: 0, width: '100%' },
   chatButton: { minWidth: 165 },
   smallAction: { minHeight: 36, paddingHorizontal: 11, borderRadius: 9, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   smallActionText: { fontFamily: 'PoppinsSemiBold', fontSize: 12, color: colors.textSoft },

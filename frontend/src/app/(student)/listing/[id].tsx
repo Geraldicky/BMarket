@@ -30,7 +30,9 @@ function fullDate(value?: string | null) {
 export default function ListingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const user = useAuth(state => state.user);
-  const desktop = useWindowDimensions().width >= 960;
+  const width = useWindowDimensions().width;
+  const desktop = width >= 960;
+  const mobile = width < 600;
   const client = useQueryClient();
   const [quantity, setQuantity] = useState('1');
   const [note, setNote] = useState('');
@@ -189,7 +191,7 @@ export default function ListingDetailScreen() {
       </View>
 
       <View style={[styles.columns, !desktop && styles.columnsMobile]}>
-        <View style={styles.gallery}>
+        <View style={[styles.gallery, !desktop && styles.galleryMobile]}>
           <View style={styles.mainMedia}>
             {activeImage && !imageFailed ? (
               <Image
@@ -228,7 +230,7 @@ export default function ListingDetailScreen() {
           <Text style={styles.galleryHint}>{images.length > 1 ? 'Pilih thumbnail atau gunakan tombol panah untuk melihat foto lain.' : 'Foto ditampilkan dengan rasio asli agar detail produk tidak terpotong.'}</Text>
         </View>
 
-        <Card style={styles.purchaseCard}>
+        <Card style={[styles.purchaseCard, !desktop && styles.purchaseCardMobile]}>
           <View style={styles.topRow}>
             <View style={styles.badgeRow}>
               <View style={styles.typeBadge}><Ionicons name={item.mode === 'PREORDER' ? 'calendar-outline' : item.mode === 'SERVICE' ? 'construct-outline' : item.mode === 'STOCKED' ? 'layers-outline' : 'cube-outline'} size={14} color={colors.primary} /><Text style={styles.typeBadgeText}>{modeLabels[item.mode] || (item.type === 'SERVICE' ? 'JASA' : 'BARANG')}</Text></View>
@@ -238,12 +240,12 @@ export default function ListingDetailScreen() {
           </View>
 
           <View style={styles.productHeading}>
-            <Text style={styles.title}>{item.title}</Text>
+            <Text style={[styles.title, mobile && styles.titleMobile]}>{item.title}</Text>
             <Text style={styles.meta}>{item.condition ? `${conditionLabels[item.condition] || item.condition} · ` : item.type === 'SERVICE' ? 'Jasa mahasiswa · ' : ''}{categoryLabels[item.category] || item.category}</Text>
-            <Text style={styles.price}>{money(item.price)}</Text>
+            <Text style={[styles.price, mobile && styles.priceMobile]}>{money(item.price)}</Text>
           </View>
 
-          <View style={styles.factGrid}>
+          <View style={[styles.factGrid, mobile && styles.factGridMobile]}>
             <View style={styles.factItem}>
               <View style={styles.factIcon}><Ionicons name={item.mode === 'PREORDER' ? 'calendar-outline' : item.mode === 'STOCKED' ? 'layers-outline' : item.mode === 'SERVICE' ? 'construct-outline' : 'cube-outline'} size={18} color={colors.primary} /></View>
               <View style={styles.flex}><Text style={styles.factLabel}>{item.mode === 'PREORDER' ? 'Kuota tersisa' : item.mode === 'STOCKED' ? 'Stok tersedia' : item.mode === 'ONE_OFF' ? 'Ketersediaan' : 'Jenis penawaran'}</Text><Text style={styles.factValue}>{item.mode === 'PREORDER' ? `${item.stockLeft ?? 0} / ${item.preorderQuota ?? item.stock ?? 0} unit` : item.mode === 'STOCKED' ? `${item.stockLeft ?? 0} unit` : item.mode === 'ONE_OFF' ? (item.status === 'SOLD' ? 'Sudah terjual' : '1 unit') : 'Jasa mahasiswa'}</Text></View>
@@ -325,8 +327,8 @@ export default function ListingDetailScreen() {
       </View>
 
       <Modal visible={checkoutOpen} transparent animationType="fade" onRequestClose={closeCheckout}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.checkoutModal}>
+        <View style={[styles.modalBackdrop, mobile && styles.modalBackdropMobile]}>
+          <View style={[styles.checkoutModal, mobile && styles.checkoutModalMobile]}>
             <View style={styles.modalHeader}>
               <View><Text style={styles.modalEyebrow}>CHECKOUT BMARKET</Text><Text style={styles.modalTitle}>Periksa pesananmu</Text><Text style={styles.modalSubtitle}>{item.mode === 'PREORDER' ? 'Pesanan akan tercatat sebagai pre-order dan pembayaran ditahan di escrow.' : 'Pastikan jumlah dan metode penyerahan sudah sesuai.'}</Text></View>
               <Pressable accessibilityLabel="Tutup checkout" onPress={closeCheckout} style={styles.modalClose}><Ionicons name="close" size={21} color={colors.textSoft} /></Pressable>
@@ -402,7 +404,7 @@ export default function ListingDetailScreen() {
               <InlineAlert message={errorMessage(buy.error)} />
             ) : null}
 
-            <View style={styles.modalActions}>
+            <View style={[styles.modalActions, mobile && styles.modalActionsMobile]}>
               <Button title="Kembali" variant="ghost" disabled={buy.isPending} onPress={closeCheckout} style={styles.modalButton} />
               <Button title="Buat pesanan" icon="arrow-forward" loading={buy.isPending} disabled={checkoutOptions.isLoading || checkoutOptions.isError} onPress={() => buy.mutate()} style={styles.modalButtonPrimary} />
             </View>
@@ -423,6 +425,7 @@ const styles = StyleSheet.create({
   columns: { flexDirection: 'row', gap: 20, alignItems: 'flex-start' },
   columnsMobile: { flexDirection: 'column', gap: 16 },
   gallery: { flex: 1.28, width: '100%', minWidth: 320, gap: 11 },
+  galleryMobile: { minWidth: 0 },
   mainMedia: { position: 'relative', width: '100%', aspectRatio: 1.22, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: colors.border, backgroundColor: '#EEF3F7' },
   mainImage: { width: '100%', height: '100%', backgroundColor: colors.surface },
   placeholder: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
@@ -442,6 +445,7 @@ const styles = StyleSheet.create({
   thumbNumberText: { fontFamily: 'PoppinsSemiBold', fontSize: 10.5, color: colors.white },
   galleryHint: { fontFamily: 'PoppinsRegular', fontSize: 11.5, lineHeight: 17, color: colors.muted },
   purchaseCard: { flex: .92, width: '100%', minWidth: 350, padding: 20, gap: 16, borderRadius: 16, shadowOpacity: .06 },
+  purchaseCardMobile: { minWidth: 0, padding: 15 },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   badgeRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
   typeBadge: { minHeight: 29, paddingHorizontal: 9, borderRadius: 8, backgroundColor: colors.primarySoft, flexDirection: 'row', alignItems: 'center', gap: 5 },
@@ -451,10 +455,13 @@ const styles = StyleSheet.create({
   save: { width: 40, height: 40, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   productHeading: { gap: 5 },
   title: { fontFamily: 'PoppinsBold', fontSize: 27, lineHeight: 35, color: colors.text },
+  titleMobile: { fontSize: 22, lineHeight: 29 },
   meta: { fontFamily: 'PoppinsRegular', fontSize: 12.5, color: colors.muted },
   price: { fontFamily: 'PoppinsBold', fontSize: 29, lineHeight: 37, color: colors.primaryDark, marginTop: 5 },
+  priceMobile: { fontSize: 24, lineHeight: 31 },
   factGrid: { flexDirection: 'row', gap: 8 },
-  factItem: { flex: 1, minHeight: 70, padding: 11, borderRadius: 11, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, flexDirection: 'row', alignItems: 'center', gap: 9 },
+  factGridMobile: { flexWrap: 'wrap' },
+  factItem: { flex: 1, minWidth: 120, minHeight: 70, padding: 11, borderRadius: 11, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, flexDirection: 'row', alignItems: 'center', gap: 9 },
   factIcon: { width: 38, height: 38, borderRadius: 10, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   factLabel: { fontFamily: 'PoppinsRegular', fontSize: 10.5, color: colors.muted },
   factValue: { fontFamily: 'PoppinsSemiBold', fontSize: 12, lineHeight: 17, color: colors.text, marginTop: 1 },
@@ -524,9 +531,11 @@ const styles = StyleSheet.create({
   safetyTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 13, color: colors.text },
   safetyCopy: { fontFamily: 'PoppinsRegular', fontSize: 11.5, lineHeight: 18, color: colors.muted, marginTop: 2 },
   modalBackdrop: { flex: 1, padding: 18, backgroundColor: 'rgba(10,26,41,.58)', alignItems: 'center', justifyContent: 'center' },
+  modalBackdropMobile: { padding: 10 },
   checkoutModal: { width: '100%', maxWidth: 680, maxHeight: '92%', padding: 22, borderRadius: 18, backgroundColor: colors.surface, gap: 16, shadowColor: '#071727', shadowOpacity: .22, shadowRadius: 26, shadowOffset: { width: 0, height: 12 } },
   modalScroll: { flexShrink: 1 },
   modalScrollContent: { gap: 16, paddingBottom: 2 },
+  checkoutModalMobile: { maxHeight: '94%', borderRadius: 14, padding: 14 },
   modalHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 },
   modalEyebrow: { fontFamily: 'PoppinsBold', fontSize: 10.5, letterSpacing: .8, color: colors.primary },
   modalTitle: { fontFamily: 'PoppinsBold', fontSize: 22, lineHeight: 29, color: colors.text },
@@ -576,6 +585,7 @@ const styles = StyleSheet.create({
   escrowInfo: { padding: 12, borderRadius: 11, borderWidth: 1, borderColor: '#CDEBDD', backgroundColor: colors.successSoft, flexDirection: 'row', alignItems: 'flex-start', gap: 9 },
   escrowText: { flex: 1, fontFamily: 'PoppinsRegular', fontSize: 10.5, lineHeight: 17, color: colors.textSoft },
   modalActions: { flexDirection: 'row', gap: 9, paddingTop: 2 },
+  modalActionsMobile: { flexDirection: 'column-reverse' },
   modalButton: { flex: 1 },
   modalButtonPrimary: { flex: 1.45 },
   flex: { flex: 1 },

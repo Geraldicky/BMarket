@@ -79,7 +79,9 @@ function Timeline({ transaction }: { transaction: Transaction }) {
 export default function TransactionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const user = useAuth(state => state.user);
-  const desktop = useWindowDimensions().width >= 960;
+  const width = useWindowDimensions().width;
+  const desktop = width >= 960;
+  const mobile = width < 600;
   const client = useQueryClient();
   const [dialog, setDialog] = useState<ActionKind | null>(null);
   const [cancelReason, setCancelReason] = useState('');
@@ -260,14 +262,14 @@ export default function TransactionDetailScreen() {
       {transaction.dispute ? <InlineAlert tone={disputeActive ? 'warning' : 'success'} message={disputeActive ? `Sengketa ${transaction.dispute.status === 'OPEN' ? 'menunggu admin' : 'sedang ditinjau'}. Dana escrow dan tindakan penyelesaian transaksi dikunci.` : `Sengketa sudah ditutup${transaction.dispute.resolutionNote ? `: ${transaction.dispute.resolutionNote}` : '.'}`} /> : null}
 
       <View style={[styles.statusBanner, { backgroundColor: meta.tint, borderColor: meta.color }]}>
-        <View style={styles.statusPrimary}>
+        <View style={[styles.statusPrimary, mobile && styles.statusPrimaryMobile]}>
           <View style={[styles.statusIcon, { backgroundColor: meta.color }]}><Ionicons name={meta.icon} size={23} color={colors.white} /></View>
           <View style={styles.statusBody}>
             <View style={styles.statusTitleRow}><Text style={[styles.statusTitle, { color: meta.color }]}>{meta.title}</Text>{active ? <View style={styles.liveBadge}><View style={[styles.liveDot, { backgroundColor: meta.color }]} /><Text style={styles.liveText}>AKTIF</Text></View> : null}</View>
             <Text style={styles.statusDescription}>{meta.description}</Text>
           </View>
         </View>
-        <View style={styles.statusAside}>
+        <View style={[styles.statusAside, mobile && styles.statusAsideMobile]}>
           <Text style={styles.statusAsideLabel}>{buyer ? 'TOTAL PEMBAYARAN' : 'NILAI PESANAN'}</Text>
           <Text style={styles.statusAsideValue}>{money(buyer ? grandTotal : transaction.totalPrice)}</Text>
           <Text style={styles.statusAsideMeta}>{meetup ? 'Meetup kampus' : 'Kurir instan'} · {buyer ? 'Pembelian' : 'Penjualan'}</Text>
@@ -278,7 +280,7 @@ export default function TransactionDetailScreen() {
         <View style={styles.mainColumn}>
           <Card style={styles.orderCard}>
             <Text style={styles.cardTitle}>Ringkasan pesanan</Text>
-            <View style={styles.productRow}>
+            <View style={[styles.productRow, mobile && styles.productRowMobile]}>
               <View style={styles.productMedia}>{transaction.listing.images?.[0] ? <Image source={transaction.listing.images[0]} style={styles.productImage} contentFit="cover" transition={140} cachePolicy="memory-disk" /> : <Ionicons name={transaction.listing.type === 'SERVICE' ? 'construct-outline' : 'cube-outline'} size={34} color={colors.primary} />}</View>
               <View style={styles.productBody}><Text style={styles.productType}>{transaction.listing.type === 'SERVICE' ? 'JASA' : 'BARANG'}</Text><Text style={styles.productTitle}>{transaction.listing.title}</Text><Text style={styles.productMeta}>{money(transaction.price)} × {transaction.quantity}</Text></View>
               <Text style={styles.productTotal}>{money(transaction.totalPrice)}</Text>
@@ -310,7 +312,7 @@ export default function TransactionDetailScreen() {
           <Card style={styles.timelineCard}><Text style={styles.cardTitle}>Progres transaksi</Text><Text style={styles.cardCopy}>Tahapan diperbarui sesuai tindakan buyer dan seller.</Text><Timeline transaction={transaction} /></Card>
         </View>
 
-        <View style={styles.sideColumn}>
+        <View style={[styles.sideColumn, !desktop && styles.sideColumnMobile]}>
           <Card style={styles.paymentCard}>
             <Text style={styles.cardEyebrow}>PEMBAYARAN</Text><Text style={styles.cardTitle}>Rincian pembayaran</Text>
             <SummaryRow label="Harga satuan" value={money(transaction.price)} />
@@ -374,25 +376,25 @@ export default function TransactionDetailScreen() {
       </View>
 
       <Modal visible={disputeVisible} transparent animationType="fade" onRequestClose={() => !createDispute.isPending && setDisputeVisible(false)}>
-        <View style={styles.modalBackdrop}><View style={styles.dialog}>
+        <View style={[styles.modalBackdrop, mobile && styles.modalBackdropMobile]}><View style={[styles.dialog, mobile && styles.dialogMobile]}>
           <View style={styles.dialogHeader}><View style={[styles.dialogIcon, { backgroundColor: colors.warningSoft }]}><Ionicons name="warning-outline" size={24} color={colors.warning}/></View><Pressable disabled={createDispute.isPending} onPress={() => setDisputeVisible(false)} style={styles.dialogClose}><Ionicons name="close" size={20} color={colors.textSoft}/></Pressable></View>
           <Text style={styles.dialogEyebrow}>DISPUTE & SAFETY</Text><Text style={styles.dialogTitle}>Laporkan masalah transaksi</Text><Text style={styles.dialogDescription}>Dana tetap dibekukan di escrow selama admin meninjau sengketa. Sertakan informasi yang objektif dan bukti jika tersedia.</Text>
           <View style={styles.reasonSection}><Text style={styles.reasonLabel}>Jenis masalah</Text><View style={styles.reasonList}>{disputeReasons.map(item => <Pressable key={item.value} onPress={() => setDisputeReason(item.value)} style={[styles.reason, disputeReason===item.value&&styles.reasonActive]}><View style={[styles.reasonRadio, disputeReason===item.value&&styles.reasonRadioActive]}>{disputeReason===item.value?<View style={styles.reasonRadioDot}/>:null}</View><Text style={[styles.reasonText, disputeReason===item.value&&styles.reasonTextActive]}>{item.label}</Text></Pressable>)}</View></View>
           <Field label="Kronologi masalah" multiline value={disputeDescription} onChangeText={setDisputeDescription} placeholder="Jelaskan apa yang terjadi, hasil komunikasi, dan kondisi barang..." maxLength={2000}/>
           <View style={styles.evidenceBox}><View style={styles.flex}><Text style={styles.evidenceTitle}>Bukti foto ({disputeEvidence.length}/4)</Text><Text style={styles.evidenceCopy}>Opsional. Screenshot chat atau foto kondisi barang dapat membantu admin.</Text></View><Button title="Tambah bukti" variant="secondary" icon="images-outline" disabled={disputeEvidence.length>=4} onPress={pickEvidence}/></View>
           {disputeEvidence.length ? <View style={styles.evidenceList}>{disputeEvidence.map((asset,index)=><Pressable key={`${asset.uri}-${index}`} onPress={()=>setDisputeEvidence(current=>current.filter((_,i)=>i!==index))} style={styles.evidenceChip}><Ionicons name="image-outline" size={14} color={colors.primary}/><Text numberOfLines={1} style={styles.evidenceChipText}>Bukti {index+1}</Text><Ionicons name="close" size={13} color={colors.muted}/></Pressable>)}</View>:null}
-          <View style={styles.dialogActions}><Button title="Kembali" variant="ghost" disabled={createDispute.isPending} onPress={()=>setDisputeVisible(false)} style={styles.dialogBack}/><Button title="Buka sengketa" icon="shield-outline" loading={createDispute.isPending} disabled={disputeDescription.trim().length<10} onPress={()=>createDispute.mutate()} style={styles.dialogConfirm}/></View>
+          <View style={[styles.dialogActions, mobile && styles.dialogActionsMobile]}><Button title="Kembali" variant="ghost" disabled={createDispute.isPending} onPress={()=>setDisputeVisible(false)} style={styles.dialogBack}/><Button title="Buka sengketa" icon="shield-outline" loading={createDispute.isPending} disabled={disputeDescription.trim().length<10} onPress={()=>createDispute.mutate()} style={styles.dialogConfirm}/></View>
         </View></View>
       </Modal>
 
       <Modal visible={Boolean(dialog)} transparent animationType="fade" onRequestClose={() => !action.isPending && setDialog(null)}>
-        <View style={styles.modalBackdrop}>
-          {dialogCopy ? <View style={styles.dialog}>
+        <View style={[styles.modalBackdrop, mobile && styles.modalBackdropMobile]}>
+          {dialogCopy ? <View style={[styles.dialog, mobile && styles.dialogMobile]}>
             <View style={styles.dialogHeader}><View style={[styles.dialogIcon, dialog === 'CANCELLED' && styles.dialogIconDanger]}><Ionicons name={dialogCopy.icon} size={24} color={dialog === 'CANCELLED' ? colors.danger : colors.primary} /></View><Pressable accessibilityLabel="Tutup dialog" disabled={action.isPending} onPress={() => setDialog(null)} style={styles.dialogClose}><Ionicons name="close" size={20} color={colors.textSoft} /></Pressable></View>
             <Text style={styles.dialogEyebrow}>{dialogCopy.eyebrow}</Text><Text style={styles.dialogTitle}>{dialogCopy.title}</Text><Text style={styles.dialogDescription}>{dialogCopy.description}</Text>
             {dialog === 'PAY' ? <View style={styles.dialogAmount}><Text style={styles.dialogAmountLabel}>Total yang dibayar</Text><Text style={styles.dialogAmountValue}>{money(grandTotal)}</Text></View> : null}
             {dialog === 'CANCELLED' ? <View style={styles.reasonSection}><Text style={styles.reasonLabel}>Pilih alasan pembatalan</Text><View style={styles.reasonList}>{cancellationReasons.map(reason => <Pressable key={reason} onPress={() => setCancelReason(reason)} style={[styles.reason, cancelReason === reason && styles.reasonActive]}><View style={[styles.reasonRadio, cancelReason === reason && styles.reasonRadioActive]}>{cancelReason === reason ? <View style={styles.reasonRadioDot} /> : null}</View><Text style={[styles.reasonText, cancelReason === reason && styles.reasonTextActive]}>{reason}</Text></Pressable>)}</View></View> : null}
-            <View style={styles.dialogActions}><Button title="Kembali" variant="ghost" disabled={action.isPending} onPress={() => setDialog(null)} style={styles.dialogBack} /><Button title={dialogCopy.confirm} variant={dialog === 'CANCELLED' ? 'danger' : 'primary'} icon={dialogCopy.icon} disabled={dialog === 'CANCELLED' && !cancelReason} loading={action.isPending} onPress={() => action.mutate({ kind: dialog!, reason: cancelReason || undefined })} style={styles.dialogConfirm} /></View>
+            <View style={[styles.dialogActions, mobile && styles.dialogActionsMobile]}><Button title="Kembali" variant="ghost" disabled={action.isPending} onPress={() => setDialog(null)} style={styles.dialogBack} /><Button title={dialogCopy.confirm} variant={dialog === 'CANCELLED' ? 'danger' : 'primary'} icon={dialogCopy.icon} disabled={dialog === 'CANCELLED' && !cancelReason} loading={action.isPending} onPress={() => action.mutate({ kind: dialog!, reason: cancelReason || undefined })} style={styles.dialogConfirm} /></View>
           </View> : null}
         </View>
       </Modal>
@@ -409,21 +411,21 @@ export default function TransactionDetailScreen() {
       />
 
       <Modal visible={handoverConfirmVisible} transparent animationType="fade" onRequestClose={() => !issueCode.isPending && setHandoverConfirmVisible(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.dialog}>
+        <View style={[styles.modalBackdrop, mobile && styles.modalBackdropMobile]}>
+          <View style={[styles.dialog, mobile && styles.dialogMobile]}>
             <View style={styles.dialogHeader}><View style={styles.dialogIcon}><Ionicons name="shield-checkmark-outline" size={24} color={colors.primary} /></View><Pressable disabled={issueCode.isPending} onPress={() => setHandoverConfirmVisible(false)} style={styles.dialogClose}><Ionicons name="close" size={20} color={colors.textSoft} /></Pressable></View>
             <Text style={styles.dialogEyebrow}>KONFIRMASI SERAH-TERIMA</Text>
             <Text style={styles.dialogTitle}>Barang sudah kamu terima?</Text>
             <Text style={styles.dialogDescription}>Kode hanya boleh dibuat setelah barang benar-benar ada di tanganmu. Setelah seller memverifikasi kode, transaksi selesai dan dana escrow dilepas.</Text>
             <View style={styles.checklist}>{['Barang sudah diterima langsung dari seller','Kondisi barang sudah diperiksa','Barang sesuai dengan listing dan kesepakatan'].map(item => <View key={item} style={styles.checkRow}><Ionicons name="checkmark-circle" size={19} color={colors.success} /><Text style={styles.checkText}>{item}</Text></View>)}</View>
             <InlineAlert tone="warning" message="Jangan berikan kode sebelum barang diterima. Kode yang berhasil diverifikasi akan menyelesaikan transaksi." />
-            <View style={styles.dialogActions}><Button title="Belum" variant="ghost" disabled={issueCode.isPending} onPress={() => setHandoverConfirmVisible(false)} style={styles.dialogBack} /><Button title="Ya, buat kode" icon="key-outline" loading={issueCode.isPending} onPress={() => issueCode.mutate()} style={styles.dialogConfirm} /></View>
+            <View style={[styles.dialogActions, mobile && styles.dialogActionsMobile]}><Button title="Belum" variant="ghost" disabled={issueCode.isPending} onPress={() => setHandoverConfirmVisible(false)} style={styles.dialogBack} /><Button title="Ya, buat kode" icon="key-outline" loading={issueCode.isPending} onPress={() => issueCode.mutate()} style={styles.dialogConfirm} /></View>
           </View>
         </View>
       </Modal>
 
       <Modal visible={handoverCodeVisible} transparent animationType="fade" onRequestClose={() => setHandoverCodeVisible(false)}>
-        <View style={styles.modalBackdrop}>
+        <View style={[styles.modalBackdrop, mobile && styles.modalBackdropMobile]}>
           <View style={[styles.dialog, styles.codeDialog]}>
             <View style={styles.dialogHeader}><View style={styles.dialogIcon}><Ionicons name="key-outline" size={24} color={colors.primary} /></View><Pressable onPress={() => setHandoverCodeVisible(false)} style={styles.dialogClose}><Ionicons name="close" size={20} color={colors.textSoft} /></Pressable></View>
             <Text style={styles.dialogEyebrow}>KODE SERAH-TERIMA</Text>
@@ -435,8 +437,8 @@ export default function TransactionDetailScreen() {
       </Modal>
 
       <Modal visible={reviewVisible} transparent animationType="fade" onRequestClose={() => !submitReview.isPending && setReviewVisible(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.dialog}>
+        <View style={[styles.modalBackdrop, mobile && styles.modalBackdropMobile]}>
+          <View style={[styles.dialog, mobile && styles.dialogMobile]}>
             <View style={styles.dialogHeader}><View style={styles.dialogIcon}><Ionicons name="star-outline" size={24} color={colors.primary} /></View><Pressable disabled={submitReview.isPending} onPress={() => setReviewVisible(false)} style={styles.dialogClose}><Ionicons name="close" size={20} color={colors.textSoft} /></Pressable></View>
             <Text style={styles.dialogEyebrow}>REVIEW SELLER</Text>
             <Text style={styles.dialogTitle}>Bagaimana pengalamanmu?</Text>
@@ -444,7 +446,7 @@ export default function TransactionDetailScreen() {
             <View style={styles.ratingPicker}>{[1,2,3,4,5].map(star => <Pressable key={star} onPress={() => setReviewRating(star)} style={styles.starButton}><Ionicons name={star <= reviewRating ? 'star' : 'star-outline'} size={34} color="#F4A928" /></Pressable>)}</View>
             <Text style={styles.ratingLabel}>{reviewRating ? `${reviewRating}/5 · ${reviewRating >= 5 ? 'Sangat baik' : reviewRating >= 4 ? 'Baik' : reviewRating >= 3 ? 'Cukup' : reviewRating >= 2 ? 'Kurang' : 'Buruk'}` : 'Pilih rating 1–5'}</Text>
             <Field label="Review (opsional)" value={reviewComment} onChangeText={setReviewComment} multiline placeholder="Ceritakan kondisi barang, komunikasi seller, atau pengalaman meetup..." maxLength={1000} />
-            <View style={styles.dialogActions}><Button title="Nanti" variant="ghost" disabled={submitReview.isPending} onPress={() => setReviewVisible(false)} style={styles.dialogBack} /><Button title="Kirim review" icon="send-outline" disabled={!reviewRating} loading={submitReview.isPending} onPress={() => submitReview.mutate()} style={styles.dialogConfirm} /></View>
+            <View style={[styles.dialogActions, mobile && styles.dialogActionsMobile]}><Button title="Nanti" variant="ghost" disabled={submitReview.isPending} onPress={() => setReviewVisible(false)} style={styles.dialogBack} /><Button title="Kirim review" icon="send-outline" disabled={!reviewRating} loading={submitReview.isPending} onPress={() => submitReview.mutate()} style={styles.dialogConfirm} /></View>
           </View>
         </View>
       </Modal>
@@ -468,6 +470,7 @@ const styles = StyleSheet.create({
   orderId: { fontFamily: 'PoppinsMedium', fontSize: 12, color: colors.muted },
   statusBanner: { minHeight: 112, padding: 16, borderRadius: 15, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 18, flexWrap: 'wrap' },
   statusPrimary: { minWidth: 320, flex: 1, flexDirection: 'row', alignItems: 'center', gap: 13 },
+  statusPrimaryMobile: { minWidth: 0, width: '100%' },
   statusIcon: { width: 50, height: 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   statusBody: { flex: 1, gap: 4 },
   statusTitleRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 9 },
@@ -477,6 +480,7 @@ const styles = StyleSheet.create({
   liveDot: { width: 7, height: 7, borderRadius: 4 },
   liveText: { fontFamily: 'PoppinsBold', fontSize: 10.5, letterSpacing: .5, color: colors.textSoft },
   statusAside: { minWidth: 190, paddingLeft: 18, borderLeftWidth: 1, borderLeftColor: 'rgba(23,43,58,.12)', alignItems: 'flex-end' },
+  statusAsideMobile: { minWidth: 0, width: '100%', paddingLeft: 0, paddingTop: 12, borderLeftWidth: 0, borderTopWidth: 1, borderTopColor: 'rgba(23,43,58,.12)', alignItems: 'flex-start' },
   statusAsideLabel: { fontFamily: 'PoppinsBold', fontSize: 10.5, letterSpacing: .55, color: colors.muted },
   statusAsideValue: { marginTop: 2, fontFamily: 'PoppinsBold', fontSize: 20, color: colors.text },
   statusAsideMeta: { marginTop: 3, fontFamily: 'PoppinsRegular', fontSize: 11.5, color: colors.muted },
@@ -484,11 +488,13 @@ const styles = StyleSheet.create({
   columnsMobile: { flexDirection: 'column' },
   mainColumn: { flex: 1.72, width: '100%', gap: 14 },
   sideColumn: { flex: .9, width: '100%', minWidth: 330, maxWidth: 390, gap: 14 },
+  sideColumnMobile: { minWidth: 0, maxWidth: '100%' },
   orderCard: { gap: 14 },
   cardEyebrow: { fontFamily: 'PoppinsBold', fontSize: 10.5, letterSpacing: .75, color: colors.primary, marginBottom: -4 },
   cardTitle: { fontFamily: 'PoppinsBold', fontSize: 16.5, color: colors.text },
   cardCopy: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 18, color: colors.muted, marginTop: -5 },
   productRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  productRowMobile: { alignItems: 'flex-start', flexWrap: 'wrap' },
   productMedia: { width: 90, height: 86, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   productImage: { width: '100%', height: '100%' },
   productBody: { flex: 1, gap: 4 },
@@ -573,7 +579,9 @@ const styles = StyleSheet.create({
   cancelReasonText: { fontFamily: 'PoppinsMedium', fontSize: 12, color: colors.text },
   cancelledBy: { fontFamily: 'PoppinsRegular', fontSize: 12, color: colors.muted },
   modalBackdrop: { flex: 1, padding: 18, backgroundColor: 'rgba(10,26,41,.58)', alignItems: 'center', justifyContent: 'center' },
+  modalBackdropMobile: { padding: 10 },
   dialog: { width: '100%', maxWidth: 520, maxHeight: '94%', padding: 24, borderRadius: 18, backgroundColor: colors.surface, gap: 11, shadowColor: '#071727', shadowOpacity: 0.22, shadowRadius: 26, shadowOffset: { width: 0, height: 12 } },
+  dialogMobile: { padding: 15, borderRadius: 15 },
   dialogHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   dialogIcon: { width: 50, height: 50, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   dialogIconDanger: { backgroundColor: colors.dangerSoft },
@@ -595,6 +603,7 @@ const styles = StyleSheet.create({
   reasonText: { flex: 1, fontFamily: 'PoppinsRegular', fontSize: 12, color: colors.textSoft },
   reasonTextActive: { fontFamily: 'PoppinsMedium', color: colors.text },
   dialogActions: { flexDirection: 'row', gap: 10, marginTop: 8 },
+  dialogActionsMobile: { flexDirection: 'column-reverse' },
   dialogBack: { flex: 1 },
   dialogConfirm: { flex: 1.6 },
   checklist: { gap: 9, padding: 14, borderRadius: 12, backgroundColor: colors.background },

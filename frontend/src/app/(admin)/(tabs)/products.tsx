@@ -54,7 +54,9 @@ const preorderLabel = (status?: string | null) => ({
 
 export default function AdminProductsScreen() {
   const client = useQueryClient();
-  const desktop = useWindowDimensions().width >= 900;
+  const width = useWindowDimensions().width;
+  const desktop = width >= 900;
+  const mobile = width < 600;
   const [search, setSearch] = useState('');
   const [keyword, setKeyword] = useState('');
   const [status, setStatus] = useState<StatusFilter>('ALL');
@@ -137,7 +139,7 @@ export default function AdminProductsScreen() {
       </View>
 
       <Card style={styles.toolbar}>
-        <View style={styles.search}><Field icon="search-outline" value={search} onChangeText={setSearch} placeholder="Cari judul, deskripsi, seller, atau email..." /></View>
+        <View style={[styles.search, mobile && styles.searchMobile]}><Field icon="search-outline" value={search} onChangeText={setSearch} placeholder="Cari judul, deskripsi, seller, atau email..." /></View>
         <View style={styles.typeFilters}>
           {([['ALL', 'Semua model'], ['ONE_OFF', 'Satuan'], ['STOCKED', 'Ready stock'], ['PREORDER', 'Pre-order'], ['SERVICE', 'Jasa']] as const).map(([key, label]) => (
             <Pressable key={key} onPress={() => setMode(key)} style={[styles.filter, mode === key && styles.filterActive]}><Text style={[styles.filterText, mode === key && styles.filterTextActive]}>{label}</Text></Pressable>
@@ -162,23 +164,23 @@ export default function AdminProductsScreen() {
             const reportCount = listing.openReportCount || 0;
             return <Card key={listing.id} style={styles.listingCard}>
               <View style={[styles.listingRow, !desktop && styles.listingRowMobile]}>
-                <View style={styles.media}>
+                <View style={[styles.media, mobile && styles.mediaMobile]}>
                   {listing.images?.[0] ? <Image source={{ uri: listing.images[0] }} style={styles.image} resizeMode="cover" /> : <Ionicons name="image-outline" size={27} color={colors.muted} />}
                 </View>
-                <View style={styles.listingBody}>
+                <View style={[styles.listingBody, mobile && styles.listingBodyMobile]}>
                   <View style={styles.titleLine}><Text numberOfLines={2} style={styles.listingTitle}>{listing.title}</Text><AdminStatusPill label={statusLabel[listing.status]} tone={statusTone(listing.status)} /></View>
                   <Text style={styles.price}>{money(listing.price)}</Text>
                   <Text style={styles.meta}>{modeLabel[listing.mode]} · {listing.category} · dibuat {date(listing.createdAt)}</Text>
                   <View style={styles.sellerRow}><View style={styles.sellerAvatar}><Text style={styles.sellerInitial}>{listing.seller?.name?.[0]?.toUpperCase() || 'B'}</Text></View><View><Text style={styles.sellerName}>{listing.seller?.name || 'Seller BMarket'}</Text><Text style={styles.sellerMeta}>{listing.seller?.email || 'Email tidak tersedia'}{listing.seller?.studentId ? ` · NIM ${listing.seller.studentId}` : ''}</Text></View></View>
                 </View>
-                <View style={styles.side}>
+                <View style={[styles.side, mobile && styles.sideMobile]}>
                   {reportCount > 0 ? <View style={styles.reportBadge}><Ionicons name="flag-outline" size={15} color={colors.danger} /><Text style={styles.reportBadgeText}>{reportCount} laporan terbuka</Text></View> : <View style={styles.cleanBadge}><Ionicons name="shield-checkmark-outline" size={15} color={colors.success} /><Text style={styles.cleanBadgeText}>Belum ada laporan</Text></View>}
-                  <View style={styles.actions}>
+                  <View style={[styles.actions, mobile && styles.actionsMobile]}>
                     <Button title={expandedId === listing.id ? 'Tutup detail' : 'Lihat detail'} variant="ghost" icon={expandedId === listing.id ? 'chevron-up-outline' : 'eye-outline'} onPress={() => setExpandedId(value => value === listing.id ? null : listing.id)} style={styles.action} />
                     {listing.status === 'ACTIVE' ? <><Button title="Sembunyikan" variant="ghost" icon="eye-off-outline" onPress={() => setPending({ listing, kind: 'STATUS', status: 'HIDDEN' })} style={styles.action} /><Button title="Hapus" variant="danger" icon="trash-outline" onPress={() => setPending({ listing, kind: 'STATUS', status: 'REMOVED' })} style={styles.action} /></> : null}
                     {listing.status === 'HIDDEN' ? <><Button title="Aktifkan" variant="secondary" icon="eye-outline" onPress={() => setPending({ listing, kind: 'STATUS', status: 'ACTIVE' })} style={styles.action} /><Button title="Hapus" variant="danger" icon="trash-outline" onPress={() => setPending({ listing, kind: 'STATUS', status: 'REMOVED' })} style={styles.action} /></> : null}
                     {listing.status === 'PENDING' ? <><Button title="Setujui" variant="secondary" icon="checkmark-circle-outline" onPress={() => setPending({ listing, kind: 'MODERATE', action: 'approve' })} style={styles.action} /><Button title="Tolak" variant="danger" icon="close-circle-outline" onPress={() => setPending({ listing, kind: 'MODERATE', action: 'reject' })} style={styles.action} /></> : null}
-                    {['SOLD', 'INACTIVE', 'REMOVED', 'REJECTED'].includes(listing.status) ? <Text style={styles.readOnly}>Status ini hanya dipantau. Tidak ada tindakan cepat yang tersedia.</Text> : null}
+                    {['SOLD', 'INACTIVE', 'REMOVED', 'REJECTED'].includes(listing.status) ? <Text style={[styles.readOnly, mobile && styles.readOnlyMobile]}>Status ini hanya dipantau. Tidak ada tindakan cepat yang tersedia.</Text> : null}
                   </View>
                 </View>
               </View>
@@ -218,6 +220,7 @@ const styles = StyleSheet.create({
   stats: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
   toolbar: { padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
   search: { flex: 1, minWidth: 280 },
+  searchMobile: { minWidth: 0, width: '100%', flexBasis: '100%' },
   typeFilters: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   filter: { minHeight: 38, paddingHorizontal: 13, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   filterActive: { borderColor: '#C5DDF8', backgroundColor: colors.primarySoft },
@@ -234,8 +237,10 @@ const styles = StyleSheet.create({
   listingRow: { flexDirection: 'row', alignItems: 'stretch', gap: 15 },
   listingRowMobile: { flexWrap: 'wrap' },
   media: { width: 128, minHeight: 112, borderRadius: 13, backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  mediaMobile: { width: 84, minHeight: 84, height: 84 },
   image: { width: '100%', height: '100%' },
   listingBody: { flex: 1.5, minWidth: 260, justifyContent: 'center', gap: 3 },
+  listingBodyMobile: { minWidth: 0, flexBasis: 180 },
   titleLine: { flexDirection: 'row', alignItems: 'center', gap: 9, flexWrap: 'wrap' },
   listingTitle: { maxWidth: 500, color: colors.text, fontFamily: 'PoppinsSemiBold', fontSize: 16 },
   price: { color: colors.primary, fontFamily: 'PoppinsBold', fontSize: 17, marginTop: 1 },
@@ -246,13 +251,16 @@ const styles = StyleSheet.create({
   sellerName: { color: colors.textSoft, fontFamily: 'PoppinsSemiBold', fontSize: 11.5 },
   sellerMeta: { color: colors.muted, fontFamily: 'PoppinsRegular', fontSize: 10.5, marginTop: 1 },
   side: { width: 285, minWidth: 240, justifyContent: 'center', gap: 11 },
+  sideMobile: { width: '100%', minWidth: 0, alignItems: 'stretch' },
   reportBadge: { alignSelf: 'flex-end', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: colors.dangerSoft },
   reportBadgeText: { color: colors.danger, fontFamily: 'PoppinsSemiBold', fontSize: 10.5 },
   cleanBadge: { alignSelf: 'flex-end', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: colors.successSoft },
   cleanBadgeText: { color: colors.success, fontFamily: 'PoppinsSemiBold', fontSize: 10.5 },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 7 },
+  actionsMobile: { justifyContent: 'flex-start' },
   action: { minWidth: 126, minHeight: 40 },
   readOnly: { maxWidth: 255, color: colors.muted, fontFamily: 'PoppinsRegular', fontSize: 10.5, lineHeight: 17, textAlign: 'right' },
+  readOnlyMobile: { maxWidth: '100%', textAlign: 'left' },
   detailPanel: { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.border, gap: 12 },
   detailBlock: { gap: 4 },
   detailLabel: { color: colors.muted, fontFamily: 'PoppinsBold', fontSize: 9.5, letterSpacing: .65 },

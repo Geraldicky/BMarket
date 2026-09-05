@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { AdminEmptyState, AdminStatusPill } from '@/components/admin-ui';
 import { Button, Card, ErrorState, FeedbackDialog, Field, Loader, Screen, Title } from '@/components/ui';
 import { colors, radius } from '@/constants/theme';
@@ -11,6 +11,7 @@ type TargetUser = { id: string; name: string; isActive: boolean } | null;
 type StatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
 
 export default function UsersScreen() {
+  const mobile = useWindowDimensions().width < 600;
   const client = useQueryClient();
   const query = useQuery({ queryKey: ['admin-users'], queryFn: endpoints.adminUsers });
   const [target, setTarget] = useState<TargetUser>(null);
@@ -49,18 +50,18 @@ export default function UsersScreen() {
     <Screen backgroundColor={colors.surfaceMuted}>
       <Title subtitle="Kelola akses akun yang melanggar kebijakan atau sudah dipulihkan.">Pengguna</Title>
       <Card style={styles.toolbar}>
-        <View style={styles.search}><Field icon="search-outline" value={search} onChangeText={setSearch} placeholder="Cari nama, email, atau NIM..." /></View>
+        <View style={[styles.search, mobile && styles.searchMobile]}><Field icon="search-outline" value={search} onChangeText={setSearch} placeholder="Cari nama, email, atau NIM..." /></View>
         <View style={styles.filters}>
           {([['ALL', 'Semua'], ['ACTIVE', 'Aktif'], ['INACTIVE', 'Nonaktif']] as const).map(([key, label]) => <Pressable key={key} onPress={() => setStatus(key)} style={[styles.filter, status === key && styles.filterActive]}><Text style={[styles.filterText, status === key && styles.filterTextActive]}>{label}</Text></Pressable>)}
         </View>
         <View style={styles.count}><Ionicons name="people-outline" size={17} color={colors.muted} /><Text style={styles.countText}>{visible.length} pengguna</Text></View>
       </Card>
       {query.isLoading ? <Loader /> : query.isError ? <ErrorState message={errorMessage(query.error)} retry={() => query.refetch()} /> : !users.length ? <Card><AdminEmptyState title="Tidak ada pengguna" message="Data pengguna belum tersedia." /></Card> : !visible.length ? <Card><AdminEmptyState compact icon="search-outline" title="Pengguna tidak ditemukan" message="Coba ubah kata kunci atau filter status." /></Card> : <View style={styles.list}>{visible.map(user => <Card key={user.id} style={styles.card}>
-        <View style={styles.row}>
+        <View style={[styles.row, mobile && styles.rowMobile]}>
           <View style={styles.avatar}><Text style={styles.avatarText}>{user.name?.[0]?.toUpperCase() || 'B'}</Text></View>
-          <View style={styles.body}><Text style={styles.name}>{user.name}</Text><Text style={styles.email}>{user.email}</Text><Text style={styles.nim}>NIM {user.studentId || '-'}</Text></View>
+          <View style={[styles.body, mobile && styles.bodyMobile]}><Text style={styles.name}>{user.name}</Text><Text style={styles.email}>{user.email}</Text><Text style={styles.nim}>NIM {user.studentId || '-'}</Text></View>
           <AdminStatusPill label={user.isActive ? 'Aktif' : 'Nonaktif'} tone={user.isActive ? 'success' : 'danger'} />
-          <Button title={user.isActive ? 'Nonaktifkan' : 'Aktifkan'} variant={user.isActive ? 'danger' : 'secondary'} loading={workingId === user.id} onPress={() => setTarget({ id: user.id, name: user.name, isActive: Boolean(user.isActive) })} style={styles.action} />
+          <Button title={user.isActive ? 'Nonaktifkan' : 'Aktifkan'} variant={user.isActive ? 'danger' : 'secondary'} loading={workingId === user.id} onPress={() => setTarget({ id: user.id, name: user.name, isActive: Boolean(user.isActive) })} style={[styles.action, mobile && styles.actionMobile]} />
         </View>
       </Card>)}</View>}
       <FeedbackDialog visible={Boolean(target)} tone={target?.isActive ? 'danger' : 'warning'} title={target?.isActive ? 'Nonaktifkan akun ini?' : 'Aktifkan kembali akun?'} message={target?.isActive ? `${target?.name || 'Pengguna'} tidak akan dapat login atau menggunakan BMarket sampai diaktifkan kembali.` : `${target?.name || 'Pengguna'} akan mendapatkan kembali akses ke BMarket.`} primaryLabel={target?.isActive ? 'Nonaktifkan' : 'Aktifkan'} secondaryLabel="Batal" loading={Boolean(target && workingId === target.id)} onClose={() => setTarget(null)} onSecondary={() => setTarget(null)} onPrimary={toggle} />
@@ -72,6 +73,7 @@ export default function UsersScreen() {
 const styles = StyleSheet.create({
   toolbar: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, flexWrap: 'wrap' },
   search: { flex: 1, minWidth: 280 },
+  searchMobile: { minWidth: 0, width: '100%', flexBasis: '100%' },
   filters: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   filter: { minHeight: 38, paddingHorizontal: 13, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   filterActive: { borderColor: '#C5DDF8', backgroundColor: colors.primarySoft },
@@ -82,11 +84,14 @@ const styles = StyleSheet.create({
   list: { gap: 10 },
   card: { padding: 16 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 14, flexWrap: 'wrap' },
+  rowMobile: { alignItems: 'flex-start' },
   avatar: { width: 54, height: 54, borderRadius: 18, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: colors.primary, fontFamily: 'PoppinsBold', fontSize: 17 },
   body: { flex: 1, minWidth: 220 },
+  bodyMobile: { minWidth: 0, flexBasis: 170 },
   name: { color: colors.text, fontFamily: 'PoppinsSemiBold', fontSize: 16 },
   email: { color: colors.muted, fontFamily: 'PoppinsRegular', fontSize: 12.5, marginTop: 1 },
   nim: { color: colors.primary, fontFamily: 'PoppinsMedium', fontSize: 11.5, marginTop: 2 },
   action: { minWidth: 138, minHeight: 42 },
+  actionMobile: { minWidth: 0, width: '100%', flexBasis: '100%' },
 });

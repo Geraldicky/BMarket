@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { ComponentProps, ReactNode } from 'react';
-import { StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import { StyleProp, StyleSheet, Text, View, ViewStyle, useWindowDimensions } from 'react-native';
 import { Card } from '@/components/ui';
 import { colors, radius } from '@/constants/theme';
 
@@ -19,8 +19,9 @@ export function AdminStatCard({ label, value, caption, icon, color = colors.prim
   background?: string;
   style?: StyleProp<ViewStyle>;
 }) {
+  const mobile = useWindowDimensions().width < 600;
   return (
-    <Card style={[styles.statCard, style]}>
+    <Card style={[styles.statCard, mobile && styles.statCardMobile, style]}>
       <AdminIconBadge icon={icon} color={color} background={background} />
       <View style={styles.statCopy}>
         <Text style={styles.statLabel}>{label}</Text>
@@ -32,8 +33,9 @@ export function AdminStatCard({ label, value, caption, icon, color = colors.prim
 }
 
 export function AdminSectionTitle({ title, subtitle, icon, right }: { title: string; subtitle?: string; icon?: IconName; right?: ReactNode }) {
+  const mobile = useWindowDimensions().width < 600;
   return (
-    <View style={styles.sectionHead}>
+    <View style={[styles.sectionHead, mobile && styles.sectionHeadMobile]}>
       <View style={styles.sectionHeadLeft}>
         {icon ? <View style={styles.sectionIcon}><Ionicons name={icon} size={18} color={colors.primary} /></View> : null}
         <View style={styles.sectionCopy}>
@@ -41,7 +43,7 @@ export function AdminSectionTitle({ title, subtitle, icon, right }: { title: str
           {subtitle ? <Text style={styles.sectionSubtitle}>{subtitle}</Text> : null}
         </View>
       </View>
-      {right ? <View>{right}</View> : null}
+      {right ? <View style={mobile ? styles.sectionRightMobile : undefined}>{right}</View> : null}
     </View>
   );
 }
@@ -81,11 +83,14 @@ export function AdminInfoRow({ icon, title, message, color = colors.primary, bac
 const styles = StyleSheet.create({
   iconBadge: { width: 48, height: 48, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
   statCard: { minWidth: 230, flex: 1, minHeight: 132, flexDirection: 'row', alignItems: 'center', gap: 16, padding: 18 },
+  statCardMobile: { minWidth: 0, flexBasis: '100%', minHeight: 108, padding: 14, gap: 13 },
   statCopy: { flex: 1, gap: 1 },
   statLabel: { color: colors.muted, fontFamily: 'PoppinsMedium', fontSize: 13 },
   statValue: { fontFamily: 'PoppinsBold', fontSize: 28, lineHeight: 35 },
   statCaption: { color: colors.muted, fontFamily: 'PoppinsRegular', fontSize: 11.5, lineHeight: 17, marginTop: 2 },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16 },
+  sectionHeadMobile: { alignItems: 'flex-start', flexWrap: 'wrap', gap: 10 },
+  sectionRightMobile: { width: '100%', alignItems: 'stretch' },
   sectionHeadLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 11 },
   sectionIcon: { width: 36, height: 36, borderRadius: 11, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   sectionCopy: { flex: 1 },

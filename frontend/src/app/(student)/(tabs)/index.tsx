@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useDeferredValue, useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -41,6 +41,7 @@ export default function HomeScreen() {
   const initialFulfillment = params.fulfillment === 'CAMPUS_MEETUP' || params.fulfillment === 'INSTANT_COURIER' ? params.fulfillment : 'ALL';
   const { width } = useWindowDimensions();
   const desktop = width >= 960;
+  const mobile = width < 600;
   const [keyword, setKeyword] = useState(initialQuery);
   const deferredKeyword = useDeferredValue(keyword);
   const [category, setCategory] = useState(initialCategory);
@@ -62,6 +63,7 @@ export default function HomeScreen() {
     getNextPageParam: last => last.page < last.totalPages ? last.page + 1 : undefined,
   });
   const wishlist = useQuery({ queryKey: ['wishlist'], queryFn: endpoints.wishlist });
+  const notificationCount = useQuery({ queryKey: ['notification-count'], queryFn: endpoints.notificationCount, refetchInterval: 30000 });
   const savedIds = new Set((wishlist.data || []).map(entry => entry.listing.id));
   const toggleSaved = useMutation({ mutationFn: ({ id, saved }: { id: string; saved: boolean }) => saved ? endpoints.unsaveListing(id) : endpoints.saveListing(id), onSuccess: (_data, variables) => { client.invalidateQueries({ queryKey: ['wishlist'] }); client.invalidateQueries({ queryKey: ['saved-status', variables.id] }); } });
 
@@ -74,10 +76,11 @@ export default function HomeScreen() {
   const meetupItems = listings.filter(item => item.fulfillmentMethods?.includes('CAMPUS_MEETUP'));
   const firstName = user?.name?.trim().split(' ')[0] || 'Binusian';
   const contentWidth = Math.max(300, Math.min(width - (desktop ? 80 : 28), layout.contentMaxWidth - 80));
-  const columns = contentWidth >= 1120 ? 5 : contentWidth >= 900 ? 4 : contentWidth >= 680 ? 3 : contentWidth >= 440 ? 2 : 1;
+  const columns = contentWidth >= 1120 ? 5 : contentWidth >= 900 ? 4 : contentWidth >= 680 ? 3 : contentWidth >= 320 ? 2 : 1;
   const gap = desktop ? 14 : 10;
   const cardWidth = (contentWidth - gap * (columns - 1)) / columns;
-  const shelfWidth = desktop ? 188 : Math.min(176, width * .46);
+  const shelfWidth = desktop ? 188 : Math.min(168, width * .44);
+  const unread = notificationCount.data?.count || 0;
 
   const chooseCategory = (value: string) => { setCategory(value); setKeyword(''); };
   const resetFilters = () => { setCategory('Semua'); setKeyword(''); setListingType('ALL'); setListingMode('ALL'); setSort('newest'); setFulfillment('ALL'); router.replace('/(student)/(tabs)'); };
@@ -85,16 +88,33 @@ export default function HomeScreen() {
 
   return (
     <Screen style={styles.page} backgroundColor="#FFFFFF">
+      {!desktop ? <View style={styles.mobileUtility}>
+        <View style={styles.mobileUtilityTop}>
+          <Text style={styles.mobileBrand}>BMarket</Text>
+          <View style={styles.mobileUtilityActions}>
+            <Pressable accessibilityLabel="Buat listing" onPress={() => router.push('/(student)/listing/form')} style={styles.mobileIconButton}><Ionicons name="add" size={20} color={colors.primary} /></Pressable>
+            <Pressable accessibilityLabel="Tersimpan" onPress={() => router.push('/(student)/saved')} style={styles.mobileIconButton}><Ionicons name="heart-outline" size={19} color={colors.primary} /></Pressable>
+            <Pressable accessibilityLabel="Notifikasi" onPress={() => router.push('/(student)/notifications')} style={styles.mobileIconButton}><Ionicons name={unread ? 'notifications' : 'notifications-outline'} size={19} color={colors.primary} />{unread ? <View style={styles.mobileNotificationBadge}><Text style={styles.mobileNotificationText}>{unread > 9 ? '9+' : unread}</Text></View> : null}</Pressable>
+            <Pressable accessibilityLabel="Profil" onPress={() => router.push('/(student)/(tabs)/profile')} style={styles.mobileAvatar}><Text style={styles.mobileAvatarText}>{user?.name?.[0]?.toUpperCase() || 'B'}</Text></Pressable>
+          </View>
+        </View>
+        <View style={styles.mobileSearch}>
+          <Ionicons name="search-outline" size={18} color="#728296" />
+          <TextInput value={keyword} onChangeText={setKeyword} placeholder="Cari barang, jasa, atau kebutuhan kampus" placeholderTextColor="#8A98A8" returnKeyType="search" style={styles.mobileSearchInput} />
+          {keyword ? <Pressable accessibilityLabel="Hapus pencarian" onPress={() => setKeyword('')}><Ionicons name="close-circle" size={18} color="#9AA8B7" /></Pressable> : null}
+        </View>
+      </View> : null}
+
       <Animated.View entering={FadeInDown.duration(180)} style={styles.welcomeRow}>
         <Text style={styles.welcomeTitle}>Halo, {firstName}!</Text>
         <Text style={styles.welcomeSubtitle}>Mau cari apa hari ini?</Text>
       </Animated.View>
 
-      <Animated.View entering={FadeInDown.delay(25).duration(200)} style={styles.heroRow}>
-        <View style={styles.heroMain}>
+      <Animated.View entering={FadeInDown.delay(25).duration(200)} style={[styles.heroRow, mobile && styles.heroRowMobile]}>
+        <View style={[styles.heroMain, mobile && styles.heroMainMobile]}>
           <View style={styles.heroGlowOne} /><View style={styles.heroGlowTwo} />
-          <View style={styles.heroCopy}><Text style={styles.heroTitle}>Barang kampus, jasa mahasiswa, satu tempat.</Text><Text style={styles.heroDescription}>Jual barang yang tidak terpakai dan temukan kebutuhan kampus dalam satu marketplace.</Text><View style={styles.heroActions}><Pressable onPress={() => router.push('/(student)/listing/form')} style={styles.heroButton}><Text style={styles.heroButtonText}>Mulai jual</Text><Ionicons name="arrow-forward" size={14} color="#0B4A91" /></Pressable></View></View>
-          <View style={styles.heroTiles}><View style={[styles.heroTile, { transform: [{ rotate: '-5deg' }] }]}><Ionicons name="laptop-outline" size={38} color="#72B5FF" /><Text style={styles.heroTileText}>Elektronik</Text></View><View style={[styles.heroTile, styles.heroTileTwo]}><Ionicons name="book-outline" size={34} color="#FFB36A" /><Text style={styles.heroTileText}>Buku</Text></View><View style={[styles.heroTile, styles.heroTileThree]}><Ionicons name="construct-outline" size={34} color="#64D6B1" /><Text style={styles.heroTileText}>Jasa</Text></View></View>
+          <View style={[styles.heroCopy, mobile && styles.heroCopyMobile]}><Text style={[styles.heroTitle, mobile && styles.heroTitleMobile]}>Barang kampus, jasa mahasiswa, satu tempat.</Text><Text style={styles.heroDescription}>Jual barang yang tidak terpakai dan temukan kebutuhan kampus dalam satu marketplace.</Text><View style={styles.heroActions}><Pressable onPress={() => router.push('/(student)/listing/form')} style={styles.heroButton}><Text style={styles.heroButtonText}>Mulai jual</Text><Ionicons name="arrow-forward" size={14} color="#0B4A91" /></Pressable></View></View>
+          <View style={[styles.heroTiles, mobile && styles.heroTilesMobile]}><View style={[styles.heroTile, { transform: [{ rotate: '-5deg' }] }]}><Ionicons name="laptop-outline" size={38} color="#72B5FF" /><Text style={styles.heroTileText}>Elektronik</Text></View><View style={[styles.heroTile, styles.heroTileTwo]}><Ionicons name="book-outline" size={34} color="#FFB36A" /><Text style={styles.heroTileText}>Buku</Text></View><View style={[styles.heroTile, styles.heroTileThree]}><Ionicons name="construct-outline" size={34} color="#64D6B1" /><Text style={styles.heroTileText}>Jasa</Text></View></View>
         </View>
         {desktop ? <View style={styles.heroSide}>
           <Pressable onPress={() => router.push('/(student)/(tabs)/transactions')} style={({ pressed }) => [styles.escrowCard, pressed && styles.sidePromoPressed]}>
@@ -139,15 +159,29 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   page: { paddingTop: 18, paddingBottom: 48, gap: 22, backgroundColor: '#FFFFFF' },
+  mobileUtility: { gap: 10, marginBottom: -4 },
+  mobileUtilityTop: { minHeight: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  mobileBrand: { fontFamily: 'PoppinsBold', fontSize: 22, color: '#1769C2', letterSpacing: -.35 },
+  mobileUtilityActions: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  mobileIconButton: { position: 'relative', width: 36, height: 36, borderRadius: 10, borderWidth: 1, borderColor: '#D8E2EC', backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  mobileNotificationBadge: { position: 'absolute', right: -4, top: -4, minWidth: 16, height: 16, paddingHorizontal: 3, borderRadius: 8, backgroundColor: '#E5485D', alignItems: 'center', justifyContent: 'center' },
+  mobileNotificationText: { color: '#FFFFFF', fontFamily: 'PoppinsBold', fontSize: 8 },
+  mobileAvatar: { width: 36, height: 36, borderRadius: 11, backgroundColor: '#EAF3FF', alignItems: 'center', justifyContent: 'center' },
+  mobileAvatarText: { fontFamily: 'PoppinsBold', fontSize: 12, color: '#1769C2' },
+  mobileSearch: { minHeight: 46, paddingHorizontal: 13, borderRadius: 12, borderWidth: 1, borderColor: '#D8E2EC', backgroundColor: '#F8FAFC', flexDirection: 'row', alignItems: 'center', gap: 9 },
+  mobileSearchInput: { flex: 1, minWidth: 0, minHeight: 44, paddingVertical: 8, fontFamily: 'PoppinsRegular', fontSize: 12.5, color: '#172334', ...( { outlineStyle: 'none', outlineWidth: 0 } as any ) },
   welcomeRow: { minHeight: 44, justifyContent: 'center', gap: 0, marginBottom: -12 },
   welcomeTitle: { fontFamily: 'PoppinsBold', fontSize: 23, lineHeight: 30, color: '#172334' },
   welcomeSubtitle: { fontFamily: 'PoppinsRegular', fontSize: 12.5, lineHeight: 18, color: '#7A8CA0' },
   heroRow: { minHeight: 246, flexDirection: 'row', gap: 12 },
+  heroRowMobile: { minHeight: 0 },
   heroMain: { minHeight: 246, flex: 2.35, overflow: 'hidden', position: 'relative', borderRadius: 14, backgroundColor: '#0B4A91', borderWidth: 1, borderColor: '#1E67AE', paddingHorizontal: 28, paddingVertical: 24, justifyContent: 'center' },
+  heroMainMobile: { minHeight: 218, paddingHorizontal: 20, paddingVertical: 20 },
   heroGlowOne: { position: 'absolute', width: 330, height: 330, borderRadius: 165, right: -120, top: -155, backgroundColor: '#1365B8' }, heroGlowTwo: { position: 'absolute', width: 210, height: 210, borderRadius: 105, right: 110, bottom: -150, backgroundColor: '#0D579F' },
-  heroCopy: { width: '62%', zIndex: 2, gap: 9 }, heroTitle: { fontFamily: 'PoppinsBold', fontSize: 28, lineHeight: 36, color: '#FFFFFF' }, heroDescription: { maxWidth: 520, fontFamily: 'PoppinsRegular', fontSize: 12.5, lineHeight: 20, color: '#C6D8EA' },
+  heroCopy: { width: '62%', zIndex: 2, gap: 9 }, heroCopyMobile: { width: '100%', paddingRight: 0 }, heroTitle: { fontFamily: 'PoppinsBold', fontSize: 28, lineHeight: 36, color: '#FFFFFF' }, heroTitleMobile: { fontSize: 23, lineHeight: 30, maxWidth: 300 }, heroDescription: { maxWidth: 520, fontFamily: 'PoppinsRegular', fontSize: 12.5, lineHeight: 20, color: '#C6D8EA' },
   heroActions: { flexDirection: 'row', gap: 8, marginTop: 6 }, heroButton: { minHeight: 42, paddingHorizontal: 16, borderRadius: 7, backgroundColor: '#FFFFFF', flexDirection: 'row', alignItems: 'center', gap: 7 }, heroButtonText: { fontFamily: 'PoppinsSemiBold', fontSize: 12, color: '#0B4A91' },
-  heroTiles: { position: 'absolute', right: 26, top: 27, width: 218, height: 170 }, heroTile: { position: 'absolute', right: 8, top: 0, width: 82, height: 82, borderRadius: 12, backgroundColor: 'rgba(255,255,255,.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,.28)', alignItems: 'center', justifyContent: 'center', gap: 4 }, heroTileTwo: { right: 68, top: 82, transform: [{ rotate: '4deg' }] }, heroTileThree: { right: 132, top: 21, transform: [{ rotate: '-3deg' }] }, heroTileText: { fontFamily: 'PoppinsSemiBold', fontSize: 10, color: '#FFFFFF' },
+  heroTiles: { position: 'absolute', right: 26, top: 27, width: 218, height: 170 },
+  heroTilesMobile: { display: 'none' }, heroTile: { position: 'absolute', right: 8, top: 0, width: 82, height: 82, borderRadius: 12, backgroundColor: 'rgba(255,255,255,.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,.28)', alignItems: 'center', justifyContent: 'center', gap: 4 }, heroTileTwo: { right: 68, top: 82, transform: [{ rotate: '4deg' }] }, heroTileThree: { right: 132, top: 21, transform: [{ rotate: '-3deg' }] }, heroTileText: { fontFamily: 'PoppinsSemiBold', fontSize: 10, color: '#FFFFFF' },
   heroSide: { flex: .95, minWidth: 280 },
   sidePromoPressed: { opacity: .84, transform: [{ scale: .99 }] },
   escrowCard: { flex: 1, minHeight: 246, position: 'relative', overflow: 'hidden', borderRadius: 14, borderWidth: 1, borderColor: '#C5DCF3', backgroundColor: '#F3F8FE', padding: 22, justifyContent: 'space-between' },

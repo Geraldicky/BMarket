@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { AdminEmptyState, AdminSectionTitle, AdminStatCard } from '@/components/admin-ui';
 import { Card, ErrorState, Loader, money, Screen, Title } from '@/components/ui';
 import { colors } from '@/constants/theme';
@@ -26,6 +26,7 @@ const actions = [
 ];
 
 export default function AdminDashboard() {
+  const mobile = useWindowDimensions().width < 700;
   const query = useQuery({ queryKey: ['admin-stats'], queryFn: endpoints.adminStats });
   const data = query.data as Record<string, number | string> | undefined;
   const priority = Number(data?.reportedListings || 0) + Number(data?.openComplaints || 0);
@@ -55,7 +56,7 @@ export default function AdminDashboard() {
           </View>
         </Card>
         <View style={styles.lowerGrid}>
-          <Card style={styles.healthCard}>
+          <Card style={[styles.healthCard, mobile && styles.healthCardMobile]}>
             <AdminSectionTitle title="Status operasional" subtitle="Ringkasan area yang perlu dipantau admin." icon="pulse-outline" />
             <View style={styles.healthRows}>
               <View style={styles.healthRow}><View style={[styles.healthIcon, { backgroundColor: colors.successSoft }]}><Ionicons name="storefront-outline" size={18} color={colors.success} /></View><View style={styles.healthCopy}><Text style={styles.healthTitle}>Marketplace aktif</Text><Text style={styles.healthText}>{Number(data?.totalListings || 0)} listing tersedia untuk komunitas.</Text></View><Text style={styles.healthValue}>{Number(data?.totalListings || 0)}</Text></View>
@@ -65,7 +66,7 @@ export default function AdminDashboard() {
               <View style={styles.healthRow}><View style={[styles.healthIcon, { backgroundColor: '#F1EDFF' }]}><Ionicons name="swap-horizontal-outline" size={18} color="#7357E7" /></View><View style={styles.healthCopy}><Text style={styles.healthTitle}>Transaksi tercatat</Text><Text style={styles.healthText}>Aktivitas transaksi yang tersimpan di BMarket.</Text></View><Text style={styles.healthValue}>{Number(data?.totalTransactions || 0)}</Text></View>
             </View>
           </Card>
-          <Card style={styles.priorityCard}>
+          <Card style={[styles.priorityCard, mobile && styles.priorityCardMobile]}>
             <AdminSectionTitle title="Antrian prioritas" subtitle="Kasus yang perlu respons admin." icon="shield-checkmark-outline" />
             {priority === 0 ? <AdminEmptyState compact title="Tidak ada hal prioritas" message="Semua laporan dan sengketa yang terlihat saat ini dalam kondisi aman." /> : <View style={styles.priorityList}>
               {Number(data?.reportedListings || 0) > 0 ? <Pressable onPress={() => router.push('/(admin)/(tabs)/moderation' as any)} style={styles.priorityRow}><View><Text style={styles.priorityTitle}>Listing dilaporkan</Text><Text style={styles.priorityText}>Periksa listing yang dilaporkan komunitas.</Text></View><Text style={styles.priorityCount}>{Number(data?.reportedListings || 0)}</Text></Pressable> : null}
@@ -76,7 +77,7 @@ export default function AdminDashboard() {
         <Card style={styles.quickCard}>
           <AdminSectionTitle title="Aksi cepat" icon="flash-outline" />
           <View style={styles.actions}>
-            {actions.map(action => <Pressable key={action.label} onPress={() => router.push(action.route as any)} style={({ pressed }) => [styles.action, pressed && { opacity: .65 }]}><Ionicons name={action.icon} size={19} color={colors.primary} /><Text style={styles.actionText}>{action.label}</Text></Pressable>)}
+            {actions.map(action => <Pressable key={action.label} onPress={() => router.push(action.route as any)} style={({ pressed }) => [styles.action, mobile && styles.actionMobile, pressed && { opacity: .65 }]}><Ionicons name={action.icon} size={19} color={colors.primary} /><Text style={styles.actionText}>{action.label}</Text></Pressable>)}
           </View>
         </Card>
       </>}
@@ -96,7 +97,9 @@ const styles = StyleSheet.create({
   monitorDivider: { width: 1, alignSelf: 'stretch', minHeight: 44, backgroundColor: colors.border },
   lowerGrid: { flexDirection: 'row', alignItems: 'stretch', flexWrap: 'wrap', gap: 14 },
   healthCard: { flex: 1.25, minWidth: 420, gap: 13 },
+  healthCardMobile: { minWidth: 0, width: '100%', flexBasis: '100%' },
   priorityCard: { flex: .9, minWidth: 320, gap: 8 },
+  priorityCardMobile: { minWidth: 0, width: '100%', flexBasis: '100%' },
   healthRows: { gap: 0 },
   healthRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
   healthIcon: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
@@ -113,5 +116,6 @@ const styles = StyleSheet.create({
   quickCard: { gap: 14 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 },
   action: { minWidth: 180, flex: 1, minHeight: 48, paddingHorizontal: 14, borderRadius: 11, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  actionMobile: { minWidth: 0, flexBasis: '100%' },
   actionText: { color: colors.textSoft, fontFamily: 'PoppinsMedium', fontSize: 12.5 },
 });
