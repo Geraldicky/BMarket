@@ -7,7 +7,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "dev": "nest start --watch",
-    "start": "node dist/main",
+    "start": "node dist/src/main.js",
     "test:watch": "vitest",
     "db:validate": "prisma validate",
     "db:generate": "prisma generate",
