@@ -9,7 +9,7 @@ import { Empty, ErrorState, Loader, Screen } from '@/components/ui';
 import { ListingCard } from '@/components/listing-card';
 import { colors, layout } from '@/constants/theme';
 import { useAuth } from '@/store/auth';
-import type { Listing } from '@/types';
+import type { Listing, ListingMode } from '@/types';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -45,6 +45,7 @@ export default function HomeScreen() {
   const deferredKeyword = useDeferredValue(keyword);
   const [category, setCategory] = useState(initialCategory);
   const [listingType, setListingType] = useState<'ALL' | 'PRODUCT' | 'SERVICE'>('ALL');
+  const [listingMode, setListingMode] = useState<'ALL' | ListingMode>('ALL');
   const [sort, setSort] = useState<'newest' | 'price_asc' | 'price_desc'>('newest');
   const [fulfillment, setFulfillment] = useState<'ALL' | 'CAMPUS_MEETUP' | 'INSTANT_COURIER'>(initialFulfillment);
   const client = useQueryClient();
@@ -53,11 +54,11 @@ export default function HomeScreen() {
   useEffect(() => setCategory(initialCategory), [initialCategory]);
   useEffect(() => setFulfillment(initialFulfillment), [initialFulfillment]);
 
-  const filtering = Boolean(deferredKeyword.trim()) || category !== 'Semua' || listingType !== 'ALL' || sort !== 'newest' || fulfillment !== 'ALL';
+  const filtering = Boolean(deferredKeyword.trim()) || category !== 'Semua' || listingType !== 'ALL' || listingMode !== 'ALL' || sort !== 'newest' || fulfillment !== 'ALL';
   const query = useInfiniteQuery({
-    queryKey: ['listings', deferredKeyword, category, listingType, sort, fulfillment],
+    queryKey: ['listings', deferredKeyword, category, listingType, listingMode, sort, fulfillment],
     initialPageParam: 1,
-    queryFn: ({ pageParam }) => endpoints.listings({ keyword: deferredKeyword.trim() || undefined, category: category === 'Semua' ? undefined : category, type: listingType === 'ALL' ? undefined : listingType, sort, fulfillmentMethod: fulfillment === 'ALL' ? undefined : fulfillment, page: pageParam, limit: 24 }),
+    queryFn: ({ pageParam }) => endpoints.listings({ keyword: deferredKeyword.trim() || undefined, category: category === 'Semua' ? undefined : category, type: listingType === 'ALL' ? undefined : listingType, mode: listingMode === 'ALL' ? undefined : listingMode, sort, fulfillmentMethod: fulfillment === 'ALL' ? undefined : fulfillment, page: pageParam, limit: 24 }),
     getNextPageParam: last => last.page < last.totalPages ? last.page + 1 : undefined,
   });
   const wishlist = useQuery({ queryKey: ['wishlist'], queryFn: endpoints.wishlist });
@@ -66,8 +67,10 @@ export default function HomeScreen() {
 
   const listings = query.data?.pages.flatMap(page => page.data) || [];
   const totalListings = query.data?.pages[0]?.total || 0;
-  const products = listings.filter(item => item.type === 'PRODUCT');
+  const latestRegular = listings.filter(item => item.mode !== 'PREORDER');
+  const products = listings.filter(item => item.type === 'PRODUCT' && item.mode !== 'PREORDER');
   const services = listings.filter(item => item.type === 'SERVICE');
+  const preorders = listings.filter(item => item.mode === 'PREORDER' && item.preorderAccepting);
   const meetupItems = listings.filter(item => item.fulfillmentMethods?.includes('CAMPUS_MEETUP'));
   const firstName = user?.name?.trim().split(' ')[0] || 'Binusian';
   const contentWidth = Math.max(300, Math.min(width - (desktop ? 80 : 28), layout.contentMaxWidth - 80));
@@ -77,7 +80,7 @@ export default function HomeScreen() {
   const shelfWidth = desktop ? 188 : Math.min(176, width * .46);
 
   const chooseCategory = (value: string) => { setCategory(value); setKeyword(''); };
-  const resetFilters = () => { setCategory('Semua'); setKeyword(''); setListingType('ALL'); setSort('newest'); setFulfillment('ALL'); router.replace('/(student)/(tabs)'); };
+  const resetFilters = () => { setCategory('Semua'); setKeyword(''); setListingType('ALL'); setListingMode('ALL'); setSort('newest'); setFulfillment('ALL'); router.replace('/(student)/(tabs)'); };
   const toggleListingSaved = (id: string, saved: boolean) => toggleSaved.mutate({ id, saved });
 
   return (
@@ -111,7 +114,8 @@ export default function HomeScreen() {
       <View style={styles.categoryPanel}><SectionHeader title="Kategori" /><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRail}>{categories.map(item => { const active = category === item.value; return <Pressable key={item.value} onPress={() => chooseCategory(item.value)} style={[styles.categoryItem, active && styles.categoryItemActive]}><View style={[styles.categoryIcon, { backgroundColor: item.tint }]}><Ionicons name={item.icon} size={25} color={item.color} /></View><Text style={[styles.categoryText, active && styles.categoryTextActive]}>{item.label}</Text></Pressable>; })}</ScrollView></View>
 
       {query.isLoading ? <Loader /> : query.isError ? <ErrorState message={errorMessage(query.error)} retry={() => query.refetch()} /> : <>
-        {!filtering ? <ListingShelf title="Baru di BMarket" subtitle="Listing terbaru dari sesama Binusian" items={listings.slice(0, 10)} cardWidth={shelfWidth} onSeeAll={() => resetFilters()} savedIds={savedIds} onToggleSaved={toggleListingSaved} /> : null}
+        {!filtering ? <ListingShelf title="Baru di BMarket" subtitle="Listing terbaru dari sesama Binusian" items={latestRegular.slice(0, 10)} cardWidth={shelfWidth} onSeeAll={() => resetFilters()} savedIds={savedIds} onToggleSaved={toggleListingSaved} /> : null}
+        {!filtering && preorders.length ? <ListingShelf title="Pre-order kampus" subtitle="Makanan, merch, dan PO mahasiswa yang sedang dibuka" items={preorders.slice(0, 10)} cardWidth={shelfWidth} onSeeAll={() => setListingMode('PREORDER')} savedIds={savedIds} onToggleSaved={toggleListingSaved} /> : null}
         {!filtering && products.length ? <ListingShelf title="Kebutuhan kuliah" subtitle="Barang preloved dan kebutuhan kampus" items={products.slice(0, 10)} cardWidth={shelfWidth} onSeeAll={() => setListingType('PRODUCT')} savedIds={savedIds} onToggleSaved={toggleListingSaved} /> : null}
         {!filtering && services.length ? <ListingShelf title="Jasa mahasiswa" subtitle="Desain, tutoring, bantuan tugas, dan lainnya" items={services.slice(0, 10)} cardWidth={shelfWidth} onSeeAll={() => setListingType('SERVICE')} savedIds={savedIds} onToggleSaved={toggleListingSaved} /> : null}
         {!filtering && meetupItems.length ? <ListingShelf title="Siap meetup" subtitle="Listing yang bisa diserah-terimakan langsung" items={meetupItems.slice(0, 10)} cardWidth={shelfWidth} onSeeAll={() => setFulfillment('CAMPUS_MEETUP')} savedIds={savedIds} onToggleSaved={toggleListingSaved} /> : null}
@@ -120,6 +124,7 @@ export default function HomeScreen() {
           <SectionHeader title={filtering ? 'Hasil pencarian' : 'Explore BMarket'} subtitle={filtering ? `${totalListings} listing ditemukan` : 'Rekomendasi barang dan jasa dari komunitas BINUS'} action={filtering ? 'Reset' : 'Lihat semua'} onPress={filtering ? resetFilters : undefined} />
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRail}>
             <View style={styles.filterGroup}><Text style={styles.filterLabel}>Tipe</Text>{([['ALL','Semua'],['PRODUCT','Barang'],['SERVICE','Jasa']] as const).map(([value,label]) => <Pressable key={value} onPress={() => setListingType(value)} style={[styles.filterChip, listingType === value && styles.filterChipActive]}><Text style={[styles.filterChipText, listingType === value && styles.filterChipTextActive]}>{label}</Text></Pressable>)}</View>
+            <View style={styles.filterGroup}><Text style={styles.filterLabel}>Model</Text>{([['ALL','Semua'],['ONE_OFF','Satuan'],['STOCKED','Ready stock'],['PREORDER','Pre-order']] as const).map(([value,label]) => <Pressable key={value} onPress={() => setListingMode(value)} style={[styles.filterChip, listingMode === value && styles.filterChipActive]}><Text style={[styles.filterChipText, listingMode === value && styles.filterChipTextActive]}>{label}</Text></Pressable>)}</View>
             <View style={styles.filterGroup}><Text style={styles.filterLabel}>Penyerahan</Text>{([['ALL','Semua'],['CAMPUS_MEETUP','Meetup'],['INSTANT_COURIER','Kurir']] as const).map(([value,label]) => <Pressable key={value} onPress={() => setFulfillment(value)} style={[styles.filterChip, fulfillment === value && styles.filterChipActive]}><Text style={[styles.filterChipText, fulfillment === value && styles.filterChipTextActive]}>{label}</Text></Pressable>)}</View>
             <View style={styles.filterGroup}><Text style={styles.filterLabel}>Urutkan</Text>{([['newest','Terbaru'],['price_asc','Harga ↑'],['price_desc','Harga ↓']] as const).map(([value,label]) => <Pressable key={value} onPress={() => setSort(value)} style={[styles.filterChip, sort === value && styles.filterChipActive]}><Text style={[styles.filterChipText, sort === value && styles.filterChipTextActive]}>{label}</Text></Pressable>)}</View>
           </ScrollView>

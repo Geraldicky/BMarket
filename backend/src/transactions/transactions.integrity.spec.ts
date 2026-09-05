@@ -100,7 +100,7 @@ describe('TransactionsService — payment, handover & wallet integrity', () => {
   it('rejects an expired handover code without releasing escrow', async () => {
     const current = {
       id: 'tx-1', buyerId: 'buyer-1', sellerId: 'seller-1', fulfillmentMethod: 'CAMPUS_MEETUP', status: 'PAID', isEscrowHeld: true,
-      dispute: null, handoverCodeHash: 'hash', handoverCodeExpiresAt: new Date(Date.now() - 1_000), grandTotal: 100000, sellerReceives: 95000,
+      dispute: null, listing: { mode: 'STOCKED', preorderStatus: null }, handoverCodeHash: 'hash', handoverCodeExpiresAt: new Date(Date.now() - 1_000), grandTotal: 100000, sellerReceives: 95000,
     };
     const tx = {
       transaction: { findUnique: vi.fn().mockResolvedValue(current), updateMany: vi.fn() },
@@ -117,7 +117,7 @@ describe('TransactionsService — payment, handover & wallet integrity', () => {
   it('rejects an incorrect handover code without releasing escrow', async () => {
     const topTransaction = {
       id: 'tx-1', buyerId: 'buyer-1', sellerId: 'seller-1', fulfillmentMethod: 'CAMPUS_MEETUP', status: 'PAID', isEscrowHeld: true,
-      dispute: null, handoverCodeHash: 'definitely-not-the-code-hash', handoverCodeExpiresAt: new Date(Date.now() + 60_000), grandTotal: 100000, sellerReceives: 95000,
+      dispute: null, listing: { mode: 'STOCKED', preorderStatus: null }, handoverCodeHash: 'definitely-not-the-code-hash', handoverCodeExpiresAt: new Date(Date.now() + 60_000), grandTotal: 100000, sellerReceives: 95000,
     };
     const tx = {
       transaction: { findUnique: vi.fn().mockResolvedValue(topTransaction), updateMany: vi.fn() },
@@ -147,7 +147,7 @@ describe('TransactionsService — payment, handover & wallet integrity', () => {
     const { service, prisma, notify } = serviceWithTx(tx, topPrisma);
 
     prisma.transaction.findUnique.mockResolvedValue({
-      id: 'tx-1', buyerId: 'buyer-1', sellerId: 'seller-1', fulfillmentMethod: 'CAMPUS_MEETUP', status: 'PAID', isEscrowHeld: true, dispute: null,
+      id: 'tx-1', buyerId: 'buyer-1', sellerId: 'seller-1', fulfillmentMethod: 'CAMPUS_MEETUP', status: 'PAID', isEscrowHeld: true, dispute: null, listing: { mode: 'STOCKED', preorderStatus: null },
     });
     prisma.transaction.update.mockImplementation(async ({ data }: any) => ({ ...data }));
     const issued = await service.issueHandoverCode('tx-1', 'buyer-1');
@@ -155,7 +155,7 @@ describe('TransactionsService — payment, handover & wallet integrity', () => {
     const hashUpdate = prisma.transaction.update.mock.calls[0][0].data.handoverCodeHash;
     tx.transaction.findUnique.mockResolvedValue({
       id: 'tx-1', buyerId: 'buyer-1', sellerId: 'seller-1', fulfillmentMethod: 'CAMPUS_MEETUP', status: 'PAID', isEscrowHeld: true,
-      dispute: null, handoverCodeHash: hashUpdate, handoverCodeExpiresAt: issued.expiresAt, grandTotal: 100000, sellerReceives: 95000,
+      dispute: null, listing: { mode: 'STOCKED', preorderStatus: null }, handoverCodeHash: hashUpdate, handoverCodeExpiresAt: issued.expiresAt, grandTotal: 100000, sellerReceives: 95000,
     });
     tx.transaction.findUniqueOrThrow.mockResolvedValue({
       id: 'tx-1', buyerId: 'buyer-1', sellerId: 'seller-1', status: 'COMPLETED', isEscrowHeld: false, sellerReceives: 95000,

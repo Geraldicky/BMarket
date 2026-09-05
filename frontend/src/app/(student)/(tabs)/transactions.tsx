@@ -30,7 +30,9 @@ function isBuyer(transaction: Transaction, userId?: string) {
 function needsAction(transaction: Transaction, userId?: string) {
   const buyer = isBuyer(transaction, userId);
   const meetup = transaction.fulfillmentMethod === 'CAMPUS_MEETUP';
+  const preorderWaiting = transaction.listing.mode === 'PREORDER' && !['READY', 'COMPLETED'].includes(transaction.listing.preorderStatus || '');
   if (buyer && transaction.status === 'PENDING') return true;
+  if (preorderWaiting && ['PAID', 'CONFIRMED'].includes(transaction.status)) return false;
   if (buyer && meetup && transaction.status === 'PAID') return true;
   if (buyer && !meetup && transaction.status === 'CONFIRMED') return true;
   if (!buyer && transaction.status === 'PAID') return true;

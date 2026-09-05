@@ -1,5 +1,7 @@
 export type Role = 'STUDENT' | 'ADMIN';
 export type ListingStatus = 'PENDING' | 'ACTIVE' | 'REJECTED' | 'SOLD' | 'INACTIVE' | 'HIDDEN' | 'REMOVED';
+export type ListingMode = 'ONE_OFF' | 'STOCKED' | 'PREORDER' | 'SERVICE';
+export type PreorderStatus = 'OPEN' | 'CLOSED' | 'PROCESSING' | 'READY' | 'COMPLETED' | 'CANCELLED';
 export type ComplaintStatus = 'OPEN' | 'IN_REVIEW' | 'RESOLVED' | 'DISMISSED';
 export type TransactionStatus = 'PENDING' | 'PAID' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
 export type FulfillmentMethod = 'CAMPUS_MEETUP' | 'INSTANT_COURIER';
@@ -32,15 +34,27 @@ export interface Listing {
   price: number | string;
   category: string;
   type: 'PRODUCT' | 'SERVICE';
+  mode: ListingMode;
   images: string[];
   status: ListingStatus;
   condition?: string | null;
   stock?: number | null;
   stockLeft?: number | null;
+  inventoryState?: 'AVAILABLE' | 'OUT_OF_STOCK' | 'SOLD' | 'PREORDER_OPEN' | 'PREORDER_CLOSED' | 'SERVICE';
+  preorderAccepting?: boolean;
+  preorderStatus?: PreorderStatus | null;
+  preorderDeadline?: string | null;
+  preorderReadyAt?: string | null;
+  preorderQuota?: number | null;
+  preorderMinOrder?: number | null;
+  preorderMaxPerBuyer?: number | null;
+  preorderPickupLocation?: string | null;
+  preorderPickupNote?: string | null;
   fulfillmentMethods: FulfillmentMethod[];
   sellerId: string;
   seller?: Partial<User>;
   createdAt: string;
+  openReportCount?: number;
 }
 
 export interface Review {
@@ -123,6 +137,7 @@ export interface Transaction {
   listingTitleSnapshot?: string | null;
   listingImageSnapshot?: string | null;
   listingTypeSnapshot?: 'PRODUCT' | 'SERVICE' | null;
+  listingModeSnapshot?: ListingMode | null;
   listingConditionSnapshot?: string | null;
   createdAt: string;
   updatedAt?: string;
@@ -207,6 +222,21 @@ export interface WalletLedger {
 
 export interface ApiEnvelope<T> { success: boolean; data: T; message?: string; }
 export interface Page<T> { data: T[]; total: number; page: number; limit: number; totalPages: number; }
+
+export interface AdminListingSummary {
+  total: number;
+  active: number;
+  hidden: number;
+  removed: number;
+  sold: number;
+  inactive: number;
+  pending: number;
+  rejected: number;
+}
+
+export interface AdminListingPage extends Page<Listing> {
+  summary: AdminListingSummary;
+}
 
 export interface ActivityListingEntry {
   id: string;

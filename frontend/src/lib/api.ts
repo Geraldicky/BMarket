@@ -1,7 +1,7 @@
 import { create, isAxiosError } from 'axios';
 import Constants from 'expo-constants';
 import { getStoredValue } from './token-storage';
-import type { ActivityListingEntry, ApiEnvelope, ChatRoom, CheckoutOptions, Complaint, CourierProvider, Dispute, DisputeReason, FulfillmentMethod, Listing, Message, Notification, Page, PublicProfile, Review, Transaction, TransactionStatus, User, WalletLedger } from '@/types';
+import type { ActivityListingEntry, AdminListingPage, ApiEnvelope, ChatRoom, CheckoutOptions, Complaint, CourierProvider, Dispute, DisputeReason, FulfillmentMethod, Listing, ListingMode, ListingStatus, Message, Notification, Page, PreorderStatus, PublicProfile, Review, Transaction, TransactionStatus, User, WalletLedger } from '@/types';
 
 export type AuthResult = { user: User; token: string };
 export type VerificationPending = {
@@ -37,6 +37,9 @@ export const endpoints = {
   createListing: (body: Partial<Listing>) => api.post<ApiEnvelope<Listing>>('/listings', body).then(unwrap),
   updateListing: (id: string, body: Partial<Listing>) => api.put<ApiEnvelope<Listing>>(`/listings/${id}`, body).then(unwrap),
   deleteListing: (id: string) => api.delete(`/listings/${id}`),
+  archiveInactiveListing: (id: string) => api.delete<ApiEnvelope<{ id: string; archived: true }>>(`/listings/${id}/archive`).then(unwrap),
+  restockListing: (id: string, quantity: number) => api.post<ApiEnvelope<Listing>>(`/listings/${id}/restock`, { quantity }).then(unwrap),
+  updatePreorderStatus: (id: string, status: PreorderStatus) => api.put<ApiEnvelope<Listing>>(`/listings/${id}/preorder-status`, { status }).then(unwrap),
   transactions: (role?: 'buyer' | 'seller') => api.get<ApiEnvelope<Transaction[]>>('/transactions', { params: role ? { role } : undefined }).then(unwrap),
   transaction: (id: string) => api.get<ApiEnvelope<Transaction>>(`/transactions/${id}`).then(unwrap),
   checkoutOptions: (listingId: string) => api.get<ApiEnvelope<CheckoutOptions>>(`/transactions/checkout-options/${listingId}`).then(unwrap),
@@ -94,6 +97,8 @@ export const endpoints = {
     }).then(unwrap);
   },
   adminStats: () => api.get<ApiEnvelope<Record<string, number>>>('/admin/dashboard').then(unwrap),
+  adminListings: (params?: { keyword?: string; status?: ListingStatus; type?: 'PRODUCT' | 'SERVICE'; mode?: ListingMode; category?: string; page?: number; limit?: number }) => api.get<ApiEnvelope<AdminListingPage>>('/admin/listings', { params }).then(unwrap),
+  adminListingStatus: (id: string, status: 'ACTIVE' | 'HIDDEN' | 'REMOVED') => api.patch<ApiEnvelope<Listing>>(`/admin/listings/${id}/status`, { status }).then(unwrap),
   pendingListings: () => api.get<ApiEnvelope<Listing[]>>('/admin/listings/pending').then(unwrap),
   moderate: (id: string, action: 'approve' | 'reject') => api.patch(`/admin/listings/${id}/moderate`, { action }),
   adminUsers: () => api.get<ApiEnvelope<{ users: User[] }>>('/admin/users').then(unwrap),

@@ -18,6 +18,15 @@ const conditionLabels: Record<string, string> = {
   NEW: 'Baru', LIKE_NEW: 'Seperti baru', GOOD: 'Kondisi baik', FAIR: 'Cukup baik',
 };
 
+const modeLabels: Record<string, string> = {
+  ONE_OFF: 'BARANG SATUAN', STOCKED: 'PRODUK STOK', PREORDER: 'PRE-ORDER', SERVICE: 'JASA',
+};
+
+function fullDate(value?: string | null) {
+  if (!value) return '—';
+  try { return new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)); } catch { return value; }
+}
+
 export default function ListingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const user = useAuth(state => state.user);
@@ -112,9 +121,24 @@ export default function ListingDetailScreen() {
   const activeImage = images[safeIndex];
   const imageFailed = activeImage ? failedImages.includes(activeImage) : false;
   const orderQuantity = Number(quantity);
+  const preorderOpen = item.mode !== 'PREORDER' || Boolean(item.preorderAccepting);
+  const availableUnits = item.mode === 'ONE_OFF'
+    ? (item.status === 'SOLD' ? 0 : 1)
+    : item.mode === 'SERVICE'
+      ? 99
+      : Math.max(0, Number(item.stockLeft ?? 0));
+  const buyerLimit = item.mode === 'PREORDER' && item.preorderMaxPerBuyer
+    ? Math.min(availableUnits, item.preorderMaxPerBuyer)
+    : availableUnits;
+  const preorderQuota = item.mode === 'PREORDER' ? Number(item.preorderQuota ?? item.stock ?? 0) : 0;
+  const preorderOrdered = item.mode === 'PREORDER' ? Math.max(0, preorderQuota - Number(item.stockLeft ?? 0)) : 0;
+  const preorderProgress = preorderQuota > 0 ? Math.min(100, Math.round((preorderOrdered / preorderQuota) * 100)) : 0;
+  const canOrder = item.status === 'ACTIVE'
+    && preorderOpen
+    && (item.mode === 'SERVICE' || buyerLimit > 0);
   const quantityValid = Number.isInteger(orderQuantity)
     && orderQuantity >= 1
-    && (item.type === 'SERVICE' || item.stockLeft === null || item.stockLeft === undefined || orderQuantity <= item.stockLeft);
+    && (item.mode === 'SERVICE' || orderQuantity <= buyerLimit);
   const orderTotal = Number(item.price) * (quantityValid ? orderQuantity : 0);
   const availableMethods = item.fulfillmentMethods?.length ? item.fulfillmentMethods : ['CAMPUS_MEETUP'] as FulfillmentMethod[];
   const selectedCourier = checkoutOptions.data?.couriers.find(option => option.provider === courierProvider);
@@ -128,13 +152,17 @@ export default function ListingDetailScreen() {
 
   const adjustQuantity = (delta: number) => {
     const current = Number(quantity) || 1;
-    const max = item.type === 'PRODUCT' && typeof item.stockLeft === 'number' ? Math.max(1, item.stockLeft) : 99;
+    const max = item.mode === 'SERVICE' ? 99 : Math.max(1, buyerLimit);
     setQuantity(String(Math.min(max, Math.max(1, current + delta))));
   };
 
   const openCheckout = () => {
+    if (!canOrder) {
+      setFeedback({ tone: 'warning', title: item.mode === 'PREORDER' ? 'Pre-order tidak menerima pesanan' : 'Produk belum tersedia', message: item.mode === 'PREORDER' ? 'Deadline sudah lewat, PO ditutup seller, atau kuotanya sudah penuh.' : 'Stok produk sedang habis.' });
+      return;
+    }
     if (!quantityValid) {
-      setFeedback({ tone: 'warning', title: 'Jumlah belum valid', message: item.type === 'PRODUCT' ? `Jumlah harus 1–${item.stockLeft || 1}.` : 'Jumlah minimal 1.' });
+      setFeedback({ tone: 'warning', title: 'Jumlah belum valid', message: item.mode === 'SERVICE' ? 'Jumlah minimal 1.' : `Jumlah harus 1–${Math.max(1, buyerLimit)}.` });
       return;
     }
     buy.reset();
@@ -203,7 +231,7 @@ export default function ListingDetailScreen() {
         <Card style={styles.purchaseCard}>
           <View style={styles.topRow}>
             <View style={styles.badgeRow}>
-              <View style={styles.typeBadge}><Ionicons name={item.type === 'SERVICE' ? 'construct-outline' : 'cube-outline'} size={14} color={colors.primary} /><Text style={styles.typeBadgeText}>{item.type === 'SERVICE' ? 'JASA' : 'BARANG'}</Text></View>
+              <View style={styles.typeBadge}><Ionicons name={item.mode === 'PREORDER' ? 'calendar-outline' : item.mode === 'SERVICE' ? 'construct-outline' : item.mode === 'STOCKED' ? 'layers-outline' : 'cube-outline'} size={14} color={colors.primary} /><Text style={styles.typeBadgeText}>{modeLabels[item.mode] || (item.type === 'SERVICE' ? 'JASA' : 'BARANG')}</Text></View>
               <View style={styles.verified}><Ionicons name="checkmark-circle" size={14} color={colors.success} /><Text style={styles.verifiedText}>SELLER TERVERIFIKASI</Text></View>
             </View>
             {!mine ? <Pressable accessibilityLabel={savedStatus.data?.saved ? 'Hapus dari tersimpan' : 'Simpan listing'} disabled={savedStatus.isLoading || saveMutation.isPending} onPress={() => saveMutation.mutate()} style={[styles.save, (savedStatus.isLoading || saveMutation.isPending) && { opacity: 0.55 }]}><Ionicons name={savedStatus.data?.saved ? 'heart' : 'heart-outline'} size={21} color={savedStatus.data?.saved ? '#E5485D' : colors.textSoft} /></Pressable> : null}
@@ -211,20 +239,34 @@ export default function ListingDetailScreen() {
 
           <View style={styles.productHeading}>
             <Text style={styles.title}>{item.title}</Text>
-            <Text style={styles.meta}>{conditionLabels[item.condition || ''] || (item.type === 'SERVICE' ? 'Jasa mahasiswa' : item.condition)} · {categoryLabels[item.category] || item.category}</Text>
+            <Text style={styles.meta}>{item.condition ? `${conditionLabels[item.condition] || item.condition} · ` : item.type === 'SERVICE' ? 'Jasa mahasiswa · ' : ''}{categoryLabels[item.category] || item.category}</Text>
             <Text style={styles.price}>{money(item.price)}</Text>
           </View>
 
           <View style={styles.factGrid}>
             <View style={styles.factItem}>
-              <View style={styles.factIcon}><Ionicons name={item.type === 'PRODUCT' ? 'cube-outline' : 'calendar-outline'} size={18} color={colors.primary} /></View>
-              <View style={styles.flex}><Text style={styles.factLabel}>{item.type === 'PRODUCT' ? 'Stok tersedia' : 'Jenis penawaran'}</Text><Text style={styles.factValue}>{item.type === 'PRODUCT' ? `${item.stockLeft ?? 'Tidak dibatasi'} unit` : 'Jasa mahasiswa'}</Text></View>
+              <View style={styles.factIcon}><Ionicons name={item.mode === 'PREORDER' ? 'calendar-outline' : item.mode === 'STOCKED' ? 'layers-outline' : item.mode === 'SERVICE' ? 'construct-outline' : 'cube-outline'} size={18} color={colors.primary} /></View>
+              <View style={styles.flex}><Text style={styles.factLabel}>{item.mode === 'PREORDER' ? 'Kuota tersisa' : item.mode === 'STOCKED' ? 'Stok tersedia' : item.mode === 'ONE_OFF' ? 'Ketersediaan' : 'Jenis penawaran'}</Text><Text style={styles.factValue}>{item.mode === 'PREORDER' ? `${item.stockLeft ?? 0} / ${item.preorderQuota ?? item.stock ?? 0} unit` : item.mode === 'STOCKED' ? `${item.stockLeft ?? 0} unit` : item.mode === 'ONE_OFF' ? (item.status === 'SOLD' ? 'Sudah terjual' : '1 unit') : 'Jasa mahasiswa'}</Text></View>
             </View>
             <View style={styles.factItem}>
               <View style={styles.factIcon}><Ionicons name="swap-horizontal-outline" size={18} color={colors.primary} /></View>
               <View style={styles.flex}><Text style={styles.factLabel}>Penyerahan</Text><Text style={styles.factValue}>{availableMethods.includes('CAMPUS_MEETUP') && availableMethods.includes('INSTANT_COURIER') ? 'Meetup / Kurir' : availableMethods.includes('INSTANT_COURIER') ? 'Kurir Instan' : 'Meetup langsung'}</Text></View>
             </View>
           </View>
+
+          {item.mode === 'PREORDER' ? (
+            <View style={[styles.preorderPanel, !preorderOpen && styles.preorderPanelClosed]}>
+              <View style={styles.preorderPanelHeader}><View style={styles.preorderPanelIcon}><Ionicons name="calendar-outline" size={19} color={colors.primary} /></View><View style={styles.flex}><Text style={styles.preorderPanelTitle}>{preorderOpen ? 'Pre-order sedang dibuka' : item.preorderStatus === 'READY' ? 'Pesanan siap diambil' : 'Pre-order sudah ditutup'}</Text><Text style={styles.preorderPanelCopy}>Deadline {fullDate(item.preorderDeadline)}</Text></View></View>
+              <View style={styles.preorderProgressRow}><Text style={styles.preorderProgressText}>{preorderOrdered} / {preorderQuota} unit dipesan</Text><Text style={styles.preorderProgressText}>{preorderProgress}%</Text></View>
+              <View style={styles.preorderProgressTrack}><View style={[styles.preorderProgressFill, { width: `${preorderProgress}%` as `${number}%` }]} /></View>
+              <View style={styles.preorderFacts}>
+                <View style={styles.preorderFact}><Text style={styles.preorderFactLabel}>Estimasi siap</Text><Text style={styles.preorderFactValue}>{fullDate(item.preorderReadyAt)}</Text></View>
+                <View style={styles.preorderFact}><Text style={styles.preorderFactLabel}>Minimum</Text><Text style={styles.preorderFactValue}>{item.preorderMinOrder ? `${item.preorderMinOrder} unit` : 'Tidak ada'}</Text></View>
+                <View style={styles.preorderFact}><Text style={styles.preorderFactLabel}>Maks. / buyer</Text><Text style={styles.preorderFactValue}>{item.preorderMaxPerBuyer ? `${item.preorderMaxPerBuyer} unit` : 'Tidak dibatasi'}</Text></View>
+              </View>
+              {item.preorderPickupLocation ? <View style={styles.preorderPickup}><Ionicons name="location-outline" size={16} color={colors.primary} /><Text style={styles.preorderPickupText}>{item.preorderPickupLocation}</Text></View> : null}
+            </View>
+          ) : null}
 
           <Pressable onPress={() => router.push({ pathname: '/(student)/seller/[id]', params: { id: item.sellerId } })} style={styles.seller}>
             <View style={styles.avatar}><Text style={styles.avatarText}>{item.seller?.name?.[0]?.toUpperCase() || 'B'}</Text></View>
@@ -239,7 +281,7 @@ export default function ListingDetailScreen() {
           {!mine ? (
             <View style={styles.purchaseSection}>
               <View style={styles.quantityRow}>
-                <View style={styles.quantityCopy}><Text style={styles.quantityLabel}>Jumlah</Text><Text style={styles.quantityHint}>{item.type === 'PRODUCT' ? `Maks. ${item.stockLeft ?? '∞'} unit` : 'Minimal 1'}</Text></View>
+                <View style={styles.quantityCopy}><Text style={styles.quantityLabel}>Jumlah</Text><Text style={styles.quantityHint}>{item.mode === 'SERVICE' ? 'Minimal 1' : item.mode === 'ONE_OFF' ? 'Barang satuan · maks. 1' : `Maks. ${Math.max(0, buyerLimit)} unit`}</Text></View>
                 <View style={styles.stepper}>
                   <Pressable accessibilityLabel="Kurangi jumlah" onPress={() => adjustQuantity(-1)} style={styles.stepperButton}><Ionicons name="remove" size={18} color={colors.textSoft} /></Pressable>
                   <View style={styles.stepperValue}><Text style={styles.stepperValueText}>{quantity || '1'}</Text></View>
@@ -251,7 +293,7 @@ export default function ListingDetailScreen() {
                 <View><Text style={styles.orderPreviewLabel}>Estimasi subtotal</Text><Text style={styles.orderPreviewHint}>{quantityValid ? `${orderQuantity} × ${money(item.price)}` : 'Periksa jumlah pembelian'}</Text></View>
                 <Text style={styles.orderPreviewTotal}>{quantityValid ? money(orderTotal) : '—'}</Text>
               </View>
-              <Button title="Lanjut ke checkout" icon="bag-check-outline" onPress={openCheckout} />
+              {canOrder ? <Button title={item.mode === 'PREORDER' ? 'Ikut pre-order' : 'Lanjut ke checkout'} icon={item.mode === 'PREORDER' ? 'calendar-outline' : 'bag-check-outline'} onPress={openCheckout} /> : <View style={styles.unavailable}><Ionicons name={item.mode === 'PREORDER' ? 'time-outline' : 'cube-outline'} size={18} color={colors.warning} /><View style={styles.flex}><Text style={styles.unavailableTitle}>{item.mode === 'PREORDER' ? 'Pre-order tidak menerima pesanan baru' : 'Stok sedang habis'}</Text><Text style={styles.unavailableText}>{item.mode === 'PREORDER' ? 'PO mungkin sudah ditutup, deadline terlewati, atau kuota penuh.' : 'Seller dapat menambahkan stok kembali pada katalog yang sama.'}</Text></View></View>}
               <Pressable onPress={() => router.push({ pathname: '/(student)/report', params: { targetType: 'LISTING', targetId: id, title: item.title } })} style={styles.reportAction}><Ionicons name="flag-outline" size={15} color={colors.muted} /><Text style={styles.reportActionText}>Laporkan listing</Text></Pressable>
             </View>
           ) : (
@@ -267,6 +309,7 @@ export default function ListingDetailScreen() {
         </View>
         <View style={styles.descriptionDivider} />
         <Text style={styles.description}>{item.description}</Text>
+        {item.mode === 'PREORDER' && item.preorderPickupNote ? <View style={styles.preorderNote}><Ionicons name="information-circle-outline" size={18} color={colors.primary} /><View style={styles.flex}><Text style={styles.preorderNoteLabel}>CATATAN PRE-ORDER</Text><Text style={styles.preorderNoteText}>{item.preorderPickupNote}</Text></View></View> : null}
         <View style={styles.deliverySummary}>
           <Text style={styles.detailLabel}>METODE PENYERAHAN</Text>
           <View style={styles.availableDeliveryRow}>
@@ -285,7 +328,7 @@ export default function ListingDetailScreen() {
         <View style={styles.modalBackdrop}>
           <View style={styles.checkoutModal}>
             <View style={styles.modalHeader}>
-              <View><Text style={styles.modalEyebrow}>CHECKOUT BMARKET</Text><Text style={styles.modalTitle}>Periksa pesananmu</Text><Text style={styles.modalSubtitle}>Pastikan jumlah dan metode penyerahan sudah sesuai.</Text></View>
+              <View><Text style={styles.modalEyebrow}>CHECKOUT BMARKET</Text><Text style={styles.modalTitle}>Periksa pesananmu</Text><Text style={styles.modalSubtitle}>{item.mode === 'PREORDER' ? 'Pesanan akan tercatat sebagai pre-order dan pembayaran ditahan di escrow.' : 'Pastikan jumlah dan metode penyerahan sudah sesuai.'}</Text></View>
               <Pressable accessibilityLabel="Tutup checkout" onPress={closeCheckout} style={styles.modalClose}><Ionicons name="close" size={21} color={colors.textSoft} /></Pressable>
             </View>
 
@@ -453,6 +496,28 @@ const styles = StyleSheet.create({
   availableDeliveryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   availableDeliveryChip: { minHeight: 34, paddingHorizontal: 10, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 6 },
   availableDeliveryText: { fontFamily: 'PoppinsMedium', fontSize: 11.5, color: colors.textSoft },
+  preorderPanel: { padding: 13, borderRadius: 12, borderWidth: 1, borderColor: '#B7D3F3', backgroundColor: '#F4F9FF', gap: 11 },
+  preorderPanelClosed: { borderColor: '#E2D8C4', backgroundColor: '#FFF9EE' },
+  preorderPanelHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  preorderPanelIcon: { width: 38, height: 38, borderRadius: 10, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  preorderPanelTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 12.5, color: colors.text },
+  preorderPanelCopy: { fontFamily: 'PoppinsRegular', fontSize: 10.5, color: colors.muted, marginTop: 1 },
+  preorderProgressRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  preorderProgressText: { fontFamily: 'PoppinsMedium', fontSize: 10.5, color: colors.textSoft },
+  preorderProgressTrack: { height: 7, borderRadius: 4, backgroundColor: '#DDEAF8', overflow: 'hidden' },
+  preorderProgressFill: { height: '100%', borderRadius: 4, backgroundColor: colors.primary },
+  preorderFacts: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  preorderFact: { minWidth: 116, flex: 1, padding: 9, borderRadius: 9, backgroundColor: colors.surface },
+  preorderFactLabel: { fontFamily: 'PoppinsRegular', fontSize: 9.5, color: colors.muted },
+  preorderFactValue: { fontFamily: 'PoppinsSemiBold', fontSize: 10.5, color: colors.text, marginTop: 2 },
+  preorderPickup: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  preorderPickupText: { flex: 1, fontFamily: 'PoppinsMedium', fontSize: 10.5, color: colors.textSoft },
+  preorderNote: { padding: 11, borderRadius: 10, backgroundColor: colors.primarySoft, flexDirection: 'row', alignItems: 'flex-start', gap: 9 },
+  preorderNoteLabel: { fontFamily: 'PoppinsBold', fontSize: 9.5, letterSpacing: .55, color: colors.primary },
+  preorderNoteText: { fontFamily: 'PoppinsRegular', fontSize: 11, lineHeight: 17, color: colors.textSoft, marginTop: 2 },
+  unavailable: { padding: 12, borderRadius: 11, borderWidth: 1, borderColor: '#EED7AD', backgroundColor: '#FFF9EE', flexDirection: 'row', alignItems: 'flex-start', gap: 9 },
+  unavailableTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 11.5, color: colors.text },
+  unavailableText: { fontFamily: 'PoppinsRegular', fontSize: 10.5, lineHeight: 16, color: colors.muted, marginTop: 1 },
   safety: { minHeight: 82, borderRadius: 13, backgroundColor: colors.successSoft, borderWidth: 1, borderColor: '#CDEBDD', padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
   safetyIcon: { width: 42, height: 42, borderRadius: 11, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   safetyBody: { flex: 1 },

@@ -13,7 +13,7 @@ export class DisputesService {
     openedBy: { select: { id: true, name: true, email: true, avatarUrl: true } },
     resolvedBy: { select: { id: true, name: true } },
     transaction: { include: {
-      listing: { select: { id: true, title: true, type: true, images: true, status: true } },
+      listing: { select: { id: true, title: true, type: true, mode: true, images: true, status: true } },
       buyer: { select: { id: true, name: true, email: true, avatarUrl: true } },
       seller: { select: { id: true, name: true, email: true, avatarUrl: true } },
     } },
@@ -56,7 +56,7 @@ export class DisputesService {
 
   async resolve(id: string, adminId: string, action: 'START_REVIEW' | 'REFUND_BUYER' | 'RELEASE_SELLER' | 'REJECT', note?: string) {
     const result = await this.prisma.$transaction(async tx => {
-      const dispute = await tx.dispute.findUnique({ where: { id }, include: { transaction: { include: { listing: { select: { type: true, status: true } } } } } });
+      const dispute = await tx.dispute.findUnique({ where: { id }, include: { transaction: { include: { listing: { select: { type: true, mode: true, status: true } } } } } });
       if (!dispute) throw new NotFoundException('Sengketa tidak ditemukan.');
       if (['RESOLVED','REJECTED'].includes(dispute.status)) throw new BadRequestException('Sengketa ini sudah ditutup.');
       if (action === 'START_REVIEW') {
@@ -77,7 +77,8 @@ export class DisputesService {
         if (!refunded.count) throw new BadRequestException('Saldo escrow tidak konsisten.');
         await this.ledger(tx, { userId: order.buyerId, transactionId: order.id, type: 'REFUND', balanceDelta: Number(escrowTotal), escrowDelta: Number(escrowTotal) * -1, description: 'Refund melalui resolusi sengketa.', idempotencyKey: `DISPUTE:REFUND:${order.id}` });
         const itemType = order.listingTypeSnapshot ?? order.listing.type as ListingType;
-        if (itemType === 'PRODUCT') await tx.listing.update({ where: { id: order.listingId }, data: { stockLeft: { increment: order.quantity }, ...(order.listing.status === 'SOLD' ? { status: 'ACTIVE' as const } : {}) } });
+        const itemMode = order.listingModeSnapshot ?? order.listing.mode;
+        if (itemType === 'PRODUCT') await tx.listing.update({ where: { id: order.listingId }, data: { stockLeft: { increment: order.quantity }, ...(itemMode === 'ONE_OFF' && order.listing.status === 'SOLD' ? { status: 'ACTIVE' as const } : {}) } });
         await tx.transaction.update({ where: { id: order.id }, data: { status: 'CANCELLED', isEscrowHeld: false, cancelledAt: now, cancelledBy: 'ADMIN', cancellationReason: 'Refund melalui resolusi sengketa.', handoverCodeHash: null, handoverCodeExpiresAt: null } });
         resolution = 'REFUND_BUYER'; refundAmount = escrowTotal;
       } else if (action === 'RELEASE_SELLER') {

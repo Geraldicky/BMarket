@@ -1,13 +1,13 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Button, Card, Empty, ErrorState, FeedbackDialog, Field, Loader, money, Screen, Title } from '@/components/ui';
 import { endpoints, errorMessage } from '@/lib/api';
 import { colors, radius } from '@/constants/theme';
-import type { Listing } from '@/types';
+import type { Listing, PreorderStatus, Transaction } from '@/types';
 
 const statusLabel: Record<string, string> = {
   ACTIVE: 'Aktif',
@@ -21,9 +21,10 @@ const statusLabel: Record<string, string> = {
 
 const moderatedStatuses = new Set(['REJECTED', 'HIDDEN', 'REMOVED']);
 
-type FilterKey = 'ALL' | 'ACTIVE' | 'SOLD' | 'MODERATED' | 'INACTIVE';
-type Target = { id: string; title: string } | null;
+type FilterKey = 'ALL' | 'ACTIVE' | 'OUT_OF_STOCK' | 'PREORDER' | 'SOLD' | 'MODERATED' | 'INACTIVE';
+type Target = { id: string; title: string; action: 'deactivate' | 'archive' } | null;
 type Feedback = { tone: 'success' | 'danger'; title: string; message: string } | null;
+type RestockTarget = { id: string; title: string } | null;
 
 function toNumber(value: number | string | null | undefined) {
   const parsed = Number(value ?? 0);
@@ -38,9 +39,38 @@ function dateLabel(value: string) {
   }
 }
 
+const modeLabel: Record<string, string> = {
+  ONE_OFF: 'BARANG SATUAN', STOCKED: 'PRODUK STOK', PREORDER: 'PRE-ORDER', SERVICE: 'JASA',
+};
+
+function derivedLabel(item: Listing) {
+  if (moderatedStatuses.has(item.status)) return statusLabel[item.status] || item.status;
+  if (item.status === 'INACTIVE') return 'Nonaktif';
+  if (item.mode === 'PREORDER') {
+    if (item.preorderStatus === 'PROCESSING') return 'Diproses';
+    if (item.preorderStatus === 'READY') return 'Siap diambil';
+    if (item.preorderStatus === 'COMPLETED') return 'PO selesai';
+    if (!item.preorderAccepting) return 'PO ditutup';
+    return 'PO aktif';
+  }
+  if (item.mode === 'STOCKED' && item.stockLeft === 0) return 'Stok habis';
+  if (item.status === 'SOLD') return 'Terjual';
+  return 'Aktif';
+}
+
+function preorderNext(status?: PreorderStatus | null): { status: PreorderStatus; label: string } | null {
+  if (!status || status === 'OPEN') return { status: 'CLOSED', label: 'Tutup PO' };
+  if (status === 'CLOSED') return { status: 'PROCESSING', label: 'Mulai proses' };
+  if (status === 'PROCESSING') return { status: 'READY', label: 'Tandai siap' };
+  if (status === 'READY') return { status: 'COMPLETED', label: 'Selesaikan PO' };
+  return null;
+}
+
 function matchesFilter(item: Listing, filter: FilterKey) {
   if (filter === 'ALL') return true;
-  if (filter === 'ACTIVE') return item.status === 'ACTIVE' || item.status === 'PENDING';
+  if (filter === 'ACTIVE') return (item.status === 'ACTIVE' || item.status === 'PENDING') && !(item.mode === 'STOCKED' && item.stockLeft === 0);
+  if (filter === 'OUT_OF_STOCK') return item.mode === 'STOCKED' && item.stockLeft === 0;
+  if (filter === 'PREORDER') return item.mode === 'PREORDER';
   if (filter === 'SOLD') return item.status === 'SOLD';
   if (filter === 'MODERATED') return moderatedStatuses.has(item.status);
   return item.status === 'INACTIVE';
@@ -58,10 +88,15 @@ export default function SellScreen() {
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [filter, setFilter] = useState<FilterKey>('ALL');
   const [keyword, setKeyword] = useState('');
+  const [restockTarget, setRestockTarget] = useState<RestockTarget>(null);
+  const [restockQty, setRestockQty] = useState('10');
+  const [ordersTarget, setOrdersTarget] = useState<Listing | null>(null);
 
   const counts = useMemo(() => ({
     total: items.length,
-    active: items.filter(item => item.status === 'ACTIVE' || item.status === 'PENDING').length,
+    active: items.filter(item => (item.status === 'ACTIVE' || item.status === 'PENDING') && !(item.mode === 'STOCKED' && item.stockLeft === 0)).length,
+    outOfStock: items.filter(item => item.mode === 'STOCKED' && item.stockLeft === 0).length,
+    preorder: items.filter(item => item.mode === 'PREORDER').length,
     sold: items.filter(item => item.status === 'SOLD').length,
     moderated: items.filter(item => moderatedStatuses.has(item.status)).length,
     inactive: items.filter(item => item.status === 'INACTIVE').length,
@@ -82,26 +117,79 @@ export default function SellScreen() {
     if (!target) return;
     setWorkingId(target.id);
     try {
-      await endpoints.deleteListing(target.id);
+      if (target.action === 'archive') await endpoints.archiveInactiveListing(target.id);
+      else await endpoints.deleteListing(target.id);
+
       await Promise.all([
         client.invalidateQueries({ queryKey: ['my-listings'] }),
         client.invalidateQueries({ queryKey: ['listings'] }),
       ]);
-      const title = target.title;
+      const { title, action } = target;
       setTarget(null);
-      setFeedback({ tone: 'success', title: 'Listing dinonaktifkan', message: `${title} tidak lagi tampil di marketplace. Histori transaksi tetap tersimpan.` });
+      setFeedback(action === 'archive'
+        ? { tone: 'success', title: 'Listing diarsipkan', message: `${title} sudah dipindahkan dari daftar listing aktifmu. Histori transaksi dan penjualan tetap tersimpan.` }
+        : { tone: 'success', title: 'Listing dinonaktifkan', message: `${title} tidak lagi tampil di marketplace. Kamu bisa menghapusnya dari etalase setelah dinonaktifkan.` });
     } catch (error) {
-      setFeedback({ tone: 'danger', title: 'Listing belum dinonaktifkan', message: errorMessage(error) });
+      setFeedback({
+        tone: 'danger',
+        title: target.action === 'archive' ? 'Listing belum dapat diarsipkan' : 'Listing belum dinonaktifkan',
+        message: errorMessage(error),
+      });
       setTarget(null);
     } finally {
       setWorkingId(null);
     }
   };
 
+  const restock = async () => {
+    if (!restockTarget) return;
+    const qty = Number(restockQty);
+    if (!Number.isInteger(qty) || qty < 1) {
+      setFeedback({ tone: 'danger', title: 'Jumlah stok belum valid', message: 'Masukkan jumlah stok minimal 1.' });
+      return;
+    }
+    setWorkingId(restockTarget.id);
+    try {
+      await endpoints.restockListing(restockTarget.id, qty);
+      await Promise.all([client.invalidateQueries({ queryKey: ['my-listings'] }), client.invalidateQueries({ queryKey: ['listings'] })]);
+      setFeedback({ tone: 'success', title: 'Stok berhasil ditambahkan', message: `${restockTarget.title} mendapat tambahan ${qty} unit tanpa membuat katalog baru.` });
+      setRestockTarget(null);
+      setRestockQty('10');
+    } catch (error) {
+      setFeedback({ tone: 'danger', title: 'Stok belum diperbarui', message: errorMessage(error) });
+    } finally { setWorkingId(null); }
+  };
+
+  const advancePreorder = async (item: Listing) => {
+    const next = preorderNext(item.preorderStatus);
+    if (!next) return;
+    setWorkingId(item.id);
+    try {
+      await endpoints.updatePreorderStatus(item.id, next.status);
+      await Promise.all([client.invalidateQueries({ queryKey: ['my-listings'] }), client.invalidateQueries({ queryKey: ['listings'] }), client.invalidateQueries({ queryKey: ['listing', item.id] })]);
+      setFeedback({ tone: 'success', title: 'Status pre-order diperbarui', message: `${item.title} sekarang berada di tahap ${next.status}.` });
+    } catch (error) {
+      setFeedback({ tone: 'danger', title: 'Status PO belum berubah', message: errorMessage(error) });
+    } finally { setWorkingId(null); }
+  };
+
+  const preorderOrders = useMemo(() => {
+    if (!ordersTarget) return [] as Transaction[];
+    return (sellerTransactions.data || [])
+      .filter(transaction => transaction.listing.id === ordersTarget.id)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [ordersTarget, sellerTransactions.data]);
+  const preorderActiveOrders = preorderOrders.filter(order => order.status !== 'CANCELLED');
+  const preorderUnits = preorderActiveOrders.reduce((total, order) => total + order.quantity, 0);
+  const preorderValue = preorderActiveOrders.reduce((total, order) => total + toNumber(order.totalPrice), 0);
+  const preorderCompleted = preorderActiveOrders.filter(order => order.status === 'COMPLETED').length;
+
   const create = <Button title="Buat listing" icon="add" onPress={() => router.push('/(student)/listing/form')} />;
   const filterOptions: { key: FilterKey; label: string; count: number }[] = [
     { key: 'ALL', label: 'Semua', count: counts.total },
     { key: 'ACTIVE', label: 'Aktif', count: counts.active },
+    { key: 'OUT_OF_STOCK', label: 'Stok habis', count: counts.outOfStock },
+    { key: 'PREORDER', label: 'Pre-order', count: counts.preorder },
     { key: 'SOLD', label: 'Terjual', count: counts.sold },
     { key: 'MODERATED', label: 'Dimoderasi', count: counts.moderated },
     { key: 'INACTIVE', label: 'Nonaktif', count: counts.inactive },
@@ -121,11 +209,11 @@ export default function SellScreen() {
       </View>
       <View style={[styles.statCard, !desktop && styles.statCardMobile]}>
         <View style={[styles.statIcon, { backgroundColor: colors.warningSoft }]}><Ionicons name="bag-check-outline" size={20} color={colors.warning} /></View>
-        <View style={styles.statCopy}><Text style={styles.statValue}>{counts.sold}</Text><Text style={styles.statLabel}>Terjual</Text></View>
+        <View style={styles.statCopy}><Text style={styles.statValue}>{counts.outOfStock}</Text><Text style={styles.statLabel}>Stok habis</Text></View>
       </View>
       <View style={[styles.statCard, !desktop && styles.statCardMobile]}>
         <View style={[styles.statIcon, { backgroundColor: colors.dangerSoft }]}><Ionicons name="shield-outline" size={20} color={colors.danger} /></View>
-        <View style={styles.statCopy}><Text style={styles.statValue}>{counts.moderated}</Text><Text style={styles.statLabel}>Dimoderasi</Text></View>
+        <View style={styles.statCopy}><Text style={styles.statValue}>{counts.preorder}</Text><Text style={styles.statLabel}>Pre-order</Text></View>
       </View>
     </View>
 
@@ -161,9 +249,12 @@ export default function SellScreen() {
 
     {query.isLoading ? <Loader /> : query.isError ? <ErrorState message={errorMessage(query.error)} retry={() => query.refetch()} /> : !items.length ? <Empty title="Etalase kamu masih kosong" message="Pasang barang pertama dan mulai berjualan ke sesama Binusian." icon="storefront-outline" action={create} /> : !filteredItems.length ? <Empty title="Tidak ada listing yang cocok" message="Coba ganti kata kunci atau pilih filter lain." icon="search-outline" /> : <View style={styles.list}>{filteredItems.map(item => {
       const moderated = moderatedStatuses.has(item.status);
-      const canEdit = item.status !== 'SOLD' && item.status !== 'REMOVED';
+      const canEdit = item.status !== 'SOLD' && item.status !== 'REMOVED' && item.preorderStatus !== 'COMPLETED';
       const canDeactivate = item.status === 'ACTIVE' || item.status === 'PENDING';
-      const stockText = item.type === 'SERVICE' ? 'Jasa' : `Stok ${item.stockLeft ?? 0}${item.stock != null ? ` / ${item.stock}` : ''}`;
+      const canArchive = item.status === 'INACTIVE' || item.status === 'SOLD' || (item.mode === 'PREORDER' && item.preorderStatus === 'COMPLETED');
+      const stockText = item.mode === 'SERVICE' ? 'Tanpa stok' : item.mode === 'ONE_OFF' ? (item.status === 'SOLD' ? 'Sudah terjual' : '1 unit') : item.mode === 'PREORDER' ? `Sisa kuota ${item.stockLeft ?? 0} / ${item.preorderQuota ?? item.stock ?? 0}` : `Stok ${item.stockLeft ?? 0}${item.stock != null ? ` / ${item.stock}` : ''}`;
+      const nextPo = item.mode === 'PREORDER' ? preorderNext(item.preorderStatus) : null;
+      const label = derivedLabel(item);
       return <Card key={item.id} style={[styles.item, !desktop && styles.itemMobile]}>
         <Pressable onPress={() => router.push({ pathname: '/(student)/listing/[id]', params: { id: item.id } })} style={({ pressed }) => [styles.media, !desktop && styles.mediaMobile, pressed && styles.pressed]}>
           {item.images?.[0] ? <Image source={item.images[0]} style={styles.image} contentFit="cover" transition={140} cachePolicy="memory-disk" /> : <Ionicons name={item.type === 'SERVICE' ? 'construct-outline' : 'cube-outline'} size={30} color="#6E879F" />}
@@ -172,7 +263,7 @@ export default function SellScreen() {
 
         <View style={styles.itemBody}>
           <View style={styles.metaRow}>
-            <Text style={styles.itemType}>{item.type === 'SERVICE' ? 'JASA' : 'BARANG'}</Text>
+            <Text style={styles.itemType}>{modeLabel[item.mode] || (item.type === 'SERVICE' ? 'JASA' : 'BARANG')}</Text>
             <View style={styles.metaDot} />
             <Text numberOfLines={1} style={styles.category}>{item.category}</Text>
           </View>
@@ -180,7 +271,7 @@ export default function SellScreen() {
           <Text style={styles.price}>{money(item.price)}</Text>
           <View style={styles.itemMetaLine}>
             <View style={styles.metaInfo}><Ionicons name={item.type === 'SERVICE' ? 'construct-outline' : 'cube-outline'} size={13} color={colors.muted} /><Text style={styles.metaText}>{stockText}</Text></View>
-            <View style={styles.metaInfo}><Ionicons name="calendar-outline" size={13} color={colors.muted} /><Text style={styles.metaText}>{dateLabel(item.createdAt)}</Text></View>
+            <View style={styles.metaInfo}><Ionicons name="calendar-outline" size={13} color={colors.muted} /><Text style={styles.metaText}>{item.mode === 'PREORDER' && item.preorderDeadline ? `Tutup ${dateLabel(item.preorderDeadline)}` : dateLabel(item.createdAt)}</Text></View>
           </View>
           {moderated ? <View style={styles.moderationNote}><Ionicons name="information-circle-outline" size={14} color={colors.danger} /><Text style={styles.moderationText}>Listing sedang ditinjau atau dibatasi admin.</Text></View> : null}
         </View>
@@ -188,18 +279,77 @@ export default function SellScreen() {
         <View style={[styles.itemRight, !desktop && styles.itemRightMobile]}>
           <View style={[styles.badge, (item.status === 'ACTIVE' || item.status === 'PENDING') && styles.badgeActive, item.status === 'SOLD' && styles.badgeSold, moderated && styles.badgeDanger]}>
             <View style={[styles.badgeDot, (item.status === 'ACTIVE' || item.status === 'PENDING') && styles.badgeDotActive, item.status === 'SOLD' && styles.badgeDotSold, moderated && styles.badgeDotDanger]} />
-            <Text style={styles.badgeText}>{statusLabel[item.status] || item.status}</Text>
+            <Text style={styles.badgeText}>{label}</Text>
           </View>
           <View style={styles.actions}>
             <Pressable onPress={() => router.push({ pathname: '/(student)/listing/[id]', params: { id: item.id } })} style={({ pressed }) => [styles.actionGhost, pressed && styles.pressed]}><Ionicons name="eye-outline" size={17} color={colors.textSoft} /><Text style={styles.actionGhostText}>Lihat</Text></Pressable>
+            {item.mode === 'PREORDER' ? <Pressable onPress={() => setOrdersTarget(item)} style={({ pressed }) => [styles.actionGhost, pressed && styles.pressed]}><Ionicons name="people-outline" size={17} color={colors.primary} /><Text style={[styles.actionGhostText, { color: colors.primary }]}>Pesanan PO</Text></Pressable> : null}
+            {item.mode === 'STOCKED' && !moderated ? <Pressable onPress={() => { setRestockTarget({ id: item.id, title: item.title }); setRestockQty('10'); }} style={({ pressed }) => [styles.edit, pressed && styles.pressed]}><Ionicons name="add-circle-outline" size={17} color={colors.primary} /><Text style={styles.editText}>+ Stok</Text></Pressable> : null}
+            {nextPo && item.status === 'ACTIVE' && !moderated ? <Pressable disabled={workingId === item.id} onPress={() => advancePreorder(item)} style={({ pressed }) => [styles.edit, pressed && styles.pressed]}><Ionicons name="arrow-forward-circle-outline" size={17} color={colors.primary} /><Text style={styles.editText}>{nextPo.label}</Text></Pressable> : null}
             {canEdit ? <Pressable onPress={() => router.push({ pathname: '/(student)/listing/form', params: { id: item.id } })} style={({ pressed }) => [styles.edit, pressed && styles.pressed]}><Ionicons name="create-outline" size={17} color={colors.primary} /><Text style={styles.editText}>Edit</Text></Pressable> : null}
-            {canDeactivate ? <Pressable accessibilityLabel={`Nonaktifkan ${item.title}`} disabled={workingId === item.id} onPress={() => setTarget({ id: item.id, title: item.title })} style={({ pressed }) => [styles.power, pressed && styles.pressed]}><Ionicons name="power-outline" size={18} color={colors.textSoft} /></Pressable> : null}
+            {canDeactivate ? <Pressable accessibilityLabel={`Nonaktifkan ${item.title}`} disabled={workingId === item.id} onPress={() => setTarget({ id: item.id, title: item.title, action: 'deactivate' })} style={({ pressed }) => [styles.power, pressed && styles.pressed]}><Ionicons name="power-outline" size={18} color={colors.textSoft} /></Pressable> : null}
+            {canArchive ? <Pressable accessibilityLabel={`Arsipkan ${item.title}`} disabled={workingId === item.id} onPress={() => setTarget({ id: item.id, title: item.title, action: 'archive' })} style={({ pressed }) => [styles.archive, pressed && styles.pressed]}><Ionicons name="archive-outline" size={17} color={colors.danger} /><Text style={styles.archiveText}>Arsipkan</Text></Pressable> : null}
           </View>
         </View>
       </Card>;
     })}</View>}
 
-    <FeedbackDialog visible={Boolean(target)} tone="warning" title="Nonaktifkan listing?" message={target ? `${target.title} akan berhenti tampil di marketplace. Tindakan ini tidak menghapus histori transaksi yang sudah ada.` : ''} primaryLabel="Nonaktifkan" secondaryLabel="Batal" loading={Boolean(target && workingId === target.id)} onClose={() => setTarget(null)} onSecondary={() => setTarget(null)} onPrimary={remove} />
+    <Modal visible={Boolean(ordersTarget)} transparent animationType="fade" onRequestClose={() => setOrdersTarget(null)}>
+      <View style={styles.modalBackdrop}>
+        <Card style={styles.ordersModal}>
+          <View style={styles.ordersHeader}>
+            <View style={styles.restockIcon}><Ionicons name="people-outline" size={22} color={colors.primary} /></View>
+            <View style={styles.flex}><Text style={styles.restockTitle}>Pesanan pre-order</Text><Text style={styles.restockCopy}>{ordersTarget?.title}</Text></View>
+            <Pressable onPress={() => setOrdersTarget(null)} style={styles.modalClose}><Ionicons name="close" size={20} color={colors.textSoft} /></Pressable>
+          </View>
+          <View style={styles.ordersStats}>
+            <View style={styles.orderStat}><Text style={styles.orderStatValue}>{preorderActiveOrders.length}</Text><Text style={styles.orderStatLabel}>Pesanan aktif</Text></View>
+            <View style={styles.orderStat}><Text style={styles.orderStatValue}>{preorderUnits}</Text><Text style={styles.orderStatLabel}>Total unit</Text></View>
+            <View style={styles.orderStat}><Text style={styles.orderStatValue}>{preorderCompleted}</Text><Text style={styles.orderStatLabel}>Sudah selesai</Text></View>
+            <View style={[styles.orderStat, styles.orderStatWide]}><Text style={[styles.orderStatValue, { color: colors.primaryDark }]}>{money(preorderValue)}</Text><Text style={styles.orderStatLabel}>Nilai order</Text></View>
+          </View>
+          {ordersTarget?.preorderMinOrder ? <View style={styles.minimumBox}><Ionicons name={preorderUnits >= ordersTarget.preorderMinOrder ? 'checkmark-circle-outline' : 'time-outline'} size={18} color={preorderUnits >= ordersTarget.preorderMinOrder ? colors.success : colors.warning} /><Text style={styles.minimumText}>{preorderUnits >= ordersTarget.preorderMinOrder ? `Minimum ${ordersTarget.preorderMinOrder} unit sudah tercapai.` : `${preorderUnits} / ${ordersTarget.preorderMinOrder} unit menuju minimum PO.`}</Text></View> : null}
+          <ScrollView style={styles.ordersScroll} contentContainerStyle={styles.ordersList} showsVerticalScrollIndicator={false}>
+            {sellerTransactions.isLoading ? <Loader /> : !preorderOrders.length ? <View style={styles.ordersEmpty}><Ionicons name="receipt-outline" size={26} color={colors.muted} /><Text style={styles.ordersEmptyTitle}>Belum ada pesanan</Text><Text style={styles.ordersEmptyCopy}>Buyer yang ikut pre-order akan muncul di sini setelah checkout.</Text></View> : preorderOrders.map(order => {
+              const status = ({ PENDING: 'Menunggu bayar', PAID: 'Sudah bayar', CONFIRMED: 'Diproses', COMPLETED: 'Selesai', CANCELLED: 'Dibatalkan' } as Record<string, string>)[order.status] || order.status;
+              return <Pressable key={order.id} onPress={() => { setOrdersTarget(null); router.push({ pathname: '/(student)/transaction/[id]', params: { id: order.id } }); }} style={({ pressed }) => [styles.orderRow, pressed && styles.pressed]}>
+                <View style={styles.orderAvatar}><Text style={styles.orderAvatarText}>{order.buyer?.name?.[0]?.toUpperCase() || 'B'}</Text></View>
+                <View style={styles.flex}><Text style={styles.orderBuyer}>{order.buyer?.name || 'Buyer BMarket'}</Text><Text style={styles.orderMeta}>{order.quantity} item · {dateLabel(order.createdAt)}</Text></View>
+                <View style={styles.orderEnd}><Text style={styles.orderAmount}>{money(order.totalPrice)}</Text><Text style={[styles.orderStatus, order.status === 'COMPLETED' && { color: colors.success }, order.status === 'CANCELLED' && { color: colors.danger }]}>{status}</Text></View>
+                <Ionicons name="chevron-forward" size={16} color={colors.muted} />
+              </Pressable>;
+            })}
+          </ScrollView>
+          <Button title="Tutup" variant="secondary" onPress={() => setOrdersTarget(null)} />
+        </Card>
+      </View>
+    </Modal>
+
+    <Modal visible={Boolean(restockTarget)} transparent animationType="fade" onRequestClose={() => setRestockTarget(null)}>
+      <View style={styles.modalBackdrop}>
+        <Card style={styles.restockModal}>
+          <View style={styles.restockHeader}><View style={styles.restockIcon}><Ionicons name="layers-outline" size={22} color={colors.primary} /></View><View style={styles.flex}><Text style={styles.restockTitle}>Tambah stok</Text><Text style={styles.restockCopy}>{restockTarget?.title}</Text></View></View>
+          <Field label="Jumlah stok tambahan" value={restockQty} onChangeText={value => setRestockQty(value.replace(/[^0-9]/g, ''))} keyboardType="number-pad" placeholder="10" />
+          <Text style={styles.restockHint}>Stok ditambahkan ke katalog yang sama. Kamu tidak perlu membuat listing baru.</Text>
+          <View style={styles.restockActions}><View style={styles.flex}><Button title="Batal" variant="secondary" onPress={() => setRestockTarget(null)} /></View><View style={styles.flex}><Button title="Tambah stok" icon="add" loading={Boolean(restockTarget && workingId === restockTarget.id)} onPress={restock} /></View></View>
+        </Card>
+      </View>
+    </Modal>
+
+    <FeedbackDialog
+      visible={Boolean(target)}
+      tone={target?.action === 'archive' ? 'danger' : 'warning'}
+      title={target?.action === 'archive' ? 'Arsipkan listing?' : 'Nonaktifkan listing?'}
+      message={target ? (target.action === 'archive'
+        ? `${target.title} akan dipindahkan dari Etalase saya tanpa menghapus histori transaksi. Data tetap tersedia untuk audit dan transaksi lama.`
+        : `${target.title} akan berhenti tampil di marketplace. Setelah nonaktif, listing dapat kamu hapus dari etalase.`) : ''}
+      primaryLabel={target?.action === 'archive' ? 'Arsipkan' : 'Nonaktifkan'}
+      secondaryLabel="Batal"
+      loading={Boolean(target && workingId === target.id)}
+      onClose={() => setTarget(null)}
+      onSecondary={() => setTarget(null)}
+      onPrimary={remove}
+    />
     <FeedbackDialog visible={Boolean(feedback)} tone={feedback?.tone || 'success'} title={feedback?.title || ''} message={feedback?.message || ''} onClose={() => setFeedback(null)} />
   </Screen>;
 }
@@ -278,7 +428,41 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   actionGhost: { minHeight: 38, paddingHorizontal: 11, borderRadius: 9, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 5 },
   actionGhostText: { fontFamily: 'PoppinsSemiBold', fontSize: 11.5, color: colors.textSoft },
+  archive: { minHeight: 38, paddingHorizontal: 11, borderRadius: 9, borderWidth: 1, borderColor: '#F2C3C3', backgroundColor: colors.dangerSoft, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  archiveText: { fontFamily: 'PoppinsSemiBold', fontSize: 11.5, color: colors.danger },
   edit: { minHeight: 38, paddingHorizontal: 11, borderRadius: 9, backgroundColor: colors.primarySoft, flexDirection: 'row', alignItems: 'center', gap: 5 },
   editText: { fontFamily: 'PoppinsSemiBold', fontSize: 11.5, color: colors.primary },
   power: { width: 38, height: 38, borderRadius: 9, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  modalBackdrop: { flex: 1, padding: 18, backgroundColor: 'rgba(10,26,41,.55)', alignItems: 'center', justifyContent: 'center' },
+  ordersModal: { width: '100%', maxWidth: 720, maxHeight: '86%', gap: 15, padding: 20 },
+  ordersHeader: { flexDirection: 'row', alignItems: 'center', gap: 11 },
+  modalClose: { width: 36, height: 36, borderRadius: 9, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  ordersStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  orderStat: { flex: 1, minWidth: 112, padding: 11, borderRadius: 11, backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border },
+  orderStatWide: { minWidth: 165 },
+  orderStatValue: { fontFamily: 'PoppinsBold', fontSize: 17, color: colors.text },
+  orderStatLabel: { marginTop: 1, fontFamily: 'PoppinsRegular', fontSize: 10.5, color: colors.muted },
+  minimumBox: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, backgroundColor: '#F8FAFD', borderWidth: 1, borderColor: colors.border },
+  minimumText: { flex: 1, fontFamily: 'PoppinsMedium', fontSize: 11.5, color: colors.textSoft },
+  ordersScroll: { maxHeight: 380 },
+  ordersList: { gap: 7, paddingVertical: 1 },
+  ordersEmpty: { minHeight: 180, alignItems: 'center', justifyContent: 'center', gap: 5 },
+  ordersEmptyTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 14, color: colors.text },
+  ordersEmptyCopy: { maxWidth: 360, fontFamily: 'PoppinsRegular', fontSize: 11.5, color: colors.muted, textAlign: 'center' },
+  orderRow: { minHeight: 66, padding: 10, borderRadius: 11, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  orderAvatar: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  orderAvatarText: { fontFamily: 'PoppinsBold', fontSize: 12, color: colors.primary },
+  orderBuyer: { fontFamily: 'PoppinsSemiBold', fontSize: 12.5, color: colors.text },
+  orderMeta: { marginTop: 1, fontFamily: 'PoppinsRegular', fontSize: 10.5, color: colors.muted },
+  orderEnd: { alignItems: 'flex-end', gap: 1 },
+  orderAmount: { fontFamily: 'PoppinsSemiBold', fontSize: 11.5, color: colors.text },
+  orderStatus: { fontFamily: 'PoppinsMedium', fontSize: 10, color: colors.primary },
+  restockModal: { width: '100%', maxWidth: 460, gap: 16, padding: 20 },
+  restockHeader: { flexDirection: 'row', alignItems: 'center', gap: 11 },
+  restockIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  restockTitle: { fontFamily: 'PoppinsBold', fontSize: 18, color: colors.text },
+  restockCopy: { fontFamily: 'PoppinsRegular', fontSize: 11.5, color: colors.muted, marginTop: 1 },
+  restockHint: { fontFamily: 'PoppinsRegular', fontSize: 11.5, lineHeight: 18, color: colors.muted },
+  restockActions: { flexDirection: 'row', gap: 9 },
+  flex: { flex: 1 },
 });

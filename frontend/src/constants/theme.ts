@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 export const colors = {
   primary: '#1167D8',
   primaryDark: '#0C4FA8',
@@ -41,21 +43,25 @@ export const radius = {
   pill: 999,
 };
 
-export const shadow = {
-  shadowColor: '#213044',
-  shadowOpacity: 0.06,
-  shadowRadius: 16,
-  shadowOffset: { width: 0, height: 6 },
-  elevation: 2,
-};
+export const shadow = Platform.OS === 'web'
+  ? { boxShadow: '0px 6px 16px rgba(33, 48, 68, 0.06)' }
+  : {
+      shadowColor: '#213044',
+      shadowOpacity: 0.06,
+      shadowRadius: 16,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 2,
+    };
 
-export const shadowSoft = {
-  shadowColor: '#213044',
-  shadowOpacity: 0.045,
-  shadowRadius: 10,
-  shadowOffset: { width: 0, height: 3 },
-  elevation: 1,
-};
+export const shadowSoft = Platform.OS === 'web'
+  ? { boxShadow: '0px 3px 10px rgba(33, 48, 68, 0.045)' }
+  : {
+      shadowColor: '#213044',
+      shadowOpacity: 0.045,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 3 },
+      elevation: 1,
+    };
 
 export const layout = {
   contentMaxWidth: 1280,

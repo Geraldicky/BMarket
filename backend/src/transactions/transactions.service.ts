@@ -69,6 +69,7 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
       listingTitleSnapshot?: string | null;
       listingImageSnapshot?: string | null;
       listingTypeSnapshot?: unknown | null;
+      listingModeSnapshot?: unknown | null;
       listingConditionSnapshot?: unknown | null;
     };
     const safeTransaction = { ...snapshot };
@@ -80,6 +81,7 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
         ...transaction.listing,
         ...(snapshot.listingTitleSnapshot ? { title: snapshot.listingTitleSnapshot } : {}),
         ...(snapshot.listingTypeSnapshot ? { type: snapshot.listingTypeSnapshot } : {}),
+        ...(snapshot.listingModeSnapshot ? { mode: snapshot.listingModeSnapshot } : {}),
         ...(snapshot.listingTypeSnapshot ? { condition: snapshot.listingConditionSnapshot ?? null } : {}),
         images: snapshot.listingImageSnapshot ? [snapshot.listingImageSnapshot] : parsedImages,
       },
@@ -90,7 +92,7 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
     return this.serializable(async tx => {
       const current = await tx.transaction.findUnique({
         where: { id },
-        include: { listing: { select: { type: true, status: true } }, dispute: true },
+        include: { listing: { select: { type: true, status: true, mode: true, preorderStatus: true, preorderDeadline: true, stockLeft: true } }, dispute: true },
       });
       if (!current || current.status !== 'PENDING' || !current.reservationExpiresAt) return false;
       if (current.reservationExpiresAt.getTime() > Date.now()) return false;
@@ -114,7 +116,7 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
           where: { id: current.listingId },
           data: {
             stockLeft: { increment: current.quantity },
-            ...(current.listing.status === 'SOLD' ? { status: 'ACTIVE' as const } : {}),
+            ...(current.listing.mode === 'ONE_OFF' && current.listing.status === 'SOLD' ? { status: 'ACTIVE' as const } : {}),
           },
         });
       }
@@ -146,9 +148,16 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
     await this.expirePendingReservations();
     const listing = await this.prisma.listing.findUnique({
       where: { id: listingId },
-      select: { id: true, status: true, fulfillmentMethods: true },
+      select: { id: true, status: true, mode: true, stockLeft: true, preorderStatus: true, preorderDeadline: true, fulfillmentMethods: true },
     });
     if (!listing || listing.status !== 'ACTIVE') throw new NotFoundException('Listing tidak tersedia.');
+    if (listing.mode === 'STOCKED' && listing.stockLeft === 0) throw new BadRequestException('Stok produk sedang habis.');
+    if (listing.mode === 'PREORDER') {
+      if (listing.preorderStatus !== 'OPEN' || !listing.preorderDeadline || listing.preorderDeadline.getTime() <= Date.now()) {
+        throw new BadRequestException('Pre-order sudah ditutup.');
+      }
+      if ((listing.stockLeft ?? 0) < 1) throw new BadRequestException('Kuota pre-order sudah penuh.');
+    }
     return {
       fulfillmentMethods: listing.fulfillmentMethods,
       couriers: Object.entries(this.couriers).map(([provider, detail]) => ({ provider, ...detail })),
@@ -208,6 +217,13 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
       const listing = await tx.listing.findUnique({ where: { id: dto.listingId } });
       if (!listing || listing.status !== 'ACTIVE') throw new BadRequestException('Listing tidak tersedia.');
       if (listing.sellerId === buyerId) throw new BadRequestException('Anda tidak dapat membeli listing sendiri.');
+      if (listing.mode === 'STOCKED' && listing.stockLeft === 0) throw new BadRequestException('Stok produk sedang habis.');
+      if (listing.mode === 'PREORDER') {
+        if (listing.preorderStatus !== 'OPEN' || !listing.preorderDeadline || listing.preorderDeadline.getTime() <= Date.now()) {
+          throw new BadRequestException('Pre-order sudah ditutup.');
+        }
+        if ((listing.stockLeft ?? 0) < 1) throw new BadRequestException('Kuota pre-order sudah penuh.');
+      }
       if (!listing.fulfillmentMethods.includes(dto.fulfillmentMethod)) {
         throw new BadRequestException('Metode penyerahan tidak tersedia untuk listing ini.');
       }
@@ -234,14 +250,21 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
       }
 
       const quantity = dto.quantity ?? 1;
+      if (!Number.isInteger(quantity) || quantity < 1) throw new BadRequestException('Jumlah pembelian minimal 1.');
+      if (listing.mode === 'ONE_OFF' && quantity !== 1) throw new BadRequestException('Barang satuan hanya dapat dibeli 1 unit.');
+      if (listing.mode === 'PREORDER' && listing.preorderMaxPerBuyer && quantity > listing.preorderMaxPerBuyer) {
+        throw new BadRequestException(`Maksimal ${listing.preorderMaxPerBuyer} unit per buyer untuk pre-order ini.`);
+      }
       if (listing.type === 'PRODUCT' && listing.stockLeft !== null) {
         const reserved = await tx.listing.updateMany({
           where: { id: listing.id, status: 'ACTIVE', stockLeft: { gte: quantity } },
           data: { stockLeft: { decrement: quantity } },
         });
-        if (!reserved.count) throw new BadRequestException('Stok tidak cukup. Muat ulang listing dan coba lagi.');
+        if (!reserved.count) throw new BadRequestException(listing.mode === 'PREORDER' ? 'Kuota pre-order tidak cukup.' : 'Stok tidak cukup. Muat ulang listing dan coba lagi.');
         const remaining = listing.stockLeft - quantity;
-        if (remaining === 0) await tx.listing.update({ where: { id: listing.id }, data: { status: 'SOLD' } });
+        if (remaining === 0 && listing.mode === 'ONE_OFF') {
+          await tx.listing.update({ where: { id: listing.id }, data: { status: 'SOLD' } });
+        }
       }
 
       const setting = await tx.commissionSetting.findFirst({ orderBy: { createdAt: 'desc' } });
@@ -262,6 +285,7 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
           listingTitleSnapshot: listing.title,
           listingImageSnapshot: this.parseImages(listing.images)[0] ?? null,
           listingTypeSnapshot: listing.type,
+          listingModeSnapshot: listing.mode,
           listingConditionSnapshot: listing.condition,
           price,
           quantity,
@@ -341,7 +365,7 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
     const result = await this.serializable(async tx => {
       const current = await tx.transaction.findUnique({
         where: { id },
-        include: { listing: { select: { type: true, status: true } }, dispute: true },
+        include: { listing: { select: { type: true, status: true, mode: true, preorderStatus: true, preorderDeadline: true, stockLeft: true } }, dispute: true },
       });
       if (!current) throw new NotFoundException('Transaksi tidak ditemukan.');
       const escrowTotal = current.grandTotal || current.totalPrice;
@@ -357,6 +381,9 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
       }
       if (current.fulfillmentMethod === 'CAMPUS_MEETUP' && status === 'CONFIRMED') {
         throw new BadRequestException('Meetup tidak perlu dikonfirmasi. Atur waktu dan lokasi melalui chat, lalu selesaikan menggunakan kode serah-terima buyer.');
+      }
+      if (current.listing.mode === 'PREORDER' && status === 'CONFIRMED' && !['READY', 'COMPLETED'].includes(current.listing.preorderStatus || '')) {
+        throw new BadRequestException('Pre-order belum siap. Tandai batch pre-order sebagai siap sebelum memproses pengiriman.');
       }
       if (!canTransition(current.status, status, actor)) {
         throw new ForbiddenException(`Anda tidak dapat mengubah status ${current.status} menjadi ${status}.`);
@@ -391,6 +418,9 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
       if (!changed.count) throw new BadRequestException('Status transaksi sudah berubah. Muat ulang halaman.');
 
       if (status === 'COMPLETED') {
+        if (current.listing.mode === 'PREORDER' && !['READY', 'COMPLETED'].includes(current.listing.preorderStatus || '')) {
+          throw new BadRequestException('Pre-order belum ditandai siap oleh seller.');
+        }
         if (current.fulfillmentMethod === 'CAMPUS_MEETUP') {
           throw new BadRequestException('Meetup harus diselesaikan menggunakan kode serah-terima buyer.');
         }
@@ -423,7 +453,7 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
             where: { id: current.listingId },
             data: {
               stockLeft: { increment: current.quantity },
-              ...(current.listing.status === 'SOLD' ? { status: 'ACTIVE' as const } : {}),
+              ...(current.listing.mode === 'ONE_OFF' && current.listing.status === 'SOLD' ? { status: 'ACTIVE' as const } : {}),
             },
           });
         }
@@ -446,10 +476,13 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
   }
 
   async issueHandoverCode(id: string, buyerId: string) {
-    const transaction = await this.prisma.transaction.findUnique({ where: { id }, include: { dispute: true } });
+    const transaction = await this.prisma.transaction.findUnique({ where: { id }, include: { dispute: true, listing: { select: { mode: true, preorderStatus: true } } } });
     if (!transaction) throw new NotFoundException('Transaksi tidak ditemukan.');
     if (transaction.buyerId !== buyerId) throw new ForbiddenException('Hanya buyer yang dapat membuat kode serah-terima.');
     if (transaction.dispute && ['OPEN','IN_REVIEW'].includes(transaction.dispute.status)) throw new BadRequestException('Kode serah-terima dinonaktifkan selama sengketa berlangsung.');
+    if (transaction.listing.mode === 'PREORDER' && !['READY', 'COMPLETED'].includes(transaction.listing.preorderStatus || '')) {
+      throw new BadRequestException('Kode serah-terima baru tersedia setelah seller menandai pre-order siap diambil.');
+    }
     if (transaction.fulfillmentMethod !== 'CAMPUS_MEETUP' || !['PAID', 'CONFIRMED'].includes(transaction.status)) {
       throw new BadRequestException('Kode hanya tersedia untuk meetup yang sudah dibayar dan dananya berada di escrow.');
     }
@@ -465,10 +498,13 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
 
   async confirmHandover(id: string, sellerId: string, code: string) {
     const result = await this.serializable(async tx => {
-      const current = await tx.transaction.findUnique({ where: { id }, include: { dispute: true } });
+      const current = await tx.transaction.findUnique({ where: { id }, include: { dispute: true, listing: { select: { mode: true, preorderStatus: true } } } });
       if (!current) throw new NotFoundException('Transaksi tidak ditemukan.');
       if (current.sellerId !== sellerId) throw new ForbiddenException('Hanya seller yang dapat mengonfirmasi kode serah-terima.');
       if (current.dispute && ['OPEN','IN_REVIEW'].includes(current.dispute.status)) throw new BadRequestException('Transaksi sedang dalam sengketa. Penyelesaian meetup dikunci.');
+      if (current.listing.mode === 'PREORDER' && !['READY', 'COMPLETED'].includes(current.listing.preorderStatus || '')) {
+        throw new BadRequestException('Pre-order belum ditandai siap diambil oleh seller.');
+      }
       if (current.fulfillmentMethod !== 'CAMPUS_MEETUP' || !['PAID', 'CONFIRMED'].includes(current.status)) {
         throw new BadRequestException('Transaksi ini tidak sedang menunggu serah-terima meetup.');
       }

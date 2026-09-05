@@ -17,6 +17,7 @@ const stats = [
 ];
 
 const actions = [
+  { label: 'Pantau semua listing', icon: 'storefront-outline' as const, route: '/(admin)/(tabs)/products' },
   { label: 'Tinjau laporan', icon: 'flag-outline' as const, route: '/(admin)/(tabs)/moderation' },
   { label: 'Lihat sengketa', icon: 'warning-outline' as const, route: '/(admin)/(tabs)/disputes' },
   { label: 'Kelola pengguna', icon: 'people-outline' as const, route: '/(admin)/(tabs)/users' },
@@ -36,6 +37,23 @@ export default function AdminDashboard() {
         <View style={styles.grid}>
           {stats.map(item => <AdminStatCard key={item.key} label={item.label} caption={item.caption} icon={item.icon} color={item.color} background={item.bg} value={item.key === 'totalRevenue' ? money(data?.[item.key]) : Number(data?.[item.key] || 0)} />)}
         </View>
+        <Card style={styles.monitorCard}>
+          <AdminSectionTitle
+            title="Pemantauan listing"
+            subtitle="Periksa seluruh barang dan jasa secara proaktif, tanpa menunggu laporan dari pengguna."
+            icon="storefront-outline"
+            right={<Pressable onPress={() => router.push('/(admin)/(tabs)/products' as any)} style={({ pressed }) => [styles.monitorButton, pressed && { opacity: .65 }]}><Text style={styles.monitorButtonText}>Buka semua listing</Text><Ionicons name="arrow-forward" size={16} color={colors.primary} /></Pressable>}
+          />
+          <View style={styles.monitorMetrics}>
+            <View style={styles.monitorMetric}><Text style={styles.monitorMetricValue}>{Number(data?.allListings || 0)}</Text><Text style={styles.monitorMetricLabel}>Semua listing</Text></View>
+            <View style={styles.monitorDivider} />
+            <View style={styles.monitorMetric}><Text style={[styles.monitorMetricValue, { color: colors.success }]}>{Number(data?.totalListings || 0)}</Text><Text style={styles.monitorMetricLabel}>Aktif</Text></View>
+            <View style={styles.monitorDivider} />
+            <View style={styles.monitorMetric}><Text style={[styles.monitorMetricValue, { color: colors.warning }]}>{Number(data?.hiddenListings || 0)}</Text><Text style={styles.monitorMetricLabel}>Disembunyikan</Text></View>
+            <View style={styles.monitorDivider} />
+            <View style={styles.monitorMetric}><Text style={[styles.monitorMetricValue, { color: colors.danger }]}>{Number(data?.removedListings || 0)}</Text><Text style={styles.monitorMetricLabel}>Dihapus admin</Text></View>
+          </View>
+        </Card>
         <View style={styles.lowerGrid}>
           <Card style={styles.healthCard}>
             <AdminSectionTitle title="Status operasional" subtitle="Ringkasan area yang perlu dipantau admin." icon="pulse-outline" />
@@ -68,6 +86,14 @@ export default function AdminDashboard() {
 
 const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
+  monitorCard: { gap: 16 },
+  monitorButton: { minHeight: 40, paddingHorizontal: 13, borderRadius: 10, borderWidth: 1, borderColor: '#CFE0F4', backgroundColor: colors.primarySoft, flexDirection: 'row', alignItems: 'center', gap: 7 },
+  monitorButtonText: { color: colors.primary, fontFamily: 'PoppinsSemiBold', fontSize: 12 },
+  monitorMetrics: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', padding: 14, borderRadius: 12, backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border },
+  monitorMetric: { minWidth: 130, flex: 1, paddingHorizontal: 14, paddingVertical: 5 },
+  monitorMetricValue: { color: colors.primary, fontFamily: 'PoppinsBold', fontSize: 24, lineHeight: 30 },
+  monitorMetricLabel: { color: colors.muted, fontFamily: 'PoppinsMedium', fontSize: 11.5, marginTop: 1 },
+  monitorDivider: { width: 1, alignSelf: 'stretch', minHeight: 44, backgroundColor: colors.border },
   lowerGrid: { flexDirection: 'row', alignItems: 'stretch', flexWrap: 'wrap', gap: 14 },
   healthCard: { flex: 1.25, minWidth: 420, gap: 13 },
   priorityCard: { flex: .9, minWidth: 320, gap: 8 },

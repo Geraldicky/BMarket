@@ -13,6 +13,7 @@ const categoryIcons: Record<string, React.ComponentProps<typeof Ionicons>['name'
 const categoryLabels: Record<string, string> = { ELECTRONICS: 'Elektronik', BOOKS: 'Buku', FASHION: 'Fashion', FOOD: 'Makanan', SERVICES: 'Jasa', SPORTS: 'Olahraga', OTHER: 'Lainnya' };
 const conditionLabels: Record<string, string> = { NEW: 'Baru', LIKE_NEW: 'Seperti baru', GOOD: 'Kondisi baik', FAIR: 'Cukup baik' };
 const placeholderColors: Record<string, string> = { ELECTRONICS: '#EAF3FF', BOOKS: '#FFF3E7', FASHION: '#F7EEFF', FOOD: '#FFF0EE', SERVICES: '#EAF8F4', SPORTS: '#FFF7DF', OTHER: '#F0F3F6' };
+const modeLabels: Record<string, string> = { ONE_OFF: 'Satuan', STOCKED: 'Ready stock', PREORDER: 'Pre-order', SERVICE: 'Jasa' };
 
 export function ListingCard({ item, onPress, style, compact = false, saved = false, onToggleSaved, storefront = false }: { item: Listing; onPress: () => void; style?: StyleProp<ViewStyle>; compact?: boolean; saved?: boolean; onToggleSaved?: () => void; storefront?: boolean }) {
   const currentUserId = useAuth(state => state.user?.id);
@@ -21,6 +22,12 @@ export function ListingCard({ item, onPress, style, compact = false, saved = fal
   const cover = item.images?.[0];
   const showImage = Boolean(cover && failedUri !== cover);
   const isOwnListing = Boolean(currentUserId && item.sellerId === currentUserId);
+  const modeLabel = modeLabels[item.mode] || (item.type === 'SERVICE' ? 'Jasa' : 'Barang');
+  const availability = item.mode === 'PREORDER'
+    ? (item.preorderAccepting ? `PO · sisa ${item.stockLeft ?? 0}` : 'PO ditutup')
+    : item.mode === 'STOCKED'
+      ? (item.stockLeft === 0 ? 'Stok habis' : `Stok ${item.stockLeft ?? 0}`)
+      : item.mode === 'ONE_OFF' ? '1 unit' : null;
   return (
     <View style={[styles.card, storefront && styles.cardStorefront, hovered && (storefront ? styles.hoveredStorefront : styles.hovered), style]}>
       <Pressable
@@ -33,12 +40,12 @@ export function ListingCard({ item, onPress, style, compact = false, saved = fal
       >
         <View style={styles.media}>
           {showImage ? <Image source={cover} style={[styles.image, compact && styles.imageCompact, storefront && styles.imageStorefront]} contentFit="cover" transition={180} cachePolicy="memory-disk" onError={() => setFailedUri(cover!)} /> : <View style={[styles.image, compact && styles.imageCompact, storefront && styles.imageStorefront, styles.placeholder, { backgroundColor: storefront ? (placeholderColors[item.category] || '#F0F3F6') : '#E8EEF5' }]}><View style={[styles.placeholderRing, compact && styles.placeholderRingCompact, storefront && styles.placeholderRingStorefront]}><Ionicons name={categoryIcons[item.category] || 'storefront-outline'} size={compact ? 29 : 40} color={storefront ? '#607A96' : '#637F99'} /></View></View>}
-          <View style={[styles.typeBadge, compact && styles.typeBadgeCompact, storefront && styles.typeBadgeStorefront]}><Ionicons name={item.type === 'SERVICE' ? 'sparkles-outline' : 'bag-handle-outline'} size={11} color={storefront ? '#1769C2' : colors.primaryDark} /><Text style={[styles.typeText, storefront && styles.typeTextStorefront]}>{item.type === 'SERVICE' ? 'Jasa' : 'Barang'}</Text></View>
+          <View style={[styles.typeBadge, compact && styles.typeBadgeCompact, storefront && styles.typeBadgeStorefront]}><Ionicons name={item.mode === 'PREORDER' ? 'calendar-outline' : item.mode === 'STOCKED' ? 'layers-outline' : item.mode === 'SERVICE' ? 'sparkles-outline' : 'bag-handle-outline'} size={11} color={storefront ? '#1769C2' : colors.primaryDark} /><Text style={[styles.typeText, storefront && styles.typeTextStorefront]}>{modeLabel}</Text></View>
         </View>
         <View style={[styles.body, compact && styles.bodyCompact, storefront && styles.bodyStorefront]}>
           <Text numberOfLines={2} style={[styles.title, compact && styles.titleCompact, storefront && styles.titleStorefront]}>{item.title}</Text>
           <Text numberOfLines={1} style={[styles.price, compact && styles.priceCompact, storefront && styles.priceStorefront]}>{money(item.price)}</Text>
-          <Text numberOfLines={1} style={[styles.meta, storefront && styles.metaStorefront]}>{categoryLabels[item.category] || item.category}{item.condition ? ' · ' + (conditionLabels[item.condition] || item.condition) : ''}</Text>
+          <Text numberOfLines={1} style={[styles.meta, storefront && styles.metaStorefront]}>{categoryLabels[item.category] || item.category}{availability ? ' · ' + availability : item.condition ? ' · ' + (conditionLabels[item.condition] || item.condition) : ''}</Text>
           <View style={[styles.sellerRow, compact && styles.sellerRowCompact, storefront && styles.sellerRowStorefront]}><View style={[styles.avatar, storefront && styles.avatarStorefront]}><Text style={[styles.avatarText, storefront && styles.avatarTextStorefront]}>{item.seller?.name?.[0]?.toUpperCase() || 'B'}</Text></View><Text numberOfLines={1} style={[styles.seller, storefront && styles.sellerStorefront]}>{item.seller?.name || 'Binusian'}</Text><Ionicons name="checkmark-circle" size={13} color={storefront ? '#1769C2' : colors.primary} /></View>
         </View>
       </Pressable>

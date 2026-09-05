@@ -51,7 +51,7 @@ export default function ModerationScreen() {
             return <View key={report.id} style={styles.reportCard}>
               <View style={styles.reportHeader}><AdminStatusPill label={report.status === 'OPEN' ? 'Laporan baru' : 'Sedang ditinjau'} tone={report.status === 'OPEN' ? 'danger' : 'warning'} /><Text style={styles.date}>{date(report.createdAt)}</Text></View>
               <View style={styles.listingRow}>
-                <View style={styles.media}>{listing?.images?.[0] ? <Image source={{ uri: listing.images[0] }} style={styles.image} /> : <Ionicons name="cube-outline" size={28} color={colors.muted} />}</View>
+                <View style={styles.media}>{listing?.images?.[0] ? <Image source={{ uri: listing.images[0] }} style={styles.image} resizeMode="cover" /> : <Ionicons name="cube-outline" size={28} color={colors.muted} />}</View>
                 <View style={styles.listingBody}><Text style={styles.listingLabel}>LISTING DILAPORKAN</Text><Text numberOfLines={2} style={styles.listingTitle}>{listing?.title || 'Listing sudah tidak tersedia'}</Text>{listing ? <Text style={styles.listingMeta}>{money(listing.price)} · {listing.type === 'SERVICE' ? 'Jasa' : 'Barang'} · {listing.seller?.name || 'Seller'}</Text> : null}</View>
                 {listing ? <AdminStatusPill label={listing.status} tone={listing.status === 'ACTIVE' ? 'success' : 'danger'} /> : null}
               </View>
@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
   date: { fontFamily: 'PoppinsRegular', fontSize: 11.5, color: colors.muted },
   listingRow: { flexDirection: 'row', alignItems: 'center', gap: 14, flexWrap: 'wrap' },
   media: { width: 90, height: 74, borderRadius: 12, backgroundColor: colors.surfaceMuted, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  image: { width: '100%', height: '100%', resizeMode: 'cover' },
+  image: { width: '100%', height: '100%' },
   listingBody: { flex: 1, minWidth: 220, gap: 2 },
   listingLabel: { fontFamily: 'PoppinsBold', fontSize: 10.5, letterSpacing: .55, color: colors.muted },
   listingTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 15, color: colors.text },

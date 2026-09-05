@@ -111,13 +111,26 @@ model Listing {
   price       Decimal       @db.Decimal(12, 2)
   category    Category
   type        ListingType   @default(PRODUCT)
+  // Pola penjualan. Dipisahkan dari type agar barang one-off, stok, dan PO
+  // dapat memiliki lifecycle berbeda tanpa memecah kompatibilitas PRODUCT/SERVICE.
+  mode        ListingMode   @default(ONE_OFF)
   images      String        @default("[]") @db.Text
   status      ListingStatus @default(ACTIVE)
   condition   Condition?
   // Stock management — hanya berlaku untuk tipe PRODUCT
   // Jika null = tidak dibatasi (untuk SERVICE)
   stock       Int? // Stok awal yang diset seller
-  stockLeft   Int? // Stok tersisa (berkurang tiap transaksi PAID)
+  stockLeft   Int? // Stok/kuota tersisa (direservasi saat checkout)
+  // Field khusus PREORDER. stock/stockLeft tetap dipakai sebagai kapasitas agar
+  // reservasi checkout tetap atomic dan tidak oversell.
+  preorderStatus         PreorderStatus?
+  preorderDeadline       DateTime?
+  preorderReadyAt        DateTime?
+  preorderQuota          Int?
+  preorderMinOrder       Int?
+  preorderMaxPerBuyer    Int?
+  preorderPickupLocation String?
+  preorderPickupNote     String? @db.Text
   // Seller menentukan metode penyerahan yang tersedia untuk listing ini.
   // Buyer memilih salah satunya saat checkout.
   fulfillmentMethods FulfillmentMethod[] @default([CAMPUS_MEETUP, INSTANT_COURIER])
@@ -125,6 +138,8 @@ model Listing {
   seller      User          @relation(fields: [sellerId], references: [id])
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+  // Seller dapat menghapus listing INACTIVE dari etalase tanpa merusak histori transaksi.
+  sellerArchivedAt DateTime?
 
   transactions   Transaction[]
   wishlistedBy    Wishlist[]
@@ -133,6 +148,9 @@ model Listing {
   @@index([status, createdAt])
   @@index([category, status])
   @@index([sellerId, createdAt])
+  @@index([sellerId, sellerArchivedAt, createdAt])
+  @@index([mode, status, createdAt])
+  @@index([preorderStatus, preorderDeadline])
   @@map("listings")
 }
 
@@ -149,6 +167,22 @@ enum Category {
 enum ListingType {
   PRODUCT
   SERVICE
+}
+
+enum ListingMode {
+  ONE_OFF
+  STOCKED
+  PREORDER
+  SERVICE
+}
+
+enum PreorderStatus {
+  OPEN
+  CLOSED
+  PROCESSING
+  READY
+  COMPLETED
+  CANCELLED
 }
 
 // Komentar inline pada nilai enum tidak didukung Prisma,
@@ -227,6 +261,7 @@ model Transaction {
   listingTitleSnapshot     String?
   listingImageSnapshot     String?
   listingTypeSnapshot      ListingType?
+  listingModeSnapshot      ListingMode?
   listingConditionSnapshot Condition?
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt

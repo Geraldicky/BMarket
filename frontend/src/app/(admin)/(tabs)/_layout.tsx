@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs, router, useSegments } from 'expo-router';
 import type { ComponentProps } from 'react';
-import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions, type ColorValue } from 'react-native';
 import { colors, shadowSoft } from '@/constants/theme';
 import { useAuth } from '@/store/auth';
 
@@ -10,6 +10,7 @@ type IconName = ComponentProps<typeof Ionicons>['name'];
 type NavItem = { route: string; label: string; icon: IconName; segment?: string };
 const navItems: NavItem[] = [
   { route: '/(admin)/(tabs)', label: 'Dashboard', icon: 'grid-outline' },
+  { route: '/(admin)/(tabs)/products', label: 'Listing', icon: 'storefront-outline', segment: 'products' },
   { route: '/(admin)/(tabs)/moderation', label: 'Moderasi', icon: 'shield-checkmark-outline', segment: 'moderation' },
   { route: '/(admin)/(tabs)/users', label: 'Pengguna', icon: 'people-outline', segment: 'users' },
   { route: '/(admin)/(tabs)/disputes', label: 'Sengketa', icon: 'warning-outline', segment: 'disputes' },
@@ -17,8 +18,10 @@ const navItems: NavItem[] = [
   { route: '/(admin)/(tabs)/settings', label: 'Pengaturan', icon: 'settings-outline', segment: 'settings' },
 ];
 
-const icon = (name: IconName) => function TabIcon({ color, size }: { color: string; size: number }) {
-  return <Ionicons name={name} size={size} color={color} />;
+type TabBarIconProps = { focused: boolean; color: ColorValue; size: number };
+
+const icon = (name: IconName) => function TabIcon({ color, size }: TabBarIconProps) {
+  return <Ionicons name={name} size={size} color={color as string} />;
 };
 
 function Screens({ desktop }: { desktop: boolean }) {
@@ -32,6 +35,7 @@ function Screens({ desktop }: { desktop: boolean }) {
       tabBarStyle: desktop ? { display: 'none' } : { height: 74, paddingTop: 7, paddingBottom: 9, borderTopColor: colors.border, backgroundColor: colors.surface },
     }}>
       <Tabs.Screen name="index" options={{ title: 'Dashboard', tabBarIcon: icon('grid-outline') }} />
+      <Tabs.Screen name="products" options={{ title: 'Listing', tabBarIcon: icon('storefront-outline') }} />
       <Tabs.Screen name="moderation" options={{ title: 'Moderasi', tabBarIcon: icon('shield-checkmark-outline') }} />
       <Tabs.Screen name="users" options={{ title: 'Pengguna', tabBarIcon: icon('people-outline') }} />
       <Tabs.Screen name="disputes" options={{ title: 'Sengketa', tabBarIcon: icon('warning-outline') }} />

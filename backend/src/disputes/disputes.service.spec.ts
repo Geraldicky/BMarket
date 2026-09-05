@@ -100,7 +100,7 @@ describe('DisputesService — escrow safety', () => {
     const order = {
       id: 'tx-1', buyerId: 'buyer-1', sellerId: 'seller-1', listingId: 'listing-1', status: 'PAID', isEscrowHeld: true,
       grandTotal: 100000, totalPrice: 100000, sellerReceives: 95000, quantity: 1,
-      listingTypeSnapshot: 'PRODUCT', listing: { type: 'PRODUCT', status: 'SOLD' },
+      listingTypeSnapshot: 'PRODUCT', listing: { type: 'PRODUCT', mode: 'ONE_OFF', status: 'SOLD' },
     };
     const tx = {
       dispute: {
@@ -136,7 +136,7 @@ describe('DisputesService — escrow safety', () => {
     const order = {
       id: 'tx-1', buyerId: 'buyer-1', sellerId: 'seller-1', listingId: 'listing-1', status: 'PAID', isEscrowHeld: true,
       grandTotal: 100000, totalPrice: 100000, sellerReceives: 95000, quantity: 1,
-      listingTypeSnapshot: 'PRODUCT', listing: { type: 'PRODUCT', status: 'SOLD' },
+      listingTypeSnapshot: 'PRODUCT', listing: { type: 'PRODUCT', mode: 'ONE_OFF', status: 'SOLD' },
     };
     const tx = {
       dispute: {
@@ -167,7 +167,7 @@ describe('DisputesService — escrow safety', () => {
     const order = {
       id: 'tx-1', buyerId: 'buyer-1', sellerId: 'seller-1', listingId: 'listing-1', status: 'PAID', isEscrowHeld: true,
       grandTotal: 100000, totalPrice: 100000, sellerReceives: 95000, quantity: 1,
-      listingTypeSnapshot: 'PRODUCT', listing: { type: 'PRODUCT', status: 'SOLD' },
+      listingTypeSnapshot: 'PRODUCT', listing: { type: 'PRODUCT', mode: 'ONE_OFF', status: 'SOLD' },
     };
     const tx = {
       dispute: {

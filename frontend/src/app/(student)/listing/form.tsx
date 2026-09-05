@@ -5,10 +5,11 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { DateTimePickerField, formatLocalDateTimeValue, parseLocalDateTimeValue } from '@/components/date-time-picker-field';
 import { Button, Card, FeedbackDialog, Field, InlineAlert, Loader, Screen, Title } from '@/components/ui';
 import { colors, radius } from '@/constants/theme';
 import { endpoints, errorMessage } from '@/lib/api';
-import type { FulfillmentMethod } from '@/types';
+import type { FulfillmentMethod, ListingMode } from '@/types';
 
 const categories = ['ELECTRONICS', 'BOOKS', 'FASHION', 'FOOD', 'SERVICES', 'SPORTS', 'OTHER'];
 const categoryLabels: Record<string, string> = {
@@ -24,9 +25,16 @@ type ListingForm = {
   description: string;
   price: string;
   category: string;
-  type: 'PRODUCT' | 'SERVICE';
+  mode: ListingMode;
   condition: string;
   stock: string;
+  preorderDeadline: string;
+  preorderReadyAt: string;
+  preorderQuota: string;
+  preorderMinOrder: string;
+  preorderMaxPerBuyer: string;
+  preorderPickupLocation: string;
+  preorderPickupNote: string;
 };
 
 type ListingPhoto = {
@@ -39,7 +47,9 @@ type FormErrors = Partial<Record<keyof ListingForm | 'photos' | 'fulfillmentMeth
 
 const initialForm: ListingForm = {
   title: '', description: '', price: '', category: 'OTHER',
-  type: 'PRODUCT', condition: 'GOOD', stock: '1',
+  mode: 'ONE_OFF', condition: 'GOOD', stock: '5',
+  preorderDeadline: '', preorderReadyAt: '', preorderQuota: '30',
+  preorderMinOrder: '', preorderMaxPerBuyer: '5', preorderPickupLocation: '', preorderPickupNote: '',
 };
 
 export default function ListingFormScreen() {
@@ -69,9 +79,16 @@ export default function ListingFormScreen() {
       description: listing.description,
       price: String(listing.price),
       category: listing.category,
-      type: listing.type,
+      mode: listing.mode || (listing.type === 'SERVICE' ? 'SERVICE' : Number(listing.stock || 1) > 1 ? 'STOCKED' : 'ONE_OFF'),
       condition: listing.condition || 'GOOD',
-      stock: String(listing.stock || 1),
+      stock: String(listing.stock || 5),
+      preorderDeadline: listing.preorderDeadline ? formatLocalDateTimeValue(new Date(listing.preorderDeadline)) : '',
+      preorderReadyAt: listing.preorderReadyAt ? formatLocalDateTimeValue(new Date(listing.preorderReadyAt)) : '',
+      preorderQuota: String(listing.preorderQuota || listing.stock || 30),
+      preorderMinOrder: listing.preorderMinOrder ? String(listing.preorderMinOrder) : '',
+      preorderMaxPerBuyer: listing.preorderMaxPerBuyer ? String(listing.preorderMaxPerBuyer) : '5',
+      preorderPickupLocation: listing.preorderPickupLocation || '',
+      preorderPickupNote: listing.preorderPickupNote || '',
     });
     setPhotos((listing.images || []).map((uri, index) => ({ key: `remote-${index}-${uri}`, uri })));
     setFulfillmentMethods(listing.fulfillmentMethods?.length ? listing.fulfillmentMethods : ['CAMPUS_MEETUP']);
@@ -83,8 +100,18 @@ export default function ListingFormScreen() {
     setErrors(current => ({ ...current, [key]: undefined }));
   };
 
-  const setNumericField = (key: 'price' | 'stock') => (value: string) => {
+  const setNumericField = (key: 'price' | 'stock' | 'preorderQuota' | 'preorderMinOrder' | 'preorderMaxPerBuyer') => (value: string) => {
     setField(key)(value.replace(/[^0-9]/g, ''));
+  };
+
+  const selectCategory = (category: string) => {
+    setForm(current => ({ ...current, category }));
+    setErrors(current => ({ ...current, category: undefined, condition: undefined }));
+  };
+
+  const selectMode = (mode: ListingMode) => {
+    setForm(current => ({ ...current, mode }));
+    setErrors(current => ({ ...current, condition: undefined, stock: undefined, preorderDeadline: undefined, preorderReadyAt: undefined }));
   };
 
   const toggleFulfillment = (method: FulfillmentMethod) => {
@@ -166,6 +193,14 @@ export default function ListingFormScreen() {
     });
   };
 
+  const listingType = form.mode === 'SERVICE' ? 'SERVICE' as const : 'PRODUCT' as const;
+  const isProduct = listingType === 'PRODUCT';
+  const isPreorder = form.mode === 'PREORDER';
+  const conditionApplies = isProduct
+    && !isPreorder
+    && !['FOOD', 'SERVICES'].includes(form.category);
+  const parseDate = (value: string) => parseLocalDateTimeValue(value);
+
   const validate = () => {
     const next: FormErrors = {};
     if (form.title.trim().length < 3) next.title = 'Judul minimal 3 karakter.';
@@ -174,9 +209,19 @@ export default function ListingFormScreen() {
     if (!form.category) next.category = 'Pilih kategori listing.';
     if (!photos.length) next.photos = 'Tambahkan minimal satu foto.';
     if (!fulfillmentMethods.length) next.fulfillmentMethods = 'Pilih minimal satu metode penyerahan.';
-    if (form.type === 'PRODUCT' && !form.condition) next.condition = 'Pilih kondisi barang.';
-    if (form.type === 'PRODUCT' && (!Number.isInteger(Number(form.stock)) || Number(form.stock) < 1)) {
-      next.stock = 'Stok minimal 1.';
+    if (conditionApplies && !form.condition) next.condition = 'Pilih kondisi barang.';
+    if (form.mode === 'STOCKED' && (!Number.isInteger(Number(form.stock)) || Number(form.stock) < 1)) next.stock = 'Stok minimal 1.';
+    if (isPreorder) {
+      const deadline = parseDate(form.preorderDeadline);
+      const readyAt = parseDate(form.preorderReadyAt);
+      const quota = Number(form.preorderQuota);
+      const minimum = form.preorderMinOrder ? Number(form.preorderMinOrder) : null;
+      const maxPerBuyer = form.preorderMaxPerBuyer ? Number(form.preorderMaxPerBuyer) : null;
+      if (!deadline || Number.isNaN(deadline.getTime()) || deadline.getTime() <= Date.now()) next.preorderDeadline = 'Deadline PO harus berada di masa mendatang.';
+      if (readyAt && deadline && readyAt.getTime() <= deadline.getTime()) next.preorderReadyAt = 'Estimasi siap harus setelah deadline.';
+      if (!Number.isInteger(quota) || quota < 1) next.preorderQuota = 'Kuota minimal 1.';
+      if (minimum !== null && (!Number.isInteger(minimum) || minimum < 1 || minimum > quota)) next.preorderMinOrder = 'Minimum harus 1 sampai jumlah kuota.';
+      if (maxPerBuyer !== null && (!Number.isInteger(maxPerBuyer) || maxPerBuyer < 1 || maxPerBuyer > quota)) next.preorderMaxPerBuyer = 'Batas buyer harus 1 sampai jumlah kuota.';
     }
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -200,11 +245,19 @@ export default function ListingFormScreen() {
         description: form.description.trim(),
         price: Number(form.price),
         category: form.category,
-        type: form.type,
-        condition: form.type === 'PRODUCT' ? form.condition : undefined,
-        stock: form.type === 'PRODUCT' ? Number(form.stock) : undefined,
+        type: listingType,
+        mode: form.mode,
+        condition: conditionApplies ? form.condition : undefined,
+        stock: form.mode === 'ONE_OFF' ? 1 : form.mode === 'STOCKED' ? Number(form.stock) : undefined,
         images,
         fulfillmentMethods,
+        preorderDeadline: isPreorder ? parseDate(form.preorderDeadline)?.toISOString() : undefined,
+        preorderReadyAt: isPreorder ? (form.preorderReadyAt.trim() ? parseDate(form.preorderReadyAt)?.toISOString() : null) : undefined,
+        preorderQuota: isPreorder ? Number(form.preorderQuota) : undefined,
+        preorderMinOrder: isPreorder && form.preorderMinOrder ? Number(form.preorderMinOrder) : undefined,
+        preorderMaxPerBuyer: isPreorder && form.preorderMaxPerBuyer ? Number(form.preorderMaxPerBuyer) : undefined,
+        preorderPickupLocation: isPreorder ? form.preorderPickupLocation.trim() || undefined : undefined,
+        preorderPickupNote: isPreorder ? form.preorderPickupNote.trim() || undefined : undefined,
       };
       return id ? endpoints.updateListing(id, body) : endpoints.createListing(body);
     },
@@ -227,7 +280,7 @@ export default function ListingFormScreen() {
   const steps = [
     { label: 'Informasi', ready: form.title.trim().length >= 3 && form.description.trim().length >= 10 },
     { label: 'Foto', ready: photos.length > 0 },
-    { label: 'Harga & stok', ready: Number(form.price) > 0 && (form.type === 'SERVICE' || Number(form.stock) > 0) },
+    { label: 'Harga & model', ready: Number(form.price) > 0 && (form.mode !== 'STOCKED' || Number(form.stock) > 0) && (!isPreorder || (Number(form.preorderQuota) > 0 && Boolean(form.preorderDeadline))) },
     { label: 'Publikasikan', ready: false },
   ];
 
@@ -241,7 +294,13 @@ export default function ListingFormScreen() {
         {steps.map((step, index) => (
           <View key={step.label} style={styles.step}>
             <View style={[styles.stepNumber, step.ready && styles.stepNumberReady]}>
-              <Ionicons name={step.ready ? 'checkmark' : index === 3 ? 'send-outline' : `${index + 1}-circle-outline` as never} size={18} color={step.ready ? colors.white : colors.muted} />
+              {step.ready ? (
+                <Ionicons name="checkmark" size={18} color={colors.white} />
+              ) : index === 3 ? (
+                <Ionicons name="send-outline" size={18} color={colors.muted} />
+              ) : (
+                <Text style={styles.stepNumberText}>{index + 1}</Text>
+              )}
             </View>
             {desktop ? <Text style={[styles.stepLabel, step.ready && styles.stepLabelReady]}>{step.label}</Text> : null}
             {index < steps.length - 1 ? <View style={[styles.stepLine, step.ready && styles.stepLineReady]} /> : null}
@@ -256,16 +315,20 @@ export default function ListingFormScreen() {
             <Text style={styles.cardCopy}>Tulis seperti kamu menjelaskan barang atau jasa ini kepada teman kampus.</Text>
           </View>
 
-          <Text style={styles.label}>Jenis listing</Text>
-          <View style={styles.segment}>
-            <Pressable onPress={() => setForm(current => ({ ...current, type: 'PRODUCT' }))} style={[styles.segmentItem, form.type === 'PRODUCT' && styles.segmentActive]}>
-              <Ionicons name="cube-outline" size={20} color={form.type === 'PRODUCT' ? colors.primary : colors.muted} />
-              <View><Text style={[styles.segmentText, form.type === 'PRODUCT' && styles.segmentTextActive]}>Barang</Text><Text style={styles.segmentCaption}>Produk fisik dengan stok</Text></View>
-            </Pressable>
-            <Pressable onPress={() => setForm(current => ({ ...current, type: 'SERVICE' }))} style={[styles.segmentItem, form.type === 'SERVICE' && styles.segmentActive]}>
-              <Ionicons name="construct-outline" size={20} color={form.type === 'SERVICE' ? colors.primary : colors.muted} />
-              <View><Text style={[styles.segmentText, form.type === 'SERVICE' && styles.segmentTextActive]}>Jasa</Text><Text style={styles.segmentCaption}>Keahlian atau layanan</Text></View>
-            </Pressable>
+          <Text style={styles.label}>Model penjualan</Text>
+          <View style={styles.modeGrid}>
+            {([
+              ['ONE_OFF', 'cube-outline', 'Barang satuan', 'Preloved atau barang unik, dijual sekali.'],
+              ['STOCKED', 'layers-outline', 'Produk dengan stok', 'Produk yang dapat direstock tanpa membuat katalog baru.'],
+              ['PREORDER', 'calendar-outline', 'Pre-order', 'Kumpulkan pesanan sampai deadline dan kuota tertentu.'],
+              ['SERVICE', 'construct-outline', 'Jasa', 'Layanan berulang tanpa stok barang.'],
+            ] as const).map(([mode, icon, title, caption]) => {
+              const active = form.mode === mode;
+              return <Pressable key={mode} onPress={() => selectMode(mode)} style={[styles.modeItem, active && styles.segmentActive]}>
+                <View style={[styles.modeIcon, active && styles.modeIconActive]}><Ionicons name={icon} size={20} color={active ? colors.primary : colors.muted} /></View>
+                <View style={styles.flex}><Text style={[styles.segmentText, active && styles.segmentTextActive]}>{title}</Text><Text style={styles.segmentCaption}>{caption}</Text></View>
+              </Pressable>;
+            })}
           </View>
 
           <Field label="Judul listing" value={form.title} onChangeText={setField('title')} maxLength={120} error={errors.title} placeholder="Contoh: ASUS VivoBook 14, RAM 8 GB" hint={`${form.title.length}/120 karakter`} />
@@ -274,7 +337,7 @@ export default function ListingFormScreen() {
             <Text style={styles.label}>Kategori</Text>
             <View style={styles.chips}>
               {categories.map(category => (
-                <Pressable key={category} onPress={() => setField('category')(category)} style={[styles.chip, form.category === category && styles.chipActive]}>
+                <Pressable key={category} onPress={() => selectCategory(category)} style={[styles.chip, form.category === category && styles.chipActive]}>
                   <Text style={[styles.chipText, form.category === category && styles.chipTextActive]}>{categoryLabels[category]}</Text>
                 </Pressable>
               ))}
@@ -285,13 +348,13 @@ export default function ListingFormScreen() {
           <Field label="Deskripsi" multiline value={form.description} onChangeText={setField('description')} maxLength={5000} error={errors.description} placeholder="Ceritakan kondisi, spesifikasi, kelengkapan, dan cara penyerahan" hint={`${form.description.length}/5000 karakter`} />
 
           <View style={[styles.fieldRow, !desktop && styles.fieldRowMobile]}>
-            <View style={styles.flex}><Field label="Harga" icon="cash-outline" value={form.price} onChangeText={setNumericField('price')} keyboardType="number-pad" error={errors.price} placeholder="Contoh: 75000" /></View>
-            {form.type === 'PRODUCT' ? <View style={styles.stock}><Field label="Stok" value={form.stock} onChangeText={setNumericField('stock')} keyboardType="number-pad" error={errors.stock} /></View> : null}
+            <View style={styles.flex}><Field label={isPreorder ? 'Harga per unit' : 'Harga'} icon="cash-outline" value={form.price} onChangeText={setNumericField('price')} keyboardType="number-pad" error={errors.price} placeholder="Contoh: 75000" /></View>
+            {form.mode === 'STOCKED' ? <View style={styles.stock}><Field label="Stok awal" value={form.stock} onChangeText={setNumericField('stock')} keyboardType="number-pad" error={errors.stock} /></View> : null}
           </View>
 
-          {form.type === 'PRODUCT' ? (
+          {conditionApplies ? (
             <View>
-              <Text style={styles.label}>Kondisi barang</Text>
+              <Text style={styles.label}>Kondisi</Text>
               <View style={styles.chips}>
                 {Object.entries(conditionLabels).map(([condition, label]) => (
                   <Pressable key={condition} onPress={() => setField('condition')(condition)} style={[styles.chip, form.condition === condition && styles.chipActive]}>
@@ -300,6 +363,44 @@ export default function ListingFormScreen() {
                 ))}
               </View>
               {errors.condition ? <Text style={styles.errorText}>{errors.condition}</Text> : null}
+            </View>
+          ) : null}
+
+          {isPreorder ? (
+            <View style={styles.preorderBox}>
+              <View style={styles.preorderHeader}><View style={styles.preorderIcon}><Ionicons name="calendar-outline" size={20} color={colors.primary} /></View><View style={styles.flex}><Text style={styles.preorderTitle}>Pengaturan pre-order</Text><Text style={styles.preorderCopy}>Buyer membayar melalui escrow saat ikut PO. Kamu mendapat jumlah pesanan yang lebih pasti.</Text></View></View>
+              <View style={[styles.fieldRow, !desktop && styles.fieldRowMobile]}>
+                <View style={styles.flex}>
+                  <DateTimePickerField
+                    label="Deadline PO"
+                    value={form.preorderDeadline}
+                    onChange={setField('preorderDeadline')}
+                    error={errors.preorderDeadline}
+                    defaultTime="20:00"
+                    minDate={new Date()}
+                    hint="Pilih tanggal penutupan PO dan jam terakhir buyer dapat memesan."
+                  />
+                </View>
+                <View style={styles.flex}>
+                  <DateTimePickerField
+                    label="Estimasi siap (opsional)"
+                    value={form.preorderReadyAt}
+                    onChange={setField('preorderReadyAt')}
+                    error={errors.preorderReadyAt}
+                    defaultTime="12:00"
+                    minDate={parseDate(form.preorderDeadline) || new Date()}
+                    optional
+                    hint="Tanggal perkiraan produk mulai siap diambil atau dikirim."
+                  />
+                </View>
+              </View>
+              <View style={[styles.fieldRow, !desktop && styles.fieldRowMobile]}>
+                <View style={styles.flex}><Field label="Kuota PO" value={form.preorderQuota} onChangeText={setNumericField('preorderQuota')} keyboardType="number-pad" error={errors.preorderQuota} /></View>
+                <View style={styles.flex}><Field label="Minimum pesanan (opsional)" value={form.preorderMinOrder} onChangeText={setNumericField('preorderMinOrder')} keyboardType="number-pad" error={errors.preorderMinOrder} /></View>
+                <View style={styles.flex}><Field label="Maks. per buyer" value={form.preorderMaxPerBuyer} onChangeText={setNumericField('preorderMaxPerBuyer')} keyboardType="number-pad" error={errors.preorderMaxPerBuyer} /></View>
+              </View>
+              <Field label="Lokasi pickup (opsional)" value={form.preorderPickupLocation} onChangeText={setField('preorderPickupLocation')} placeholder="Contoh: BINUS Anggrek, depan Admisi" />
+              <Field label="Catatan pickup / produksi (opsional)" multiline value={form.preorderPickupNote} onChangeText={setField('preorderPickupNote')} placeholder="Contoh: pickup pukul 12:00–15:00. Bawa bukti transaksi BMarket." />
             </View>
           ) : null}
 
@@ -369,7 +470,7 @@ export default function ListingFormScreen() {
           ) : null}
           {mutation.isError && Object.keys(errors).length > 0 ? <InlineAlert message="Lengkapi bagian yang masih ditandai." /> : null}
           <Button title={id ? 'Simpan perubahan' : 'Publikasikan listing'} icon={id ? 'save-outline' : 'send-outline'} loading={mutation.isPending} onPress={() => mutation.mutate()} />
-          <Text style={styles.reviewNote}>Listing langsung tayang. Pengguna lain tetap dapat melaporkan konten yang melanggar aturan komunitas.</Text>
+          <Text style={styles.reviewNote}>{isPreorder ? 'Pre-order langsung tayang dan menerima pesanan sampai deadline atau kuota habis.' : 'Listing langsung tayang. Pengguna lain tetap dapat melaporkan konten yang melanggar aturan komunitas.'}</Text>
         </View>
       </View>
       <FeedbackDialog visible={Boolean(feedback)} tone={feedback?.tone || 'success'} title={feedback?.title || ''} message={feedback?.message || ''} primaryLabel={feedback?.listingId ? 'Lihat listing' : 'OK'} onClose={() => setFeedback(null)} onPrimary={() => { const listingId = feedback?.listingId; setFeedback(null); if (listingId) router.replace({ pathname: '/(student)/listing/[id]', params: { id: listingId } }); }} />
@@ -382,6 +483,7 @@ const styles = StyleSheet.create({
   step: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 9 },
   stepNumber: { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' },
   stepNumberReady: { backgroundColor: colors.primary },
+  stepNumberText: { fontFamily: 'PoppinsSemiBold', fontSize: 13, color: colors.muted },
   stepLabel: { fontFamily: 'PoppinsMedium', fontSize: 12, color: colors.muted },
   stepLabelReady: { fontFamily: 'PoppinsSemiBold', color: colors.text },
   stepLine: { height: 2, flex: 1, backgroundColor: colors.border, marginHorizontal: 10 },
@@ -398,7 +500,16 @@ const styles = StyleSheet.create({
   segmentActive: { borderColor: '#A8C8EF', backgroundColor: colors.primarySoft },
   segmentText: { fontFamily: 'PoppinsSemiBold', fontSize: 13, color: colors.textSoft },
   segmentTextActive: { color: colors.primary },
-  segmentCaption: { fontFamily: 'PoppinsRegular', fontSize: 12, color: colors.muted, marginTop: 1 },
+  segmentCaption: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 17, color: colors.muted, marginTop: 1 },
+  modeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  modeItem: { width: '48.8%', minWidth: 245, minHeight: 84, borderRadius: 12, borderWidth: 1, borderColor: colors.border, padding: 13, flexDirection: 'row', alignItems: 'center', gap: 11 },
+  modeIcon: { width: 42, height: 42, borderRadius: 11, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' },
+  modeIconActive: { backgroundColor: colors.surface },
+  preorderBox: { gap: 13, padding: 15, borderRadius: 13, borderWidth: 1, borderColor: '#B7D3F3', backgroundColor: '#F7FBFF' },
+  preorderHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 11 },
+  preorderIcon: { width: 42, height: 42, borderRadius: 11, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  preorderTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 14, color: colors.text },
+  preorderCopy: { fontFamily: 'PoppinsRegular', fontSize: 11.5, lineHeight: 17, color: colors.muted, marginTop: 2 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { minHeight: 40, paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, justifyContent: 'center' },
   chipActive: { borderColor: '#A8C8EF', backgroundColor: colors.primarySoft },

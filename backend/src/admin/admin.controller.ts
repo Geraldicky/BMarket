@@ -20,6 +20,45 @@ export class AdminController {
 
   // ── Listings ──────────────────────────────
 
+  @Get('listings')
+  async getAllListings(
+    @Query('keyword') keyword?: string,
+    @Query('status') status?: string,
+    @Query('type') type?: string,
+    @Query('category') category?: string,
+    @Query('mode') mode?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const data = await this.adminService.getAllListings({
+      keyword,
+      status,
+      type,
+      category,
+      mode,
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 20,
+    });
+    return { success: true, data };
+  }
+
+  @Patch('listings/:id/status')
+  async setListingStatus(
+    @Param('id') id: string,
+    @Body('status') status: 'ACTIVE' | 'HIDDEN' | 'REMOVED',
+  ) {
+    if (!['ACTIVE', 'HIDDEN', 'REMOVED'].includes(status)) {
+      throw new BadRequestException('Status moderasi listing tidak valid.');
+    }
+    const data = await this.adminService.setListingStatus(id, status);
+    const message = status === 'ACTIVE'
+      ? 'Listing berhasil diaktifkan kembali.'
+      : status === 'HIDDEN'
+        ? 'Listing berhasil disembunyikan dari marketplace.'
+        : 'Listing berhasil dihapus oleh admin.';
+    return { success: true, message, data };
+  }
+
   @Get('listings/pending')
   async getPendingListings() {
     const data = await this.adminService.getPendingListings();

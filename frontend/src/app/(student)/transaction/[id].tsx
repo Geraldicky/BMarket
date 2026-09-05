@@ -240,6 +240,9 @@ export default function TransactionDetailScreen() {
   const disputeActive = Boolean(transaction.dispute && ['OPEN', 'IN_REVIEW'].includes(transaction.dispute.status));
   const canOpenDispute = ['PAID', 'CONFIRMED'].includes(transaction.status) && transaction.isEscrowHeld && !transaction.dispute;
   const canCancel = ['PENDING', 'PAID'].includes(transaction.status) && !disputeActive;
+  const preorder = transaction.listing.mode === 'PREORDER';
+  const preorderReady = !preorder || ['READY', 'COMPLETED'].includes(transaction.listing.preorderStatus || '');
+  const preorderStatusText = ({ OPEN: 'PO masih dibuka', CLOSED: 'PO sudah ditutup', PROCESSING: 'Sedang diproduksi/disiapkan', READY: 'Siap diambil/dikirim', COMPLETED: 'Batch PO selesai', CANCELLED: 'PO dibatalkan' } as Record<string, string>)[transaction.listing.preorderStatus || ''] || 'Status PO belum tersedia';
   const grandTotal = Number(transaction.grandTotal || transaction.totalPrice);
   const insufficientBalance = buyer && transaction.status === 'PENDING' && balance.data && Number(balance.data.balance) < grandTotal;
   const dialogCopy = dialog ? actionCopy[dialog] : null;
@@ -253,6 +256,7 @@ export default function TransactionDetailScreen() {
       {success ? <InlineAlert tone="success" message={success} /> : null}
       {actionError ? <InlineAlert message={actionError} /> : null}
       {transaction.status === 'PENDING' && transaction.reservationExpiresAt ? <InlineAlert tone="warning" message={`Stok direservasi sampai ${dateTime(transaction.reservationExpiresAt)}. Jika belum dibayar, pesanan otomatis dibatalkan dan stok dikembalikan.`} /> : null}
+      {preorder && ['PAID', 'CONFIRMED'].includes(transaction.status) ? <InlineAlert tone={preorderReady ? 'success' : 'warning'} message={`${preorderStatusText}${transaction.listing.preorderReadyAt ? ` · Estimasi siap ${dateTime(transaction.listing.preorderReadyAt)}` : ''}${transaction.listing.preorderPickupLocation ? ` · Pickup ${transaction.listing.preorderPickupLocation}` : ''}. ${preorderReady ? 'Pesanan sudah dapat dilanjutkan ke proses penyerahan.' : 'Dana tetap aman di escrow sampai seller menandai batch siap.'}`} /> : null}
       {transaction.dispute ? <InlineAlert tone={disputeActive ? 'warning' : 'success'} message={disputeActive ? `Sengketa ${transaction.dispute.status === 'OPEN' ? 'menunggu admin' : 'sedang ditinjau'}. Dana escrow dan tindakan penyelesaian transaksi dikunci.` : `Sengketa sudah ditutup${transaction.dispute.resolutionNote ? `: ${transaction.dispute.resolutionNote}` : '.'}`} /> : null}
 
       <View style={[styles.statusBanner, { backgroundColor: meta.tint, borderColor: meta.color }]}>
@@ -332,17 +336,28 @@ export default function TransactionDetailScreen() {
             <Text style={styles.actionHelp}>{buyer && transaction.status === 'PENDING' ? 'Bayar pesanan agar dana masuk escrow. Setelah itu, gunakan chat untuk menyepakati meetup.' : meetup && ['PAID', 'CONFIRMED'].includes(transaction.status) ? (buyer ? 'Chat dengan seller untuk menyepakati waktu dan lokasi. Setelah barang benar-benar kamu terima, buat kode dan berikan 6 angka tersebut kepada seller.' : 'Chat dengan buyer untuk menyepakati waktu dan lokasi. Setelah barang diserahkan, minta kode 6 angka dari buyer lalu masukkan di bawah.') : !buyer && transaction.status === 'PAID' ? 'Siapkan pengiriman setelah detail penerima sesuai.' : buyer && transaction.status === 'CONFIRMED' ? 'Selesaikan hanya setelah kiriman benar-benar diterima.' : active ? 'Menunggu tindakan dari pihak lain.' : 'Tidak ada tindakan lain untuk transaksi ini.'}</Text>
             {buyer && transaction.status === 'PENDING' ? <Button title={insufficientBalance ? 'Saldo tidak cukup' : 'Bayar dari saldo'} icon="wallet-outline" disabled={Boolean(insufficientBalance)} onPress={() => openDialog('PAY')} /> : null}
             {insufficientBalance ? <Button title="Tambah saldo di profil" variant="secondary" icon="add-circle-outline" onPress={() => router.push('/(student)/(tabs)/profile')} /> : null}
-            {!buyer && transaction.status === 'PAID' && !meetup ? <Button title="Siapkan pengiriman" icon="cube-outline" onPress={() => openDialog('CONFIRMED')} /> : null}
+            {!buyer && transaction.status === 'PAID' && !meetup && preorderReady ? <Button title="Siapkan pengiriman" icon="cube-outline" onPress={() => openDialog('CONFIRMED')} /> : null}
+            {!buyer && transaction.status === 'PAID' && !meetup && preorder && !preorderReady ? <InlineAlert tone="warning" message="Pengiriman belum dapat diproses. Ubah status batch pre-order menjadi Siap diambil/dikirim dari Etalase Saya terlebih dahulu." /> : null}
             {buyer && meetup && ['PAID', 'CONFIRMED'].includes(transaction.status) ? (
               <View style={styles.handoverBox}>
-                {handoverCode && codeSeconds > 0 ? <><Text style={styles.handoverLabel}>KODE SERAH-TERIMA AKTIF</Text><Text style={styles.handoverHint}>Kode sudah dibuat dan masih aktif selama {codeTime}. Buka kembali jika perlu melihatnya.</Text></> : <Text style={styles.handoverHint}>Buat kode hanya setelah meetup berlangsung, barang sudah kamu terima, dan kondisinya sudah kamu periksa.</Text>}
-                <Button title={handoverCode && codeSeconds > 0 ? 'Lihat kode serah-terima' : 'Saya sudah menerima barang · Buat kode'} variant="secondary" icon="key-outline" loading={issueCode.isPending} onPress={() => handoverCode && codeSeconds > 0 ? setHandoverCodeVisible(true) : setHandoverConfirmVisible(true)} />
+                {preorder && !preorderReady ? <>
+                  <Text style={styles.handoverLabel}>MENUNGGU PRE-ORDER SIAP</Text>
+                  <Text style={styles.handoverHint}>Seller masih menyiapkan batch pre-order. Kode serah-terima baru tersedia setelah status PO menjadi Siap diambil/dikirim.</Text>
+                </> : <>
+                  {handoverCode && codeSeconds > 0 ? <><Text style={styles.handoverLabel}>KODE SERAH-TERIMA AKTIF</Text><Text style={styles.handoverHint}>Kode sudah dibuat dan masih aktif selama {codeTime}. Buka kembali jika perlu melihatnya.</Text></> : <Text style={styles.handoverHint}>Buat kode hanya setelah meetup berlangsung, barang sudah kamu terima, dan kondisinya sudah kamu periksa.</Text>}
+                  <Button title={handoverCode && codeSeconds > 0 ? 'Lihat kode serah-terima' : 'Saya sudah menerima barang · Buat kode'} variant="secondary" icon="key-outline" loading={issueCode.isPending} onPress={() => handoverCode && codeSeconds > 0 ? setHandoverCodeVisible(true) : setHandoverConfirmVisible(true)} />
+                </>}
               </View>
             ) : null}
             {!buyer && meetup && ['PAID', 'CONFIRMED'].includes(transaction.status) ? (
               <View style={styles.handoverBox}>
-                <Field label="Kode dari buyer" value={handoverInput} onChangeText={value => setHandoverInput(value.replace(/[^0-9]/g, '').slice(0, 6))} keyboardType="number-pad" maxLength={6} placeholder="Masukkan 6 angka setelah barang diserahkan" />
-                <Button title="Verifikasi kode & selesaikan transaksi" icon="shield-checkmark-outline" disabled={handoverInput.length !== 6} loading={confirmHandover.isPending} onPress={() => confirmHandover.mutate()} />
+                {preorder && !preorderReady ? <>
+                  <Text style={styles.handoverLabel}>BATCH BELUM SIAP</Text>
+                  <Text style={styles.handoverHint}>Tandai pre-order sebagai Siap diambil/dikirim dari Etalase Saya sebelum melakukan serah-terima dengan buyer.</Text>
+                </> : <>
+                  <Field label="Kode dari buyer" value={handoverInput} onChangeText={value => setHandoverInput(value.replace(/[^0-9]/g, '').slice(0, 6))} keyboardType="number-pad" maxLength={6} placeholder="Masukkan 6 angka setelah barang diserahkan" />
+                  <Button title="Verifikasi kode & selesaikan transaksi" icon="shield-checkmark-outline" disabled={handoverInput.length !== 6} loading={confirmHandover.isPending} onPress={() => confirmHandover.mutate()} />
+                </>}
               </View>
             ) : null}
             {buyer && transaction.status === 'CONFIRMED' && !meetup ? <Button title="Kiriman sudah diterima" icon="checkmark-circle-outline" onPress={() => openDialog('COMPLETED')} /> : null}

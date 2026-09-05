@@ -13,7 +13,7 @@ export class CreateTransactionDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(100)
+  @Max(999)
   quantity?: number;
 
   @IsOptional()

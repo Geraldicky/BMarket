@@ -6,6 +6,7 @@ const listing = {
   sellerId: 'seller-1',
   status: 'ACTIVE',
   type: 'PRODUCT',
+  mode: 'STOCKED',
   stockLeft: 3,
   price: 100000,
   images: JSON.stringify(['http://localhost:3000/uploads/product.jpg']),
@@ -84,9 +85,35 @@ describe('TransactionsService checkout flow', () => {
         listingTitleSnapshot: listing.title,
         listingImageSnapshot: 'http://localhost:3000/uploads/product.jpg',
         listingTypeSnapshot: 'PRODUCT',
+        listingModeSnapshot: 'STOCKED',
       }),
     }));
     expect(result.listing.images).toEqual(['http://localhost:3000/uploads/product.jpg']);
+  });
+
+  it('keeps a stocked catalog active when the last available unit is reserved', async () => {
+    const lastUnit = { ...listing, stockLeft: 1, mode: 'STOCKED' as const };
+    const tx = {
+      listing: {
+        findUnique: vi.fn().mockResolvedValue(lastUnit),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        update: vi.fn(),
+      },
+      transaction: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockImplementation(({ data }) => Promise.resolve({
+          id: 'stocked-last-unit', status: 'PENDING', buyerId: 'buyer-1', sellerId: listing.sellerId,
+          ...data, listing: { ...lastUnit, stockLeft: 0 }, buyer: { id: 'buyer-1' }, seller: { id: listing.sellerId },
+        })),
+      },
+      commissionSetting: { findFirst: vi.fn().mockResolvedValue({ rate: 5 }) },
+    };
+    const service = serviceWithTransactionClient(tx);
+
+    await service.create('buyer-1', { ...meetupCheckout, quantity: 1 });
+
+    expect(tx.listing.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: { stockLeft: { decrement: 1 } } }));
+    expect(tx.listing.update).not.toHaveBeenCalled();
   });
 
   it('adds courier fee to buyer total without charging seller commission on shipping', async () => {
@@ -132,6 +159,7 @@ describe('TransactionsService checkout flow', () => {
       id: 'transaction-meetup', buyerId: 'buyer-1', sellerId: 'seller-1', status: 'PAID',
       fulfillmentMethod: 'CAMPUS_MEETUP', isEscrowHeld: true, grandTotal: 100000,
       sellerReceives: 95000, handoverCodeHash: null, handoverCodeExpiresAt: null,
+      listing: { mode: 'STOCKED', preorderStatus: null },
     };
     const completed = { ...current, status: 'COMPLETED', listing, buyer: { id: 'buyer-1' }, seller: { id: 'seller-1' } };
     const tx = {
@@ -172,7 +200,7 @@ describe('TransactionsService checkout flow', () => {
     const current = {
       id: 'expired-transaction', buyerId: 'buyer-1', sellerId: 'seller-1', status: 'PENDING',
       listingId: listing.id, quantity: 1, reservationExpiresAt: expiredAt, isEscrowHeld: false,
-      listingTypeSnapshot: 'PRODUCT', listing: { type: 'PRODUCT', status: 'SOLD' },
+      listingTypeSnapshot: 'PRODUCT', listing: { type: 'PRODUCT', mode: 'ONE_OFF', status: 'SOLD' },
     };
     const tx = {
       transaction: {
@@ -202,7 +230,7 @@ describe('TransactionsService checkout flow', () => {
     const tx = {
       transaction: { findUnique: vi.fn().mockResolvedValue({
         id: 'transaction-1', buyerId: 'buyer-1', sellerId: 'seller-1', status: 'PENDING',
-        listingId: listing.id, listing: { type: 'PRODUCT', status: 'ACTIVE' },
+        listingId: listing.id, listing: { type: 'PRODUCT', mode: 'ONE_OFF', status: 'ACTIVE' },
       }) },
     };
     const service = serviceWithTransactionClient(tx);
@@ -226,7 +254,7 @@ describe('TransactionsService checkout flow', () => {
   it('refunds escrow and reopens a sold listing after cancellation', async () => {
     const current = {
       id: 'transaction-1', buyerId: 'buyer-1', sellerId: 'seller-1', status: 'PAID',
-      listingId: listing.id, listing: { type: 'PRODUCT', status: 'SOLD' },
+      listingId: listing.id, listing: { type: 'PRODUCT', mode: 'ONE_OFF', status: 'SOLD' },
       isEscrowHeld: true, quantity: 1, totalPrice: 100000, grandTotal: 100000,
     };
     const result = { ...current, status: 'CANCELLED', isEscrowHeld: false, listing };
@@ -255,7 +283,7 @@ describe('TransactionsService checkout flow', () => {
   it('does not reactivate a listing hidden by admin when an order is cancelled', async () => {
     const current = {
       id: 'transaction-1', buyerId: 'buyer-1', sellerId: 'seller-1', status: 'PENDING',
-      listingId: listing.id, listing: { type: 'PRODUCT', status: 'HIDDEN' },
+      listingId: listing.id, listing: { type: 'PRODUCT', mode: 'ONE_OFF', status: 'HIDDEN' },
       isEscrowHeld: false, quantity: 1, totalPrice: 100000, grandTotal: 100000,
     };
     const result = { ...current, status: 'CANCELLED', listing: { ...listing, status: 'HIDDEN' } };

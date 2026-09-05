@@ -19,12 +19,15 @@ export class AdminService {
 
   async getDashboardStats() {
     const [
-      totalUsers, totalListings, reportedListings,
+      totalUsers, totalListings, allListings, hiddenListings, removedListings, reportedListings,
       totalTransactions, openComplaints, totalRevenue,
       commissionSetting,
     ] = await Promise.all([
       this.prisma.user.count({ where: { role: 'STUDENT' } }),
       this.listingsService.countByStatus('ACTIVE'),
+      this.listingsService.countAll(),
+      this.listingsService.countByStatus('HIDDEN'),
+      this.listingsService.countByStatus('REMOVED'),
       this.complaintsService.countReportedListings(),
       this.transactionsService.count(),
       this.complaintsService.countUnresolved(),
@@ -33,13 +36,21 @@ export class AdminService {
     ]);
 
     return {
-      totalUsers, totalListings, reportedListings,
+      totalUsers, totalListings, allListings, hiddenListings, removedListings, reportedListings,
       totalTransactions, openComplaints, totalRevenue,
       currentCommissionRate: commissionSetting ? Number(commissionSetting.rate) : 5.0,
     };
   }
 
   // ── Listings ──────────────────────────────
+
+  getAllListings(filter: { keyword?: string; status?: string; type?: string; category?: string; mode?: string; page?: number; limit?: number }) {
+    return this.listingsService.findAllForAdmin(filter);
+  }
+
+  setListingStatus(id: string, status: 'ACTIVE' | 'HIDDEN' | 'REMOVED') {
+    return this.listingsService.setModerationStatus(id, status);
+  }
 
   getPendingListings() {
     return this.listingsService.findPending();
