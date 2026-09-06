@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors } from '@/constants/theme';
+import { colors, webTransition } from '@/constants/theme';
 import { StudentDesktopHeader } from '@/components/student-desktop-header';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -25,13 +25,15 @@ function MobileTabBar({ state, navigation }: TabBarProps) {
   };
 
   return (
-    <View style={[styles.mobileBar, { height: 62 + insets.bottom, paddingBottom: Math.max(insets.bottom, 6) }]}>
+    <View style={[styles.mobileBar, { height: 66 + insets.bottom, paddingBottom: Math.max(insets.bottom, 7) }]}>
       {state.routes.map((route, index) => {
         const item = items[route.name];
         const active = state.index === index;
         return (
-          <Pressable key={route.key} onPress={() => open(route, index)} style={styles.mobileItem}>
-            <Ionicons name={active ? item.filled : item.outline} size={narrow ? 21 : 23} color={active ? colors.primary : colors.muted} />
+          <Pressable key={route.key} onPress={() => open(route, index)} style={({ pressed }) => [styles.mobileItem, pressed && styles.mobileItemPressed]}>
+            <View style={[styles.iconShell, active && styles.iconShellActive]}>
+              <Ionicons name={active ? item.filled : item.outline} size={narrow ? 20 : 22} color={active ? colors.primary : colors.muted} />
+            </View>
             <Text numberOfLines={1} style={[styles.mobileLabel, narrow && styles.mobileLabelNarrow, active && styles.mobileLabelActive]}>{item.shortLabel}</Text>
           </Pressable>
         );
@@ -62,9 +64,12 @@ export default function StudentTabs() {
 }
 
 const styles = StyleSheet.create({
-  mobileBar: { backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border, flexDirection: 'row', paddingTop: 7 },
-  mobileItem: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3 },
-  mobileLabel: { fontFamily: 'PoppinsMedium', fontSize: 10.5, color: colors.muted },
-  mobileLabelNarrow: { fontSize: 9.2 },
+  mobileBar: { backgroundColor: 'rgba(255,255,255,.98)', borderTopWidth: 1, borderTopColor: colors.border, flexDirection: 'row', paddingTop: 6, paddingHorizontal: 6 },
+  mobileItem: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2, borderRadius: 12, ...webTransition },
+  mobileItemPressed: { opacity: .72, transform: [{ scale: .96 }] },
+  iconShell: { width: 38, height: 29, borderRadius: 10, alignItems: 'center', justifyContent: 'center', ...webTransition },
+  iconShellActive: { backgroundColor: colors.primarySoft, transform: [{ translateY: -1 }] },
+  mobileLabel: { fontFamily: 'PoppinsMedium', fontSize: 10.25, color: colors.muted },
+  mobileLabelNarrow: { fontSize: 9 },
   mobileLabelActive: { color: colors.primary, fontFamily: 'PoppinsSemiBold' },
 });

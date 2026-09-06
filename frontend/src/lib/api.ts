@@ -18,8 +18,9 @@ const host = Constants.expoConfig?.hostUri?.split(':')[0];
 export const API_URL = process.env.EXPO_PUBLIC_API_URL || `http://${host || 'localhost'}:3000/api`;
 export const SOCKET_URL = API_URL.replace(/\/api\/?$/, '');
 export const TOKEN_KEY = 'bmarket_access_token';
-const configuredTimeout = Number(process.env.EXPO_PUBLIC_API_TIMEOUT_MS || 15000);
-export const API_TIMEOUT_MS = Number.isFinite(configuredTimeout) && configuredTimeout >= 5000 ? configuredTimeout : 15000;
+const defaultTimeout = API_URL.includes('railway.app') ? 70000 : 15000;
+const configuredTimeout = Number(process.env.EXPO_PUBLIC_API_TIMEOUT_MS || defaultTimeout);
+export const API_TIMEOUT_MS = Number.isFinite(configuredTimeout) && configuredTimeout >= 5000 ? configuredTimeout : defaultTimeout;
 export const api = create({ baseURL: API_URL, timeout: API_TIMEOUT_MS });
 api.interceptors.request.use(async config => { const token = await getStoredValue(TOKEN_KEY); if (token) config.headers.Authorization = `Bearer ${token}`; return config; });
 const unwrap = <T>(response: { data: ApiEnvelope<T> }) => response.data.data;
@@ -112,6 +113,16 @@ export const endpoints = {
   commission: () => api.get<ApiEnvelope<{ rate: number }>>('/admin/commission').then(unwrap),
   setCommission: (rate: number) => api.patch('/admin/commission', { rate }),
 };
-export function errorMessage(error: unknown) { if (isAxiosError(error)) return error.response?.data?.message || error.message; return error instanceof Error ? error.message : 'Terjadi kesalahan. Coba lagi.'; }
+export function errorMessage(error: unknown) {
+  if (isAxiosError(error)) {
+    const serverMessage = error.response?.data?.message;
+    if (serverMessage) return Array.isArray(serverMessage) ? serverMessage[0] : serverMessage;
+    if (error.code === 'ECONNABORTED') return 'Server BMarket sedang bangun dari mode hemat. Tunggu sebentar lalu coba lagi.';
+    if (!error.response) return 'Koneksi ke BMarket terputus. Periksa internetmu lalu coba lagi.';
+    if (error.response.status >= 500) return 'BMarket sedang mengalami gangguan sementara. Coba lagi sebentar.';
+    return 'Permintaan belum berhasil. Coba lagi.';
+  }
+  return error instanceof Error ? error.message : 'Terjadi kesalahan. Coba lagi.';
+}
 export function errorCode(error: unknown): string | undefined { return isAxiosError(error) ? error.response?.data?.code : undefined; }
 export function errorRetryAfter(error: unknown): number | undefined { return isAxiosError(error) ? error.response?.data?.retryAfterSeconds : undefined; }

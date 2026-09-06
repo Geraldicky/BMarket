@@ -3,6 +3,7 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleProp,
@@ -16,7 +17,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, layout, radius, shadowSoft, spacing } from '@/constants/theme';
+import { colors, layout, radius, shadowSoft, spacing, webTransition } from '@/constants/theme';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -46,6 +47,27 @@ export function Card(props: ViewProps) {
   return <View {...props} style={[styles.card, mobile && styles.cardMobile, props.style]} />;
 }
 
+export function SectionHeader({ title, subtitle, actionLabel, onAction }: { title: string; subtitle?: string; actionLabel?: string; onAction?: () => void }) {
+  const mobile = useWindowDimensions().width < 600;
+  return (
+    <View style={[styles.sectionHeader, mobile && styles.sectionHeaderMobile]}>
+      <View style={styles.sectionHeaderCopy}>
+        <Text style={[styles.sectionHeaderTitle, mobile && styles.sectionHeaderTitleMobile]}>{title}</Text>
+        {subtitle ? <Text style={styles.sectionHeaderSubtitle}>{subtitle}</Text> : null}
+      </View>
+      {actionLabel && onAction ? (
+        <Pressable onPress={onAction} style={({ pressed }) => [styles.sectionAction, pressed && styles.sectionActionPressed]}>
+          <Text style={styles.sectionActionText}>{actionLabel}</Text><Ionicons name="arrow-forward" size={14} color={colors.primary} />
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+export function Skeleton({ width = '100%', height = 16, radius: skeletonRadius = 8, style }: { width?: number | `${number}%`; height?: number; radius?: number; style?: StyleProp<ViewStyle> }) {
+  return <View style={[styles.skeleton, { width, height, borderRadius: skeletonRadius }, style]} />;
+}
+
 export function Field({ label, hint, error, icon, rightIcon, onRightPress, ...props }: TextInputProps & {
   label?: string; hint?: string; error?: string; icon?: IconName; rightIcon?: IconName; onRightPress?: () => void;
 }) {
@@ -72,10 +94,25 @@ export function Field({ label, hint, error, icon, rightIcon, onRightPress, ...pr
 export function Button({ title, onPress, variant = 'primary', loading, disabled, icon, style }: {
   title: string; onPress?: () => void; variant?: 'primary' | 'secondary' | 'danger' | 'ghost'; loading?: boolean; disabled?: boolean; icon?: IconName; style?: StyleProp<ViewStyle>;
 }) {
+  const [hovered, setHovered] = useState(false);
   const foreground = variant === 'primary' || variant === 'danger' ? colors.white : colors.primary;
   return (
-    <Pressable accessibilityRole="button" disabled={disabled || loading} onPress={onPress} style={({ pressed }) => [styles.button, styles[`button_${variant}`], style, (pressed || disabled) && { opacity: 0.68 }]}>
-      {loading ? <ActivityIndicator color={foreground} /> : <View style={styles.buttonContent}>{icon ? <Ionicons name={icon} color={foreground} size={19} /> : null}<Text style={[styles.buttonText, styles[`buttonText_${variant}`]]}>{title}</Text></View>}
+    <Pressable
+      accessibilityRole="button"
+      disabled={disabled || loading}
+      onPress={onPress}
+      onHoverIn={() => setHovered(true)}
+      onHoverOut={() => setHovered(false)}
+      style={({ pressed }) => [
+        styles.button,
+        styles[`button_${variant}`],
+        hovered && !disabled && !loading && styles[`buttonHover_${variant}`],
+        style,
+        pressed && styles.buttonPressed,
+        disabled && styles.buttonDisabled,
+      ]}
+    >
+      {loading ? <View style={styles.buttonContent}><ActivityIndicator color={foreground} /><Text style={[styles.buttonText, styles[`buttonText_${variant}`]]}>Memproses…</Text></View> : <View style={styles.buttonContent}>{icon ? <Ionicons name={icon} color={foreground} size={19} /> : null}<Text style={[styles.buttonText, styles[`buttonText_${variant}`]]}>{title}</Text></View>}
     </Pressable>
   );
 }
@@ -150,7 +187,7 @@ export function FeedbackDialog({
 }
 
 export function Empty({ title, message, icon = 'storefront-outline', action }: { title: string; message: string; icon?: IconName; action?: React.ReactNode }) {
-  return <Card style={styles.empty}><View style={styles.emptyIcon}><Ionicons name={icon} size={27} color={colors.primary} /></View><Text style={styles.emptyTitle}>{title}</Text><Text style={[styles.subtitle, styles.emptyMessage]}>{message}</Text>{action}</Card>;
+  return <View style={styles.empty}><View style={styles.emptyIcon}><Ionicons name={icon} size={27} color={colors.primary} /></View><Text style={styles.emptyTitle}>{title}</Text><Text style={[styles.subtitle, styles.emptyMessage]}>{message}</Text>{action}</View>;
 }
 
 export function Loader() {
@@ -158,7 +195,7 @@ export function Loader() {
 }
 
 export function ErrorState({ message, retry }: { message: string; retry?: () => void }) {
-  return <Card style={styles.empty}><View style={[styles.emptyIcon, { backgroundColor: colors.dangerSoft }]}><Ionicons name="cloud-offline-outline" size={28} color={colors.danger} /></View><Text style={styles.errorTitle}>Belum berhasil memuat</Text><Text style={styles.subtitle}>{message}</Text>{retry ? <Button title="Coba lagi" variant="secondary" icon="refresh-outline" onPress={retry} /> : null}</Card>;
+  return <View style={styles.empty}><View style={[styles.emptyIcon, { backgroundColor: colors.dangerSoft }]}><Ionicons name="cloud-offline-outline" size={28} color={colors.danger} /></View><Text style={styles.errorTitle}>Belum berhasil memuat</Text><Text style={[styles.subtitle, styles.emptyMessage]}>{message}</Text>{retry ? <Button title="Coba lagi" variant="secondary" icon="refresh-outline" onPress={retry} /> : null}</View>;
 }
 
 export const money = (value: number | string | undefined) => `Rp ${Number(value || 0).toLocaleString('id-ID')}`;
@@ -168,7 +205,7 @@ const styles = StyleSheet.create({
 
   feedbackBackdrop: { flex: 1, padding: 24, backgroundColor: 'rgba(10,26,41,.58)', alignItems: 'center', justifyContent: 'center' },
   feedbackBackdropMobile: { padding: 12 },
-  feedbackDialog: { width: '100%', maxWidth: 440, borderRadius: 18, padding: 22, gap: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, shadowColor: '#071727', shadowOpacity: .18, shadowRadius: 28, shadowOffset: { width: 0, height: 14 }, elevation: 8 },
+  feedbackDialog: { width: '100%', maxWidth: 440, borderRadius: 18, padding: 22, gap: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, ...(Platform.OS === 'web' ? { boxShadow: '0 18px 44px rgba(7,23,39,.20)' } as any : { shadowColor: '#071727', shadowOpacity: .18, shadowRadius: 28, shadowOffset: { width: 0, height: 14 }, elevation: 8 }) },
   feedbackDialogMobile: { borderRadius: 16, padding: 17, gap: 14 },
   feedbackHeader: { minHeight: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   feedbackIcon: { width: 46, height: 46, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
@@ -197,24 +234,40 @@ const styles = StyleSheet.create({
   titleMobile: { fontSize: 24, lineHeight: 31 },
   subtitle: { fontFamily: 'PoppinsRegular', fontSize: 14, color: colors.muted, lineHeight: 22, textAlign: 'left' },
   subtitleMobile: { fontSize: 12.5, lineHeight: 19 },
-  card: { backgroundColor: colors.surface, borderRadius: 14, padding: 20, gap: 10, borderWidth: 1, borderColor: colors.border, ...shadowSoft },
+  card: { backgroundColor: colors.surface, borderRadius: 14, padding: 20, gap: 10, borderWidth: 1, borderColor: colors.border },
   cardMobile: { borderRadius: 12, padding: 14 },
+  sectionHeader: { minHeight: 44, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16 },
+  sectionHeaderMobile: { alignItems: 'flex-start', gap: 10 },
+  sectionHeaderCopy: { flex: 1, gap: 2 },
+  sectionHeaderTitle: { fontFamily: 'PoppinsBold', color: colors.text, fontSize: 19, lineHeight: 25 },
+  sectionHeaderTitleMobile: { fontSize: 17, lineHeight: 23 },
+  sectionHeaderSubtitle: { fontFamily: 'PoppinsRegular', color: colors.muted, fontSize: 12, lineHeight: 18 },
+  sectionAction: { minHeight: 36, paddingHorizontal: 10, borderRadius: 9, flexDirection: 'row', alignItems: 'center', gap: 5, ...webTransition },
+  sectionActionPressed: { backgroundColor: colors.primarySoft, transform: [{ scale: .98 }] },
+  sectionActionText: { fontFamily: 'PoppinsSemiBold', color: colors.primary, fontSize: 11.5 },
+  skeleton: { backgroundColor: '#EDF2F7' },
   fieldWrap: { gap: 7 },
   label: { fontFamily: 'PoppinsMedium', color: colors.textSoft, fontSize: 14 },
-  inputShell: { minHeight: 52, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, gap: 11, backgroundColor: colors.surface, borderColor: colors.borderStrong, borderWidth: 1, borderRadius: radius.md },
-  inputFocused: { borderColor: colors.primary, backgroundColor: '#FBFDFF' },
+  inputShell: { minHeight: 52, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, gap: 11, backgroundColor: colors.surface, borderColor: colors.borderStrong, borderWidth: 1, borderRadius: radius.md, ...webTransition },
+  inputFocused: { borderColor: colors.primary, backgroundColor: '#FBFDFF', ...(Platform.OS === 'web' ? { boxShadow: '0 0 0 3px rgba(17,103,216,.10)' } as any : {}) },
   inputError: { borderColor: colors.danger },
   input: { minWidth: 0, flex: 1, minHeight: 50, paddingVertical: 10, borderWidth: 0, color: colors.text, fontFamily: 'PoppinsRegular', fontSize: 15, ...( { outlineStyle: 'none', outlineWidth: 0 } as any ) },
   multiline: { minHeight: 110, paddingTop: 14, textAlignVertical: 'top' },
   inputAction: { width: 28, height: 36, alignItems: 'center', justifyContent: 'center' },
   hint: { color: colors.muted, fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 18 },
   fieldError: { color: colors.danger, fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 18 },
-  button: { minHeight: 48, borderRadius: 11, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  button: { minHeight: 48, borderRadius: 11, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1, ...webTransition, ...(Platform.OS === 'web' ? { cursor: 'pointer' } as any : {}) },
   buttonContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
   button_primary: { backgroundColor: colors.primary, borderColor: colors.primary },
+  buttonHover_primary: { backgroundColor: colors.primaryHover, borderColor: colors.primaryHover, transform: [{ translateY: -1 }], ...shadowSoft },
   button_secondary: { backgroundColor: colors.primarySoft, borderColor: '#C8E0FA' },
+  buttonHover_secondary: { backgroundColor: '#DDEEFF', borderColor: '#A9CFF4', transform: [{ translateY: -1 }] },
   button_danger: { backgroundColor: colors.danger, borderColor: colors.danger },
+  buttonHover_danger: { backgroundColor: '#D94848', borderColor: '#D94848', transform: [{ translateY: -1 }] },
   button_ghost: { backgroundColor: 'transparent', borderColor: colors.border },
+  buttonHover_ghost: { backgroundColor: colors.surfaceMuted, borderColor: colors.borderStrong },
+  buttonPressed: { opacity: .82, transform: [{ scale: .985 }] },
+  buttonDisabled: { opacity: .48 },
   buttonText: { fontFamily: 'PoppinsSemiBold', fontSize: 15 },
   buttonText_primary: { color: colors.white }, buttonText_secondary: { color: colors.primary }, buttonText_danger: { color: colors.white }, buttonText_ghost: { color: colors.textSoft },
   alert: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, borderRadius: radius.sm, padding: 12 },
@@ -222,7 +275,7 @@ const styles = StyleSheet.create({
   alertSuccess: { backgroundColor: colors.successSoft, borderWidth: 1, borderColor: '#C9EDDE' },
   alertWarning: { backgroundColor: colors.warningSoft, borderWidth: 1, borderColor: '#F2D6A8' },
   alertText: { flex: 1, fontFamily: 'PoppinsRegular', fontSize: 13, lineHeight: 20 },
-  empty: { alignItems: 'center', justifyContent: 'center', minHeight: 230, paddingVertical: spacing.xxl, gap: spacing.sm },
+  empty: { alignItems: 'center', justifyContent: 'center', minHeight: 210, paddingVertical: spacing.xl, paddingHorizontal: spacing.lg, gap: spacing.sm },
   emptyIcon: { width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
   emptyMessage: { textAlign: 'center', maxWidth: 440 },
   emptyTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 19, color: colors.text },

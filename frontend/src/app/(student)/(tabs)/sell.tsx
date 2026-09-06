@@ -6,7 +6,7 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Button, Card, Empty, ErrorState, FeedbackDialog, Field, Loader, money, Screen, Title } from '@/components/ui';
 import { endpoints, errorMessage } from '@/lib/api';
-import { colors, radius } from '@/constants/theme';
+import { colors, radius, shadowSoft, webTransition } from '@/constants/theme';
 import type { Listing, PreorderStatus, Transaction } from '@/types';
 
 const statusLabel: Record<string, string> = {
@@ -199,37 +199,27 @@ export default function SellScreen() {
   return <Screen>
     <Title eyebrow="ETALASE PENJUAL" subtitle="Kelola listing, pantau status, dan lihat performa penjualanmu." action={create}>Etalase saya</Title>
 
-    <View style={styles.statsGrid}>
-      <View style={[styles.statCard, !desktop && styles.statCardMobile, compactMobile && styles.statCardCompact]}>
-        <View style={[styles.statIcon, { backgroundColor: colors.primarySoft }]}><Ionicons name="albums-outline" size={20} color={colors.primary} /></View>
-        <View style={styles.statCopy}><Text style={styles.statValue}>{counts.total}</Text><Text style={styles.statLabel}>Total listing</Text></View>
+    <View style={[styles.sellerOverview, !desktop && styles.sellerOverviewMobile]}>
+      <View style={styles.overviewLead}>
+        <View style={styles.overviewEyebrowRow}><View style={styles.overviewPulse} /><Text style={styles.overviewEyebrow}>TOKO KAMU HARI INI</Text></View>
+        <Text style={styles.overviewRevenue}>{money(sellerRevenue)}</Text>
+        <Text style={styles.overviewCaption}>Pendapatan dari {completedTransactions.length} transaksi selesai</Text>
+        <Pressable onPress={() => router.push('/(student)/listing/form')} style={({ pressed }) => [styles.overviewAction, pressed && styles.overviewActionPressed]}><Ionicons name="add" size={16} color="#FFFFFF" /><Text style={styles.overviewActionText}>Tambah produk</Text></Pressable>
       </View>
-      <View style={[styles.statCard, !desktop && styles.statCardMobile, compactMobile && styles.statCardCompact]}>
-        <View style={[styles.statIcon, { backgroundColor: colors.successSoft }]}><Ionicons name="checkmark-circle-outline" size={20} color={colors.success} /></View>
-        <View style={styles.statCopy}><Text style={styles.statValue}>{counts.active}</Text><Text style={styles.statLabel}>Sedang aktif</Text></View>
+      <View style={[styles.overviewMetrics, compactMobile && styles.overviewMetricsCompact]}>
+        <View style={styles.overviewMetric}><Text style={styles.overviewMetricValue}>{counts.active}</Text><Text style={styles.overviewMetricLabel}>Aktif</Text></View>
+        <View style={styles.overviewMetricDivider} />
+        <View style={styles.overviewMetric}><Text style={styles.overviewMetricValue}>{counts.outOfStock}</Text><Text style={styles.overviewMetricLabel}>Stok habis</Text></View>
+        <View style={styles.overviewMetricDivider} />
+        <View style={styles.overviewMetric}><Text style={styles.overviewMetricValue}>{counts.preorder}</Text><Text style={styles.overviewMetricLabel}>Pre-order</Text></View>
+        <View style={styles.overviewMetricDivider} />
+        <View style={styles.overviewMetric}><Text style={styles.overviewMetricValue}>{counts.total}</Text><Text style={styles.overviewMetricLabel}>Total listing</Text></View>
       </View>
-      <View style={[styles.statCard, !desktop && styles.statCardMobile, compactMobile && styles.statCardCompact]}>
-        <View style={[styles.statIcon, { backgroundColor: colors.warningSoft }]}><Ionicons name="bag-check-outline" size={20} color={colors.warning} /></View>
-        <View style={styles.statCopy}><Text style={styles.statValue}>{counts.outOfStock}</Text><Text style={styles.statLabel}>Stok habis</Text></View>
-      </View>
-      <View style={[styles.statCard, !desktop && styles.statCardMobile, compactMobile && styles.statCardCompact]}>
-        <View style={[styles.statIcon, { backgroundColor: colors.dangerSoft }]}><Ionicons name="shield-outline" size={20} color={colors.danger} /></View>
-        <View style={styles.statCopy}><Text style={styles.statValue}>{counts.preorder}</Text><Text style={styles.statLabel}>Pre-order</Text></View>
-      </View>
-    </View>
-
-    <View style={[styles.performance, !desktop && styles.performanceMobile]}>
-      <View style={[styles.performanceLead, !desktop && styles.performanceLeadMobile]}>
-        <View style={styles.performanceIcon}><Ionicons name="trending-up-outline" size={21} color={colors.primary} /></View>
-        <View><Text style={styles.performanceEyebrow}>PERFORMA PENJUALAN</Text><Text style={styles.performanceTitle}>Ringkasan transaksi selesai</Text></View>
-      </View>
-      <View style={styles.performanceMetric}><Text style={styles.performanceValue}>{completedTransactions.length}</Text><Text style={styles.performanceLabel}>Transaksi selesai</Text></View>
-      <View style={styles.performanceDivider} />
-      <View style={styles.performanceMetric}><Text style={styles.performanceRevenue}>{money(sellerRevenue)}</Text><Text style={styles.performanceLabel}>Pendapatan diterima</Text></View>
+      {counts.outOfStock > 0 ? <View style={styles.overviewNudge}><Ionicons name="cube-outline" size={17} color={colors.warning} /><Text style={styles.overviewNudgeText}>{counts.outOfStock} produk kehabisan stok. Restock supaya muncul lagi di marketplace.</Text><Pressable onPress={() => setFilter('OUT_OF_STOCK')}><Text style={styles.overviewNudgeAction}>Lihat</Text></Pressable></View> : counts.preorder > 0 ? <View style={styles.overviewNudge}><Ionicons name="calendar-outline" size={17} color="#7442C3" /><Text style={styles.overviewNudgeText}>Pantau deadline dan progres pre-order aktifmu dari tab Pre-order.</Text><Pressable onPress={() => setFilter('PREORDER')}><Text style={[styles.overviewNudgeAction, { color: '#7442C3' }]}>Buka</Text></Pressable></View> : null}
     </View>
 
     <View style={styles.sectionHeading}>
-      <View><Text style={styles.listTitle}>Daftar listing</Text><Text style={styles.listCopy}>Cari, filter, dan kelola semua listing dari satu tempat.</Text></View>
+      <View><Text style={styles.listTitle}>Kelola listing</Text><Text style={styles.listCopy}>Semua produk, stok, dan pre-order kamu ada di sini.</Text></View>
       <Text style={styles.resultCount}>{filteredItems.length} ditampilkan</Text>
     </View>
 
@@ -356,38 +346,37 @@ export default function SellScreen() {
 }
 
 const styles = StyleSheet.create({
-  pressed: { opacity: .67 },
-  statsGrid: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
-  statCard: { flex: 1, minWidth: 190, minHeight: 96, paddingHorizontal: 18, paddingVertical: 16, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 13 },
-  statCardMobile: { minWidth: 0, flexBasis: '47%', paddingHorizontal: 14 },
-  statCardCompact: { flexBasis: '100%' },
-  statIcon: { width: 46, height: 46, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  statCopy: { gap: 1 },
-  statValue: { fontFamily: 'PoppinsBold', fontSize: 23, lineHeight: 28, color: colors.text },
-  statLabel: { fontFamily: 'PoppinsRegular', fontSize: 12, color: colors.muted },
-
-  performance: { minHeight: 88, paddingHorizontal: 18, paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: '#CFE1F6', backgroundColor: '#F7FAFE', flexDirection: 'row', alignItems: 'center', gap: 24 },
-  performanceMobile: { flexWrap: 'wrap', alignItems: 'flex-start', gap: 14 },
-  performanceLead: { flex: 1, minWidth: 270, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  performanceLeadMobile: { minWidth: 0, width: '100%' },
-  performanceIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
-  performanceEyebrow: { fontFamily: 'PoppinsBold', fontSize: 10.5, letterSpacing: .65, color: colors.primary },
-  performanceTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 13, color: colors.text, marginTop: 1 },
-  performanceMetric: { minWidth: 132, alignItems: 'flex-end' },
-  performanceValue: { fontFamily: 'PoppinsBold', fontSize: 20, color: colors.text },
-  performanceRevenue: { fontFamily: 'PoppinsBold', fontSize: 18, color: colors.primaryDark },
-  performanceLabel: { fontFamily: 'PoppinsRegular', fontSize: 11.5, color: colors.muted, marginTop: 2 },
-  performanceDivider: { width: 1, height: 38, backgroundColor: colors.border },
+  pressed: { opacity: .72, transform: [{ scale: .985 }] },
+  sellerOverview: { overflow: 'hidden', position: 'relative', borderRadius: 18, borderWidth: 1, borderColor: '#CFE0F2', backgroundColor: '#F8FBFF', padding: 20, flexDirection: 'row', alignItems: 'stretch', gap: 22, flexWrap: 'wrap', ...shadowSoft },
+  sellerOverviewMobile: { padding: 16, gap: 16 },
+  overviewLead: { flex: 1.25, minWidth: 260, gap: 4 },
+  overviewEyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  overviewPulse: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#5FC89B' },
+  overviewEyebrow: { fontFamily: 'PoppinsBold', fontSize: 10.5, letterSpacing: .75, color: colors.primary },
+  overviewRevenue: { marginTop: 4, fontFamily: 'PoppinsBold', fontSize: 27, lineHeight: 34, color: colors.text, letterSpacing: -.35 },
+  overviewCaption: { fontFamily: 'PoppinsRegular', fontSize: 11.5, lineHeight: 18, color: colors.muted },
+  overviewAction: { alignSelf: 'flex-start', minHeight: 38, marginTop: 9, paddingHorizontal: 13, borderRadius: 9, backgroundColor: colors.primary, flexDirection: 'row', alignItems: 'center', gap: 6, ...webTransition },
+  overviewActionPressed: { opacity: .82, transform: [{ scale: .98 }] },
+  overviewActionText: { fontFamily: 'PoppinsSemiBold', fontSize: 11.5, color: colors.white },
+  overviewMetrics: { flex: 1.4, minWidth: 390, minHeight: 112, borderLeftWidth: 1, borderLeftColor: '#D9E6F3', paddingLeft: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', gap: 12 },
+  overviewMetricsCompact: { minWidth: 0, width: '100%', borderLeftWidth: 0, borderTopWidth: 1, borderTopColor: '#D9E6F3', paddingLeft: 0, paddingTop: 14, flexWrap: 'wrap' },
+  overviewMetric: { minWidth: 64, alignItems: 'center', gap: 1 },
+  overviewMetricValue: { fontFamily: 'PoppinsBold', fontSize: 22, color: '#23364A' },
+  overviewMetricLabel: { fontFamily: 'PoppinsRegular', fontSize: 10.5, color: colors.muted, textAlign: 'center' },
+  overviewMetricDivider: { width: 1, height: 38, backgroundColor: '#D9E6F3' },
+  overviewNudge: { flexBasis: '100%', minHeight: 42, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E0E7EF', flexDirection: 'row', alignItems: 'center', gap: 8 },
+  overviewNudgeText: { flex: 1, fontFamily: 'PoppinsRegular', fontSize: 11.25, lineHeight: 17, color: colors.textSoft },
+  overviewNudgeAction: { fontFamily: 'PoppinsSemiBold', fontSize: 11, color: colors.warning },
 
   sectionHeading: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' },
   listTitle: { fontFamily: 'PoppinsBold', fontSize: 21, color: colors.text },
   listCopy: { fontFamily: 'PoppinsRegular', fontSize: 12.5, lineHeight: 19, color: colors.muted, marginTop: 2 },
   resultCount: { fontFamily: 'PoppinsMedium', fontSize: 12, color: colors.muted },
-  controls: { padding: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  controls: { paddingVertical: 10, paddingHorizontal: 0, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 12 },
   controlsMobile: { alignItems: 'stretch', flexDirection: 'column' },
   searchWrap: { minWidth: 250, maxWidth: 390, flex: 1 },
   filters: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 7, flexWrap: 'wrap' },
-  filter: { minHeight: 36, paddingHorizontal: 11, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 7 },
+  filter: { minHeight: 36, paddingHorizontal: 11, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 7, ...webTransition },
   filterActive: { borderColor: '#B7D3F3', backgroundColor: colors.primarySoft },
   filterText: { fontFamily: 'PoppinsMedium', fontSize: 11.5, color: colors.textSoft },
   filterTextActive: { fontFamily: 'PoppinsSemiBold', color: colors.primary },

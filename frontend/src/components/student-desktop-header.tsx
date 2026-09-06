@@ -6,6 +6,7 @@ import { Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } fro
 import { endpoints } from '@/lib/api';
 import { FeedbackDialog, money } from '@/components/ui';
 import { useAuth } from '@/store/auth';
+import { webTransition } from '@/constants/theme';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -242,7 +243,7 @@ export function StudentDesktopHeader() {
             />
             {searchValue ? <Pressable accessibilityLabel="Hapus pencarian" onPress={clearSearch} style={styles.clearSearch}><Ionicons name="close" size={16} color="#71839A" /></Pressable> : null}
             {!compactDesktop ? <View style={styles.shortcutKey}><Text style={styles.shortcutKeyText}>Ctrl K</Text></View> : null}
-            <Pressable onPress={() => submitSearch()} style={styles.searchAction}>
+            <Pressable onPress={() => submitSearch()} style={({ pressed }) => [styles.searchAction, pressed && styles.searchActionPressed]}>
               <Ionicons name="search" size={16} color="#FFFFFF" />
             </Pressable>
           </View>
@@ -268,17 +269,17 @@ export function StudentDesktopHeader() {
         </View>
 
         <View style={styles.headerActions}>
-          <Pressable onPress={() => router.push('/(student)/listing/form')} style={styles.sellButton}>
+          <Pressable onPress={() => router.push('/(student)/listing/form')} style={({ pressed }) => [styles.sellButton, pressed && styles.headerPress]}>
             <Ionicons name="add" size={17} color="#FFFFFF" />
             <Text style={styles.sellButtonText}>{compactDesktop ? 'Jual' : 'Buat Listing'}</Text>
           </Pressable>
-          <Pressable accessibilityLabel="Pesan" onPress={() => router.push('/(student)/(tabs)/chats')} style={styles.iconButton}>
+          <Pressable accessibilityLabel="Pesan" onPress={() => router.push('/(student)/(tabs)/chats')} style={({ pressed }) => [styles.iconButton, pressed && styles.headerPress]}>
             <Ionicons name="chatbubble-ellipses-outline" size={19} color="#FFFFFF" />
           </Pressable>
-          <Pressable accessibilityLabel="Tersimpan" onPress={() => router.push('/(student)/saved')} style={styles.iconButton}>
+          <Pressable accessibilityLabel="Tersimpan" onPress={() => router.push('/(student)/saved')} style={({ pressed }) => [styles.iconButton, pressed && styles.headerPress]}>
             <Ionicons name="heart-outline" size={20} color="#FFFFFF" />
           </Pressable>
-          <Pressable accessibilityLabel="Notifikasi" onPress={() => router.push('/(student)/notifications')} style={styles.iconButton}>
+          <Pressable accessibilityLabel="Notifikasi" onPress={() => router.push('/(student)/notifications')} style={({ pressed }) => [styles.iconButton, pressed && styles.headerPress]}>
             <Ionicons name={unread ? 'notifications' : 'notifications-outline'} size={20} color="#FFFFFF" />
             {unread ? <View style={styles.notificationBadge}><Text style={styles.notificationBadgeText}>{unread > 9 ? '9+' : unread}</Text></View> : null}
           </Pressable>
@@ -393,13 +394,14 @@ const styles = StyleSheet.create({
   brandCompact: { width: 122 },
   brandWordmark: { fontFamily: 'PoppinsBold', fontSize: 27, lineHeight: 32, color: '#FFFFFF', letterSpacing: -.5 },
   searchWrap: { minWidth: 280, maxWidth: 620, flex: 1, position: 'relative', zIndex: 1250 },
-  search: { width: '100%', height: 42, borderRadius: 9, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'transparent', paddingLeft: 13, paddingRight: 5, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  searchFocused: { borderColor: '#8FC2FF', shadowColor: '#062F61', shadowOpacity: .18, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
+  search: { width: '100%', height: 42, borderRadius: 10, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'transparent', paddingLeft: 13, paddingRight: 5, flexDirection: 'row', alignItems: 'center', gap: 8, ...webTransition },
+  searchFocused: { borderColor: '#91C6FF', ...( { boxShadow: '0 8px 22px rgba(2, 38, 78, .18)' } as any ) },
   searchInput: { flex: 1, height: '100%', fontFamily: 'PoppinsRegular', fontSize: 12.5, color: '#162131', outlineStyle: 'none' } as never,
   clearSearch: { width: 26, height: 26, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
   shortcutKey: { minWidth: 45, height: 24, paddingHorizontal: 7, borderRadius: 5, borderWidth: 1, borderColor: '#DFE5EC', backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center' },
   shortcutKeyText: { fontFamily: 'PoppinsMedium', fontSize: 9.5, color: '#718096' },
-  searchAction: { width: 36, height: 32, borderRadius: 7, backgroundColor: '#114B91', alignItems: 'center', justifyContent: 'center' },
+  searchAction: { width: 36, height: 32, borderRadius: 8, backgroundColor: '#114B91', alignItems: 'center', justifyContent: 'center', ...webTransition },
+  searchActionPressed: { opacity: .8, transform: [{ scale: .94 }] },
   searchDropdown: { position: 'absolute', top: 47, left: 0, right: 0, maxHeight: 430, overflow: 'hidden', borderRadius: 10, borderWidth: 1, borderColor: '#D6DEE8', backgroundColor: '#FFFFFF', shadowColor: '#0D243B', shadowOpacity: .20, shadowRadius: 18, shadowOffset: { width: 0, height: 9 }, elevation: 20, zIndex: 1400 },
   searchSection: { paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#EEF2F6' },
   searchSectionHead: { minHeight: 36, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#EEF2F6' },
@@ -420,9 +422,10 @@ const styles = StyleSheet.create({
   searchEmpty: { minHeight: 78, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', gap: 10 },
   searchEmptyText: { flex: 1, fontFamily: 'PoppinsRegular', fontSize: 10.5, lineHeight: 16, color: '#7B899A' },
   headerActions: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 8, zIndex: 1100 },
-  sellButton: { height: 40, borderRadius: 8, paddingHorizontal: 14, backgroundColor: '#1676E8', borderWidth: 1, borderColor: '#4A9AF2', flexDirection: 'row', alignItems: 'center', gap: 6 },
+  sellButton: { height: 40, borderRadius: 9, paddingHorizontal: 14, backgroundColor: '#1676E8', borderWidth: 1, borderColor: '#4A9AF2', flexDirection: 'row', alignItems: 'center', gap: 6, ...webTransition },
   sellButtonText: { fontFamily: 'PoppinsSemiBold', fontSize: 12, color: '#FFFFFF' },
-  iconButton: { width: 40, height: 40, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,.22)', backgroundColor: 'rgba(0,0,0,.10)', alignItems: 'center', justifyContent: 'center' },
+  iconButton: { width: 40, height: 40, borderRadius: 9, borderWidth: 1, borderColor: 'rgba(255,255,255,.18)', backgroundColor: 'rgba(0,0,0,.08)', alignItems: 'center', justifyContent: 'center', ...webTransition },
+  headerPress: { opacity: .74, transform: [{ scale: .95 }] },
   profileMenuWrap: { position: 'relative', zIndex: 1200 },
   profile: { minHeight: 42, maxWidth: 190, borderRadius: 9, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 3, paddingRight: 7 },
   profileActive: { backgroundColor: 'rgba(0,0,0,.12)' },
@@ -466,11 +469,11 @@ const styles = StyleSheet.create({
   marketNav: { height: 42, backgroundColor: '#073B7C', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,.10)', zIndex: 900 },
   marketNavInner: { width: '100%', maxWidth: 1280, height: '100%', alignSelf: 'center', paddingHorizontal: 24, flexDirection: 'row', alignItems: 'center', gap: 16 },
   primaryTabs: { height: '100%', flexDirection: 'row', alignItems: 'center' },
-  primaryTab: { height: '100%', paddingHorizontal: 11, flexDirection: 'row', alignItems: 'center', gap: 5, borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  primaryTabActive: { backgroundColor: 'rgba(255,255,255,.08)', borderBottomColor: '#62A8FF' },
+  primaryTab: { height: '100%', paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 6, borderBottomWidth: 2, borderBottomColor: 'transparent', ...webTransition },
+  primaryTabActive: { backgroundColor: 'rgba(255,255,255,.07)', borderBottomColor: '#7DBBFF' },
   primaryTabText: { fontFamily: 'PoppinsMedium', fontSize: 11.5, color: '#BFD4EE' },
   primaryTabTextActive: { fontFamily: 'PoppinsSemiBold', color: '#FFFFFF' },
-  navPressed: { backgroundColor: 'rgba(255,255,255,.12)' },
+  navPressed: { backgroundColor: 'rgba(255,255,255,.12)', transform: [{ translateY: 1 }] },
   notificationBadge: { position: 'absolute', right: -4, top: -5, minWidth: 16, height: 16, paddingHorizontal: 4, borderRadius: 8, backgroundColor: '#F04E5E', alignItems: 'center', justifyContent: 'center' },
   notificationBadgeText: { fontFamily: 'PoppinsBold', fontSize: 9, color: '#FFFFFF' },
 });
