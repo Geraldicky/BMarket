@@ -57,7 +57,15 @@ export function StudentDesktopHeader() {
   const currentQuery = typeof params.q === 'string' ? params.q : '';
   const [searchValue, setSearchValue] = useState(currentQuery);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => {
+    if (typeof localStorage === 'undefined') return [];
+    try {
+      const stored = JSON.parse(localStorage.getItem('bmarket-recent-searches') || '[]');
+      return Array.isArray(stored) ? stored.filter(item => typeof item === 'string').slice(0, 6) : [];
+    } catch {
+      return [];
+    }
+  });
   const [activeSuggestion, setActiveSuggestion] = useState(-1);
   const [profileOpen, setProfileOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
@@ -68,26 +76,20 @@ export function StudentDesktopHeader() {
   const balance = useQuery({ queryKey: ['header-balance'], queryFn: endpoints.balance, enabled: profileOpen, staleTime: 30000 });
   const buyerTransactions = useQuery({ queryKey: ['header-buyer-transactions'], queryFn: () => endpoints.transactions('buyer'), enabled: profileOpen, staleTime: 30000 });
   const wishlist = useQuery({ queryKey: ['header-wishlist'], queryFn: endpoints.wishlist, enabled: profileOpen, staleTime: 30000 });
+  const effectiveSearchValue = searchOpen ? searchValue : currentQuery;
   const suggestionQuery = useQuery({
-    queryKey: ['header-search-suggestions', searchValue.trim()],
-    queryFn: () => endpoints.listings({ keyword: searchValue.trim(), page: 1, limit: 5, sort: 'newest' }),
-    enabled: searchOpen && searchValue.trim().length >= 2,
+    queryKey: ['header-search-suggestions', effectiveSearchValue.trim()],
+    queryFn: () => endpoints.listings({ keyword: effectiveSearchValue.trim(), page: 1, limit: 5, sort: 'newest' }),
+    enabled: searchOpen && effectiveSearchValue.trim().length >= 2,
     staleTime: 20000,
   });
 
-  useEffect(() => setSearchValue(currentQuery), [currentQuery]);
-  useEffect(() => {
-    if (typeof localStorage === 'undefined') return;
-    try {
-      const stored = JSON.parse(localStorage.getItem('bmarket-recent-searches') || '[]');
-      if (Array.isArray(stored)) setRecentSearches(stored.filter(item => typeof item === 'string').slice(0, 6));
-    } catch { setRecentSearches([]); }
-  }, []);
   useEffect(() => {
     if (typeof document === 'undefined') return;
     const handler = (event: any) => {
       if ((event.ctrlKey || event.metaKey) && String(event.key).toLowerCase() === 'k') {
         event.preventDefault();
+        setSearchValue(currentQuery);
         setSearchOpen(true);
         searchInputRef.current?.focus();
       }
@@ -98,7 +100,7 @@ export function StudentDesktopHeader() {
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [searchOpen]);
+  }, [searchOpen, currentQuery]);
   useEffect(() => () => {
     if (closeTimer.current) clearTimeout(closeTimer.current);
     if (searchCloseTimer.current) clearTimeout(searchCloseTimer.current);
@@ -131,6 +133,10 @@ export function StudentDesktopHeader() {
   const openSearch = () => {
     if (searchCloseTimer.current) clearTimeout(searchCloseTimer.current);
     setSearchOpen(true);
+  };
+  const focusSearch = () => {
+    if (!searchOpen) setSearchValue(currentQuery);
+    openSearch();
   };
   const scheduleCloseSearch = () => {
     if (searchCloseTimer.current) clearTimeout(searchCloseTimer.current);
@@ -224,15 +230,15 @@ export function StudentDesktopHeader() {
 
         <View
           style={styles.searchWrap}
-          {...({ onPointerEnter: openSearch, onPointerLeave: scheduleCloseSearch } as any)}
+          {...({ onPointerEnter: focusSearch, onPointerLeave: scheduleCloseSearch } as any)}
         >
           <View style={[styles.search, searchOpen && styles.searchFocused]}>
             <Ionicons name="search-outline" size={18} color="#71839A" />
             <TextInput
               ref={searchInputRef}
-              value={searchValue}
+              value={effectiveSearchValue}
               onChangeText={value => { setSearchValue(value); setActiveSuggestion(-1); openSearch(); }}
-              onFocus={openSearch}
+              onFocus={focusSearch}
               onBlur={scheduleCloseSearch}
               onKeyPress={handleSearchKey}
               onSubmitEditing={() => activeSuggestion >= 0 && keyboardChoices[activeSuggestion] ? chooseSearchChoice(keyboardChoices[activeSuggestion]) : submitSearch()}

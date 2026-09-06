@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { colors, radius, shadow } from '@/constants/theme';
+import { colors, shadow } from '@/constants/theme';
 
 const MONTHS = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 const DAYS = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
@@ -65,15 +65,15 @@ export function DateTimePickerField({
   const [time, setTime] = useState(selected ? `${pad(selected.getHours())}:${pad(selected.getMinutes())}` : defaultTime);
   const [timeError, setTimeError] = useState('');
 
-  useEffect(() => {
-    if (!open) return;
+  const openPicker = () => {
     const nextSelected = parseLocalDateTimeValue(value);
     const base = nextSelected || minDate || new Date();
     setDraftDate(base);
     setMonthCursor(new Date(base.getFullYear(), base.getMonth(), 1));
     setTime(nextSelected ? `${pad(nextSelected.getHours())}:${pad(nextSelected.getMinutes())}` : defaultTime);
     setTimeError('');
-  }, [open, value, defaultTime, minDate]);
+    setOpen(true);
+  };
 
   const cells = useMemo(() => {
     const year = monthCursor.getFullYear();
@@ -103,7 +103,7 @@ export function DateTimePickerField({
   return (
     <View style={styles.wrap}>
       <Text style={styles.label}>{label}</Text>
-      <Pressable onPress={() => setOpen(true)} style={[styles.field, error && styles.fieldError]}>
+      <Pressable onPress={openPicker} style={[styles.field, error && styles.fieldError]}>
         <View style={styles.leadingIcon}><Ionicons name="calendar-outline" size={18} color={colors.primary} /></View>
         <Text style={[styles.value, !value && styles.placeholder]} numberOfLines={1}>{value ? formatDisplay(value) : placeholder}</Text>
         <Ionicons name="chevron-down" size={17} color={colors.muted} />

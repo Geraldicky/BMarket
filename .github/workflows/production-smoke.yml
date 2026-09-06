@@ -1,0 +1,29 @@
+name: Production Smoke
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */6 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      PLAYWRIGHT_BASE_URL: https://b-market-hazel.vercel.app
+      E2E_API_URL: https://bmarket-api-production.up.railway.app/api
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm install
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test e2e/smoke.spec.ts e2e/api-health.spec.ts --project=chromium

@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useDeferredValue, useEffect, useState } from 'react';
+import { useDeferredValue, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -39,12 +39,14 @@ function HomeSkeleton({ cardWidth }: { cardWidth: number }) {
   </View>;
 }
 
-export default function HomeScreen() {
+type HomeContentProps = {
+  initialQuery: string;
+  initialCategory: string;
+  initialFulfillment: 'ALL' | 'CAMPUS_MEETUP' | 'INSTANT_COURIER';
+};
+
+function HomeContent({ initialQuery, initialCategory, initialFulfillment }: HomeContentProps) {
   const user = useAuth(state => state.user);
-  const params = useLocalSearchParams<{ q?: string; category?: string; fulfillment?: string }>();
-  const initialQuery = typeof params.q === 'string' ? params.q : '';
-  const initialCategory = typeof params.category === 'string' ? params.category : 'Semua';
-  const initialFulfillment = params.fulfillment === 'CAMPUS_MEETUP' || params.fulfillment === 'INSTANT_COURIER' ? params.fulfillment : 'ALL';
   const { width } = useWindowDimensions();
   const desktop = width >= 960;
   const mobile = width < 600;
@@ -57,9 +59,6 @@ export default function HomeScreen() {
   const [fulfillment, setFulfillment] = useState<'ALL' | 'CAMPUS_MEETUP' | 'INSTANT_COURIER'>(initialFulfillment);
   const client = useQueryClient();
 
-  useEffect(() => setKeyword(initialQuery), [initialQuery]);
-  useEffect(() => setCategory(initialCategory), [initialCategory]);
-  useEffect(() => setFulfillment(initialFulfillment), [initialFulfillment]);
 
   const filtering = Boolean(deferredKeyword.trim()) || category !== 'Semua' || listingType !== 'ALL' || listingMode !== 'ALL' || sort !== 'newest' || fulfillment !== 'ALL';
   const query = useInfiniteQuery({
@@ -171,6 +170,16 @@ export default function HomeScreen() {
       <View style={styles.footer}><Text style={styles.footerBrand}>BMarket</Text><Text style={styles.footerText}>Marketplace komunitas BINUS untuk barang, jasa, dan transaksi yang lebih terstruktur.</Text></View>
     </Screen>
   );
+}
+
+export default function HomeScreen() {
+  const params = useLocalSearchParams<{ q?: string; category?: string; fulfillment?: string }>();
+  const initialQuery = typeof params.q === 'string' ? params.q : '';
+  const initialCategory = typeof params.category === 'string' ? params.category : 'Semua';
+  const initialFulfillment: HomeContentProps['initialFulfillment'] = params.fulfillment === 'CAMPUS_MEETUP' || params.fulfillment === 'INSTANT_COURIER' ? params.fulfillment : 'ALL';
+  const routeKey = `${initialQuery}::${initialCategory}::${initialFulfillment}`;
+
+  return <HomeContent key={routeKey} initialQuery={initialQuery} initialCategory={initialCategory} initialFulfillment={initialFulfillment} />;
 }
 
 const styles = StyleSheet.create({

@@ -49,19 +49,15 @@ function RoomItem({ room, currentUserId, active }: { room: ChatRoom; currentUser
   );
 }
 
-export default function ChatRoomScreen() {
-  const { id, transactionId, name } = useLocalSearchParams<{ id: string; transactionId?: string; name?: string }>();
-  const { width } = useWindowDimensions();
-  const desktop = width >= 960;
-  const user = useAuth(state => state.user);
+type ChatRoomContentProps = {
+  id: string;
+  transactionId?: string;
+  name?: string;
+  desktop: boolean;
+};
 
-  useEffect(() => {
-    if (!desktop || !id) return;
-    router.replace({
-      pathname: '/(student)/(tabs)/chats',
-      params: { roomId: id, ...(transactionId ? { transactionId } : {}) },
-    } as never);
-  }, [desktop, id, transactionId]);
+function ChatRoomContent({ id, transactionId, name, desktop }: ChatRoomContentProps) {
+  const user = useAuth(state => state.user);
   const [liveMessages, setLiveMessages] = useState<Message[]>([]);
   const [content, setContent] = useState('');
   const [sendError, setSendError] = useState('');
@@ -78,12 +74,6 @@ export default function ChatRoomScreen() {
   const currentRoom = roomsQuery.data?.find(room => room.id === id);
   const other = currentRoom ? (currentRoom.userAId === user?.id ? currentRoom.userB : currentRoom.userA) : undefined;
   const otherName = other?.name || name || 'Percakapan';
-
-  useEffect(() => {
-    setLiveMessages([]);
-    setContent('');
-    setSendError('');
-  }, [id]);
 
   useEffect(() => {
     let mounted = true;
@@ -184,6 +174,22 @@ export default function ChatRoomScreen() {
       </View>
     </KeyboardAvoidingView>
   );
+}
+
+export default function ChatRoomScreen() {
+  const { id, transactionId, name } = useLocalSearchParams<{ id: string; transactionId?: string; name?: string }>();
+  const { width } = useWindowDimensions();
+  const desktop = width >= 960;
+
+  useEffect(() => {
+    if (!desktop || !id) return;
+    router.replace({
+      pathname: '/(student)/(tabs)/chats',
+      params: { roomId: id, ...(transactionId ? { transactionId } : {}) },
+    } as never);
+  }, [desktop, id, transactionId]);
+
+  return <ChatRoomContent key={id} id={id} transactionId={transactionId} name={name} desktop={desktop} />;
 }
 
 const styles = StyleSheet.create({

@@ -7,7 +7,7 @@ import { io, Socket } from 'socket.io-client';
 import { Card, Empty, ErrorState, Field, InlineAlert, Loader, Screen, Title } from '@/components/ui';
 import { endpoints, errorMessage, SOCKET_URL, TOKEN_KEY } from '@/lib/api';
 import { getStoredValue } from '@/lib/token-storage';
-import { colors, radius, shadowSoft, spacing } from '@/constants/theme';
+import { colors, radius, shadowSoft } from '@/constants/theme';
 import { useAuth } from '@/store/auth';
 import type { ChatRoom, Message } from '@/types';
 
@@ -61,12 +61,6 @@ function DesktopConversation({ roomId, transactionId, rooms, currentUserId }: { 
   const currentRoom = rooms.find(room => room.id === roomId);
   const other = currentRoom ? (currentRoom.userAId === currentUserId ? currentRoom.userB : currentRoom.userA) : undefined;
   const otherName = other?.name || 'Percakapan';
-
-  useEffect(() => {
-    setLiveMessages([]);
-    setContent('');
-    setSendError('');
-  }, [roomId]);
 
   useEffect(() => {
     let mounted = true;
@@ -157,8 +151,8 @@ export default function ChatsScreen() {
   const { width } = useWindowDimensions();
   const desktop = width >= 960;
   const [search, setSearch] = useState('');
-  const [selectedRoomId, setSelectedRoomId] = useState(typeof params.roomId === 'string' ? params.roomId : '');
-  const [selectedTransactionId, setSelectedTransactionId] = useState<string | undefined>(typeof params.transactionId === 'string' ? params.transactionId : undefined);
+  const selectedRoomId = typeof params.roomId === 'string' ? params.roomId : '';
+  const selectedTransactionId = typeof params.transactionId === 'string' ? params.transactionId : undefined;
   const query = useQuery({ queryKey: ['rooms'], queryFn: endpoints.rooms, refetchInterval: 15000 });
   const rooms = useMemo(() => query.data?.filter(room => {
     const other = room.userAId === user?.id ? room.userB : room.userA;
@@ -166,16 +160,8 @@ export default function ChatsScreen() {
   }) || [], [query.data, search, user?.id]);
   const unread = query.data?.reduce((sum, room) => sum + (room.unreadCount || 0), 0) || 0;
 
-  useEffect(() => {
-    if (typeof params.roomId === 'string' && params.roomId) {
-      setSelectedRoomId(params.roomId);
-      setSelectedTransactionId(typeof params.transactionId === 'string' ? params.transactionId : undefined);
-    }
-  }, [params.roomId, params.transactionId]);
-
   const selectRoom = (room: ChatRoom) => {
-    setSelectedRoomId(room.id);
-    setSelectedTransactionId(undefined);
+    router.replace({ pathname: '/(student)/(tabs)/chats', params: { roomId: room.id } } as never);
   };
 
   if (desktop) {
@@ -193,7 +179,7 @@ export default function ChatsScreen() {
             </ScrollView>
           </View>
 
-          {selectedRoomId ? <DesktopConversation roomId={selectedRoomId} transactionId={selectedTransactionId} rooms={query.data || []} currentUserId={user?.id} /> : <View style={styles.emptyConversation}>
+          {selectedRoomId ? <DesktopConversation key={selectedRoomId} roomId={selectedRoomId} transactionId={selectedTransactionId} rooms={query.data || []} currentUserId={user?.id} /> : <View style={styles.emptyConversation}>
             <View style={styles.emptyIcon}><Ionicons name="chatbubbles-outline" size={34} color={colors.primary} /></View>
             <Text style={styles.emptyTitle}>Pilih percakapan</Text>
             <Text style={styles.emptyCopy}>Pilih salah satu chat di kiri untuk mulai berdiskusi tentang kondisi barang, lokasi meetup, atau detail transaksi.</Text>

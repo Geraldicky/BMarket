@@ -1,13 +1,13 @@
 {
   "name": "binus-marketplace-nest",
-  "version": "2.5.0",
+  "version": "2.7.0",
   "description": "BINUS Student Marketplace - NestJS Backend",
   "scripts": {
     "build": "nest build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "dev": "nest start --watch",
-    "start": "node dist/src/main.js",
+    "start": "node dist/main",
     "test:watch": "vitest",
     "db:validate": "prisma validate",
     "db:generate": "prisma generate",
@@ -15,6 +15,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "db:seed": "ts-node prisma/seed.ts",
+    "db:seed:demo": "ts-node prisma/seed-demo.ts",
     "test:flows": "vitest run src/transactions/transactions.service.spec.ts src/transactions/transactions.integrity.spec.ts src/reviews/reviews.service.spec.ts src/activity/activity.service.spec.ts src/disputes/disputes.service.spec.ts src/notifications/notifications.service.spec.ts src/safety/safety.service.spec.ts src/chat/chat.service.spec.ts"
   },
   "dependencies": {

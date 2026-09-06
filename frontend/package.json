@@ -1,7 +1,7 @@
 {
   "name": "bmarket-mobile",
   "main": "expo-router/entry",
-  "version": "2.6.2",
+  "version": "2.7.0",
   "dependencies": {
     "@expo/ui": "~57.0.15",
     "@expo/vector-icons": "^15.1.1",
@@ -35,6 +35,7 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/react": "~19.2.2",
     "eslint": "^9.39.5",
     "eslint-config-expo": "^57.0.2",
@@ -46,7 +47,11 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "test:e2e": "playwright test",
+    "test:e2e:smoke": "playwright test e2e/smoke.spec.ts --project=chromium",
+    "test:e2e:headed": "playwright test --headed --project=chromium",
+    "test:e2e:report": "playwright show-report"
   },
   "private": true,
   "engines": {

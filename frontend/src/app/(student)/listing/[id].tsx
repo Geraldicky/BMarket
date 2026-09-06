@@ -64,32 +64,21 @@ export default function ListingDetailScreen() {
   });
   useEffect(() => { if (id) endpoints.recordRecent(id).catch(() => undefined); }, [id]);
 
-  useEffect(() => {
-    if (!checkoutOpen || !checkoutOptions.data) return;
-
-    const options = checkoutOptions.data;
-    setFulfillmentMethod(current => options.fulfillmentMethods.includes(current)
-      ? current
-      : (options.fulfillmentMethods[0] ?? 'CAMPUS_MEETUP'));
-    setCourierProvider(current => options.couriers.some(option => option.provider === current)
-      ? current
-      : (options.couriers[0]?.provider ?? 'GOSEND'));
-  }, [checkoutOpen, checkoutOptions.data]);
   const buy = useMutation({
     mutationFn: () => {
       const amount = Number(quantity);
       if (!Number.isInteger(amount) || amount < 1) throw new Error('Jumlah pembelian minimal 1.');
-      if (fulfillmentMethod === 'INSTANT_COURIER' && (!deliveryAddress.trim() || !recipientPhone.trim())) {
+      if (effectiveFulfillmentMethod === 'INSTANT_COURIER' && (!deliveryAddress.trim() || !recipientPhone.trim())) {
         throw new Error('Lengkapi alamat penerima dan nomor telepon.');
       }
       return endpoints.buy({
         listingId: id,
         quantity: amount,
         note: note.trim() || undefined,
-        fulfillmentMethod,
-        courierProvider: fulfillmentMethod === 'INSTANT_COURIER' ? courierProvider : undefined,
-        deliveryAddress: fulfillmentMethod === 'INSTANT_COURIER' ? deliveryAddress.trim() : undefined,
-        recipientPhone: fulfillmentMethod === 'INSTANT_COURIER' ? recipientPhone.trim() : undefined,
+        fulfillmentMethod: effectiveFulfillmentMethod,
+        courierProvider: effectiveFulfillmentMethod === 'INSTANT_COURIER' ? effectiveCourierProvider : undefined,
+        deliveryAddress: effectiveFulfillmentMethod === 'INSTANT_COURIER' ? deliveryAddress.trim() : undefined,
+        recipientPhone: effectiveFulfillmentMethod === 'INSTANT_COURIER' ? recipientPhone.trim() : undefined,
       });
     },
     onSuccess: transaction => {
@@ -143,8 +132,14 @@ export default function ListingDetailScreen() {
     && (item.mode === 'SERVICE' || orderQuantity <= buyerLimit);
   const orderTotal = Number(item.price) * (quantityValid ? orderQuantity : 0);
   const availableMethods = item.fulfillmentMethods?.length ? item.fulfillmentMethods : ['CAMPUS_MEETUP'] as FulfillmentMethod[];
-  const selectedCourier = checkoutOptions.data?.couriers.find(option => option.provider === courierProvider);
-  const shippingFee = fulfillmentMethod === 'INSTANT_COURIER' ? Number(selectedCourier?.fee || 0) : 0;
+  const checkoutMethods = checkoutOptions.data?.fulfillmentMethods?.length ? checkoutOptions.data.fulfillmentMethods : availableMethods;
+  const effectiveFulfillmentMethod = checkoutMethods.includes(fulfillmentMethod) ? fulfillmentMethod : (checkoutMethods[0] ?? 'CAMPUS_MEETUP');
+  const checkoutCouriers = checkoutOptions.data?.couriers ?? [];
+  const effectiveCourierProvider = checkoutCouriers.some(option => option.provider === courierProvider)
+    ? courierProvider
+    : (checkoutCouriers[0]?.provider ?? courierProvider);
+  const selectedCourier = checkoutCouriers.find(option => option.provider === effectiveCourierProvider);
+  const shippingFee = effectiveFulfillmentMethod === 'INSTANT_COURIER' ? Number(selectedCourier?.fee || 0) : 0;
   const orderGrandTotal = orderTotal + shippingFee;
 
   const changeImage = (direction: -1 | 1) => {
@@ -347,22 +342,22 @@ export default function ListingDetailScreen() {
               {checkoutOptions.isError ? <View style={styles.optionsError}><Text style={styles.optionsErrorText}>Pilihan penyerahan belum dapat dimuat.</Text><Button title="Coba lagi" variant="secondary" icon="refresh-outline" onPress={() => checkoutOptions.refetch()} /></View> : null}
               <View style={styles.fulfillmentOptions}>
                 {availableMethods.includes('CAMPUS_MEETUP') ? (
-                  <Pressable onPress={() => setFulfillmentMethod('CAMPUS_MEETUP')} style={[styles.fulfillmentOption, fulfillmentMethod === 'CAMPUS_MEETUP' && styles.fulfillmentOptionActive]}>
+                  <Pressable onPress={() => setFulfillmentMethod('CAMPUS_MEETUP')} style={[styles.fulfillmentOption, effectiveFulfillmentMethod === 'CAMPUS_MEETUP' && styles.fulfillmentOptionActive]}>
                     <View style={styles.fulfillmentIcon}><Ionicons name="people-outline" size={21} color={colors.primary} /></View>
                     <View style={styles.flex}><Text style={styles.fulfillmentTitle}>Meetup langsung</Text><Text style={styles.fulfillmentCaption}>Atur waktu & lokasi lewat chat · gratis</Text></View>
-                    <Ionicons name={fulfillmentMethod === 'CAMPUS_MEETUP' ? 'checkmark-circle' : 'ellipse-outline'} size={21} color={fulfillmentMethod === 'CAMPUS_MEETUP' ? colors.primary : colors.borderStrong} />
+                    <Ionicons name={effectiveFulfillmentMethod === 'CAMPUS_MEETUP' ? 'checkmark-circle' : 'ellipse-outline'} size={21} color={effectiveFulfillmentMethod === 'CAMPUS_MEETUP' ? colors.primary : colors.borderStrong} />
                   </Pressable>
                 ) : null}
                 {availableMethods.includes('INSTANT_COURIER') ? (
-                  <Pressable onPress={() => setFulfillmentMethod('INSTANT_COURIER')} style={[styles.fulfillmentOption, fulfillmentMethod === 'INSTANT_COURIER' && styles.fulfillmentOptionActive]}>
+                  <Pressable onPress={() => setFulfillmentMethod('INSTANT_COURIER')} style={[styles.fulfillmentOption, effectiveFulfillmentMethod === 'INSTANT_COURIER' && styles.fulfillmentOptionActive]}>
                     <View style={styles.fulfillmentIcon}><Ionicons name="bicycle-outline" size={21} color={colors.primary} /></View>
                     <View style={styles.flex}><Text style={styles.fulfillmentTitle}>Kurir Instan</Text><Text style={styles.fulfillmentCaption}>Ongkir simulasi · estimasi 1–3 jam</Text></View>
-                    <Ionicons name={fulfillmentMethod === 'INSTANT_COURIER' ? 'checkmark-circle' : 'ellipse-outline'} size={21} color={fulfillmentMethod === 'INSTANT_COURIER' ? colors.primary : colors.borderStrong} />
+                    <Ionicons name={effectiveFulfillmentMethod === 'INSTANT_COURIER' ? 'checkmark-circle' : 'ellipse-outline'} size={21} color={effectiveFulfillmentMethod === 'INSTANT_COURIER' ? colors.primary : colors.borderStrong} />
                   </Pressable>
                 ) : null}
               </View>
 
-              {fulfillmentMethod === 'CAMPUS_MEETUP' ? (
+              {effectiveFulfillmentMethod === 'CAMPUS_MEETUP' ? (
                 <View style={styles.meetupChatInfo}>
                   <View style={styles.meetupChatIcon}><Ionicons name="chatbubbles-outline" size={21} color={colors.primary} /></View>
                   <View style={styles.flex}>
@@ -375,7 +370,7 @@ export default function ListingDetailScreen() {
                   <Text style={styles.fieldLabel}>Pilih layanan kurir</Text>
                   <View style={styles.courierOptions}>
                     {(checkoutOptions.data?.couriers || []).map(courier => (
-                      <Pressable key={courier.provider} onPress={() => setCourierProvider(courier.provider)} style={[styles.courierOption, courierProvider === courier.provider && styles.courierOptionActive]}>
+                      <Pressable key={courier.provider} onPress={() => setCourierProvider(courier.provider)} style={[styles.courierOption, effectiveCourierProvider === courier.provider && styles.courierOptionActive]}>
                         <View><Text style={styles.courierName}>{courier.label}</Text><Text style={styles.courierEta}>{courier.eta}</Text></View><Text style={styles.courierFee}>{money(courier.fee)}</Text>
                       </Pressable>
                     ))}

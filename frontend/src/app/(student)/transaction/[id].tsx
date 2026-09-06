@@ -91,7 +91,7 @@ export default function TransactionDetailScreen() {
   const [handoverConfirmVisible, setHandoverConfirmVisible] = useState(false);
   const [handoverCodeVisible, setHandoverCodeVisible] = useState(false);
   const [handoverExpiresAt, setHandoverExpiresAt] = useState('');
-  const [clock, setClock] = useState(Date.now());
+  const [clock, setClock] = useState(0);
   const [reviewVisible, setReviewVisible] = useState(false);
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewComment, setReviewComment] = useState('');
@@ -107,7 +107,6 @@ export default function TransactionDetailScreen() {
 
   useEffect(() => {
     if (!handoverCodeVisible || !handoverExpiresAt) return;
-    setClock(Date.now());
     const timer = setInterval(() => setClock(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [handoverCodeVisible, handoverExpiresAt]);
@@ -139,6 +138,7 @@ export default function TransactionDetailScreen() {
       setActionError('');
       setHandoverCode(result.code);
       setHandoverExpiresAt(result.expiresAt);
+      setClock(Date.now());
       setHandoverConfirmVisible(false);
       setHandoverCodeVisible(true);
       setSuccess('Kode serah-terima aktif. Berikan hanya kepada seller setelah barang sudah kamu terima dan periksa.');
@@ -347,7 +347,7 @@ export default function TransactionDetailScreen() {
                   <Text style={styles.handoverHint}>Seller masih menyiapkan batch pre-order. Kode serah-terima baru tersedia setelah status PO menjadi Siap diambil/dikirim.</Text>
                 </> : <>
                   {handoverCode && codeSeconds > 0 ? <><Text style={styles.handoverLabel}>KODE SERAH-TERIMA AKTIF</Text><Text style={styles.handoverHint}>Kode sudah dibuat dan masih aktif selama {codeTime}. Buka kembali jika perlu melihatnya.</Text></> : <Text style={styles.handoverHint}>Buat kode hanya setelah meetup berlangsung, barang sudah kamu terima, dan kondisinya sudah kamu periksa.</Text>}
-                  <Button title={handoverCode && codeSeconds > 0 ? 'Lihat kode serah-terima' : 'Saya sudah menerima barang · Buat kode'} variant="secondary" icon="key-outline" loading={issueCode.isPending} onPress={() => handoverCode && codeSeconds > 0 ? setHandoverCodeVisible(true) : setHandoverConfirmVisible(true)} />
+                  <Button title={handoverCode && codeSeconds > 0 ? 'Lihat kode serah-terima' : 'Saya sudah menerima barang · Buat kode'} variant="secondary" icon="key-outline" loading={issueCode.isPending} onPress={() => { if (handoverCode && codeSeconds > 0) { setClock(Date.now()); setHandoverCodeVisible(true); } else { setHandoverConfirmVisible(true); } }} />
                 </>}
               </View>
             ) : null}

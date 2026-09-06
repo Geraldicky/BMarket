@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useMemo, useState } from 'react';
 import { Image } from 'expo-image';
 import { Platform, Pressable, StyleProp, StyleSheet, Text, useWindowDimensions, View, ViewStyle } from 'react-native';
-import { colors, radius, shadowHover, webTransition } from '@/constants/theme';
+import { colors, shadowHover, webTransition } from '@/constants/theme';
 import type { Listing } from '@/types';
 import { money } from './ui';
 import { useAuth } from '@/store/auth';

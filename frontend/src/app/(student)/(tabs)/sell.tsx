@@ -83,7 +83,7 @@ export default function SellScreen() {
   const compactMobile = width < 480;
   const query = useQuery({ queryKey: ['my-listings'], queryFn: endpoints.myListings });
   const sellerTransactions = useQuery({ queryKey: ['transactions', 'seller'], queryFn: () => endpoints.transactions('seller') });
-  const items = query.data || [];
+  const items = useMemo(() => query.data ?? [], [query.data]);
   const [target, setTarget] = useState<Target>(null);
   const [workingId, setWorkingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);

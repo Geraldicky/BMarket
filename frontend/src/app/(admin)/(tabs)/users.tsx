@@ -20,7 +20,7 @@ export default function UsersScreen() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<StatusFilter>('ALL');
 
-  const users = query.data?.users || [];
+  const users = useMemo(() => query.data?.users ?? [], [query.data?.users]);
   const visible = useMemo(() => users.filter(user => {
     const q = search.trim().toLowerCase();
     const matchesText = !q || [user.name, user.email, user.studentId].some(value => String(value || '').toLowerCase().includes(q));

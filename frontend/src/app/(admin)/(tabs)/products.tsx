@@ -72,7 +72,6 @@ export default function AdminProductsScreen() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  useEffect(() => { setPage(1); }, [status, mode]);
 
   const params = useMemo(() => ({
     ...(keyword ? { keyword } : {}),
@@ -142,7 +141,7 @@ export default function AdminProductsScreen() {
         <View style={[styles.search, mobile && styles.searchMobile]}><Field icon="search-outline" value={search} onChangeText={setSearch} placeholder="Cari judul, deskripsi, seller, atau email..." /></View>
         <View style={styles.typeFilters}>
           {([['ALL', 'Semua model'], ['ONE_OFF', 'Satuan'], ['STOCKED', 'Ready stock'], ['PREORDER', 'Pre-order'], ['SERVICE', 'Jasa']] as const).map(([key, label]) => (
-            <Pressable key={key} onPress={() => setMode(key)} style={[styles.filter, mode === key && styles.filterActive]}><Text style={[styles.filterText, mode === key && styles.filterTextActive]}>{label}</Text></Pressable>
+            <Pressable key={key} onPress={() => { setMode(key); setPage(1); }} style={[styles.filter, mode === key && styles.filterActive]}><Text style={[styles.filterText, mode === key && styles.filterTextActive]}>{label}</Text></Pressable>
           ))}
         </View>
         <Pressable onPress={() => query.refetch()} style={({ pressed }) => [styles.refresh, pressed && { opacity: .6 }]}><Ionicons name="refresh-outline" size={19} color={colors.primary} /></Pressable>
@@ -150,7 +149,7 @@ export default function AdminProductsScreen() {
 
       <View style={styles.statusFilters}>
         {statusOptions.map(option => (
-          <Pressable key={option.key} onPress={() => setStatus(option.key)} style={[styles.statusFilter, status === option.key && styles.statusFilterActive]}>
+          <Pressable key={option.key} onPress={() => { setStatus(option.key); setPage(1); }} style={[styles.statusFilter, status === option.key && styles.statusFilterActive]}>
             <Text style={[styles.statusFilterText, status === option.key && styles.statusFilterTextActive]}>{option.label}</Text>
           </Pressable>
         ))}

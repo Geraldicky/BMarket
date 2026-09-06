@@ -16,7 +16,7 @@ export default function ComplaintsScreen() {
   const [pending, setPending] = useState<ComplaintAction>(null);
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'danger'; title: string; message: string } | null>(null);
   const [search, setSearch] = useState('');
-  const items = query.data || [];
+  const items = useMemo(() => query.data ?? [], [query.data]);
   const visible = useMemo(() => items.filter(item => {
     const q = search.trim().toLowerCase();
     return !q || [item.id, item.reason, item.description, item.reporter?.name, item.targetListing?.title, item.targetUser?.name, item.status].some(value => String(value || '').toLowerCase().includes(q));
