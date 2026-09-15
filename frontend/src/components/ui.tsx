@@ -1,27 +1,13 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleProp,
-  StyleSheet,
-  Text,
-  TextInput,
-  TextInputProps,
-  View,
-  ViewProps,
-  ViewStyle,
-  useWindowDimensions,
-} from 'react-native';
+import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleProp, Text, TextInput, TextInputProps, View, ViewProps, ViewStyle, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, layout, radius, shadowSoft, spacing, webTransition } from '@/constants/theme';
+import { colors, layout, radius, shadowSoft, spacing, webTransition, makeStyles } from '@/constants/theme';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 export function Screen({ children, scroll = true, style, backgroundColor }: ViewProps & { scroll?: boolean; backgroundColor?: string }) {
+  const styles = useStyles();
   const width = useWindowDimensions().width;
   const desktop = width >= 960;
   const mobile = width < 600;
@@ -37,17 +23,20 @@ export function Screen({ children, scroll = true, style, backgroundColor }: View
   );
 }
 
-export function Title({ children, subtitle, eyebrow, action }: { children: React.ReactNode; subtitle?: string; eyebrow?: string; action?: React.ReactNode }) {
+export function Title({ children, subtitle, action, center = false }: { children: React.ReactNode; subtitle?: string; eyebrow?: string; action?: React.ReactNode; center?: boolean }) {
+  const styles = useStyles();
   const mobile = useWindowDimensions().width < 600;
-  return <View style={[styles.titleRow, mobile && styles.titleRowMobile]}><View style={styles.titleWrap}>{eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}<Text style={[styles.title, mobile && styles.titleMobile]}>{children}</Text>{subtitle ? <Text style={[styles.subtitle, mobile && styles.subtitleMobile]}>{subtitle}</Text> : null}</View>{action ? <View style={[styles.titleAction, mobile && styles.titleActionMobile]}>{action}</View> : null}</View>;
+  return <View style={[styles.titleRow, mobile && styles.titleRowMobile]}><View style={styles.titleWrap}><Text style={[styles.title, mobile && styles.titleMobile, center && styles.textCenter]}>{children}</Text>{subtitle ? <Text style={[styles.subtitle, mobile && styles.subtitleMobile, center && styles.textCenter]}>{subtitle}</Text> : null}</View>{action ? <View style={[styles.titleAction, mobile && styles.titleActionMobile]}>{action}</View> : null}</View>;
 }
 
 export function Card(props: ViewProps) {
+  const styles = useStyles();
   const mobile = useWindowDimensions().width < 600;
   return <View {...props} style={[styles.card, mobile && styles.cardMobile, props.style]} />;
 }
 
 export function SectionHeader({ title, subtitle, actionLabel, onAction }: { title: string; subtitle?: string; actionLabel?: string; onAction?: () => void }) {
+  const styles = useStyles();
   const mobile = useWindowDimensions().width < 600;
   return (
     <View style={[styles.sectionHeader, mobile && styles.sectionHeaderMobile]}>
@@ -65,24 +54,28 @@ export function SectionHeader({ title, subtitle, actionLabel, onAction }: { titl
 }
 
 export function Skeleton({ width = '100%', height = 16, radius: skeletonRadius = 8, style }: { width?: number | `${number}%`; height?: number; radius?: number; style?: StyleProp<ViewStyle> }) {
+  const styles = useStyles();
   return <View style={[styles.skeleton, { width, height, borderRadius: skeletonRadius }, style]} />;
 }
 
-export function Field({ label, hint, error, icon, rightIcon, onRightPress, ...props }: TextInputProps & {
+export function Field({ label, hint, error, icon, rightIcon, onRightPress, dense = false, ...props }: TextInputProps & {
   label?: string; hint?: string; error?: string; icon?: IconName; rightIcon?: IconName; onRightPress?: () => void;
+  /** Tighter label and input sizing for height-constrained screens (e.g. auth forms on phones). */
+  dense?: boolean;
 }) {
+  const styles = useStyles();
   const [focused, setFocused] = useState(false);
   return (
-    <View style={styles.fieldWrap}>
-      {label ? <Text style={styles.label}>{label}</Text> : null}
-      <View style={[styles.inputShell, focused && styles.inputFocused, error && styles.inputError]}>
-        {icon ? <Ionicons name={icon} size={19} color={focused ? colors.primary : colors.muted} /> : null}
+    <View style={[styles.fieldWrap, dense && styles.fieldWrapDense]}>
+      {label ? <Text style={[styles.label, dense && styles.labelDense]}>{label}</Text> : null}
+      <View style={[styles.inputShell, dense && styles.inputShellDense, focused && styles.inputFocused, error && styles.inputError]}>
+        {icon ? <Ionicons name={icon} size={dense ? 17 : 19} color={focused ? colors.primary : colors.muted} /> : null}
         <TextInput
           placeholderTextColor={colors.muted}
           {...props}
           onFocus={event => { setFocused(true); props.onFocus?.(event); }}
           onBlur={event => { setFocused(false); props.onBlur?.(event); }}
-          style={[styles.input, props.multiline && styles.multiline, props.style]}
+          style={[styles.input, dense && styles.inputDense, props.multiline && styles.multiline, props.style]}
         />
         {rightIcon ? <Pressable accessibilityRole="button" hitSlop={8} onPress={onRightPress} style={({ pressed }) => [styles.inputAction, pressed && { opacity: 0.55 }]}><Ionicons name={rightIcon} size={20} color={colors.muted} /></Pressable> : null}
       </View>
@@ -94,6 +87,7 @@ export function Field({ label, hint, error, icon, rightIcon, onRightPress, ...pr
 export function Button({ title, onPress, variant = 'primary', loading, disabled, icon, style }: {
   title: string; onPress?: () => void; variant?: 'primary' | 'secondary' | 'danger' | 'ghost'; loading?: boolean; disabled?: boolean; icon?: IconName; style?: StyleProp<ViewStyle>;
 }) {
+  const styles = useStyles();
   const [hovered, setHovered] = useState(false);
   const foreground = variant === 'primary' || variant === 'danger' ? colors.white : colors.primary;
   return (
@@ -118,6 +112,7 @@ export function Button({ title, onPress, variant = 'primary', loading, disabled,
 }
 
 export function InlineAlert({ message, tone = 'danger' }: { message: string; tone?: 'danger' | 'success' | 'warning' }) {
+  const styles = useStyles();
   const color = tone === 'success' ? colors.success : tone === 'warning' ? colors.warning : colors.danger;
   const icon = tone === 'success' ? 'checkmark-circle-outline' : tone === 'warning' ? 'time-outline' : 'alert-circle-outline';
   const boxStyle = tone === 'success' ? styles.alertSuccess : tone === 'warning' ? styles.alertWarning : styles.alertDanger;
@@ -152,6 +147,7 @@ export function FeedbackDialog({
   onClose?: () => void;
   loading?: boolean;
 }) {
+  const styles = useStyles();
   const meta: Record<FeedbackTone, { icon: IconName; color: string; background: string; label: string }> = {
     info: { icon: 'information-circle-outline', color: colors.primary, background: colors.primarySoft, label: 'INFORMASI' },
     success: { icon: 'checkmark-circle-outline', color: colors.success, background: colors.successSoft, label: 'BERHASIL' },
@@ -187,34 +183,38 @@ export function FeedbackDialog({
 }
 
 export function Empty({ title, message, icon = 'storefront-outline', action }: { title: string; message: string; icon?: IconName; action?: React.ReactNode }) {
+  const styles = useStyles();
   return <View style={styles.empty}><View style={styles.emptyIcon}><Ionicons name={icon} size={27} color={colors.primary} /></View><Text style={styles.emptyTitle}>{title}</Text><Text style={[styles.subtitle, styles.emptyMessage]}>{message}</Text>{action}</View>;
 }
 
 export function Loader() {
+  const styles = useStyles();
   return <View style={styles.center}><ActivityIndicator size="large" color={colors.primary} /><Text style={styles.loadingText}>Menyiapkan untukmu...</Text></View>;
 }
 
 export function ErrorState({ message, retry }: { message: string; retry?: () => void }) {
+  const styles = useStyles();
   return <View style={styles.empty}><View style={[styles.emptyIcon, { backgroundColor: colors.dangerSoft }]}><Ionicons name="cloud-offline-outline" size={28} color={colors.danger} /></View><Text style={styles.errorTitle}>Belum berhasil memuat</Text><Text style={[styles.subtitle, styles.emptyMessage]}>{message}</Text>{retry ? <Button title="Coba lagi" variant="secondary" icon="refresh-outline" onPress={retry} /> : null}</View>;
 }
 
 export const money = (value: number | string | undefined) => `Rp ${Number(value || 0).toLocaleString('id-ID')}`;
 export const date = (value: string | undefined) => value ? new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' }).format(new Date(value)) : '-';
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
 
-  feedbackBackdrop: { flex: 1, padding: 24, backgroundColor: 'rgba(10,26,41,.58)', alignItems: 'center', justifyContent: 'center' },
+  feedbackBackdrop: { flex: 1, padding: 24, backgroundColor: colors.overlay, alignItems: 'center', justifyContent: 'center' },
   feedbackBackdropMobile: { padding: 12 },
   feedbackDialog: { width: '100%', maxWidth: 440, borderRadius: 18, padding: 22, gap: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, ...(Platform.OS === 'web' ? { boxShadow: '0 18px 44px rgba(7,23,39,.20)' } as any : { shadowColor: '#071727', shadowOpacity: .18, shadowRadius: 28, shadowOffset: { width: 0, height: 14 }, elevation: 8 }) },
   feedbackDialogMobile: { borderRadius: 16, padding: 17, gap: 14 },
-  feedbackHeader: { minHeight: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  // Warnings and confirmations are centered; the close button is pinned to the top-right corner.
+  feedbackHeader: { position: 'relative', minHeight: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   feedbackIcon: { width: 46, height: 46, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  feedbackClose: { width: 38, height: 38, borderRadius: 11, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
-  feedbackCopy: { gap: 5 },
-  feedbackEyebrow: { fontFamily: 'PoppinsBold', fontSize: 11, letterSpacing: .75 },
-  feedbackTitle: { fontFamily: 'PoppinsBold', fontSize: 22, lineHeight: 29, color: colors.text },
+  feedbackClose: { position: 'absolute', top: 0, right: 0, width: 38, height: 38, borderRadius: 11, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  feedbackCopy: { gap: 5, alignItems: 'center' },
+  feedbackEyebrow: { fontFamily: 'PoppinsBold', fontSize: 11, letterSpacing: .75, textAlign: 'center' },
+  feedbackTitle: { fontFamily: 'PoppinsBold', fontSize: 22, lineHeight: 29, color: colors.text, textAlign: 'center' },
   feedbackTitleMobile: { fontSize: 20, lineHeight: 27 },
-  feedbackMessage: { fontFamily: 'PoppinsRegular', fontSize: 13.5, lineHeight: 21, color: colors.textSoft },
+  feedbackMessage: { fontFamily: 'PoppinsRegular', fontSize: 13.5, lineHeight: 21, color: colors.textSoft, textAlign: 'center' },
   feedbackActions: { flexDirection: 'row', gap: 10, marginTop: 2 },
   feedbackActionsMobile: { flexDirection: 'column-reverse' },
   feedbackSecondary: { flex: 1 },
@@ -229,11 +229,11 @@ const styles = StyleSheet.create({
   titleWrap: { flex: 1, gap: 4 },
   titleAction: { alignSelf: 'center' },
   titleActionMobile: { alignSelf: 'stretch' },
-  eyebrow: { fontFamily: 'PoppinsBold', fontSize: 11, letterSpacing: .85, color: colors.primary },
   title: { fontFamily: 'PoppinsBold', fontSize: 30, lineHeight: 38, color: colors.text },
   titleMobile: { fontSize: 24, lineHeight: 31 },
   subtitle: { fontFamily: 'PoppinsRegular', fontSize: 14, color: colors.muted, lineHeight: 22, textAlign: 'left' },
   subtitleMobile: { fontSize: 12.5, lineHeight: 19 },
+  textCenter: { textAlign: 'center' },
   card: { backgroundColor: colors.surface, borderRadius: 14, padding: 20, gap: 10, borderWidth: 1, borderColor: colors.border },
   cardMobile: { borderRadius: 12, padding: 14 },
   sectionHeader: { minHeight: 44, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16 },
@@ -245,11 +245,15 @@ const styles = StyleSheet.create({
   sectionAction: { minHeight: 36, paddingHorizontal: 10, borderRadius: 9, flexDirection: 'row', alignItems: 'center', gap: 5, ...webTransition },
   sectionActionPressed: { backgroundColor: colors.primarySoft, transform: [{ scale: .98 }] },
   sectionActionText: { fontFamily: 'PoppinsSemiBold', color: colors.primary, fontSize: 11.5 },
-  skeleton: { backgroundColor: '#EDF2F7' },
+  skeleton: { backgroundColor: colors.skeleton },
   fieldWrap: { gap: 7 },
+  fieldWrapDense: { gap: 5 },
   label: { fontFamily: 'PoppinsMedium', color: colors.textSoft, fontSize: 14 },
+  labelDense: { fontSize: 13 },
+  inputShellDense: { minHeight: 46, paddingHorizontal: 13, gap: 9 },
+  inputDense: { minHeight: 44, paddingVertical: 8, fontSize: 14 },
   inputShell: { minHeight: 52, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, gap: 11, backgroundColor: colors.surface, borderColor: colors.borderStrong, borderWidth: 1, borderRadius: radius.md, ...webTransition },
-  inputFocused: { borderColor: colors.primary, backgroundColor: '#FBFDFF', ...(Platform.OS === 'web' ? { boxShadow: '0 0 0 3px rgba(17,103,216,.10)' } as any : {}) },
+  inputFocused: { borderColor: colors.primary, backgroundColor: colors.primaryMist, ...(Platform.OS === 'web' ? { boxShadow: '0 0 0 3px rgba(17,103,216,.10)' } as any : {}) },
   inputError: { borderColor: colors.danger },
   input: { minWidth: 0, flex: 1, minHeight: 50, paddingVertical: 10, borderWidth: 0, color: colors.text, fontFamily: 'PoppinsRegular', fontSize: 15, ...( { outlineStyle: 'none', outlineWidth: 0 } as any ) },
   multiline: { minHeight: 110, paddingTop: 14, textAlignVertical: 'top' },
@@ -260,21 +264,21 @@ const styles = StyleSheet.create({
   buttonContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
   button_primary: { backgroundColor: colors.primary, borderColor: colors.primary },
   buttonHover_primary: { backgroundColor: colors.primaryHover, borderColor: colors.primaryHover, transform: [{ translateY: -1 }], ...shadowSoft },
-  button_secondary: { backgroundColor: colors.primarySoft, borderColor: '#C8E0FA' },
-  buttonHover_secondary: { backgroundColor: '#DDEEFF', borderColor: '#A9CFF4', transform: [{ translateY: -1 }] },
+  button_secondary: { backgroundColor: colors.primarySoft, borderColor: colors.primaryBorder },
+  buttonHover_secondary: { backgroundColor: colors.primarySoftHover, borderColor: colors.primaryBorderStrong, transform: [{ translateY: -1 }] },
   button_danger: { backgroundColor: colors.danger, borderColor: colors.danger },
-  buttonHover_danger: { backgroundColor: '#D94848', borderColor: '#D94848', transform: [{ translateY: -1 }] },
+  buttonHover_danger: { backgroundColor: colors.dangerHover, borderColor: colors.dangerHover, transform: [{ translateY: -1 }] },
   button_ghost: { backgroundColor: 'transparent', borderColor: colors.border },
   buttonHover_ghost: { backgroundColor: colors.surfaceMuted, borderColor: colors.borderStrong },
   buttonPressed: { opacity: .82, transform: [{ scale: .985 }] },
   buttonDisabled: { opacity: .48 },
   buttonText: { fontFamily: 'PoppinsSemiBold', fontSize: 15 },
   buttonText_primary: { color: colors.white }, buttonText_secondary: { color: colors.primary }, buttonText_danger: { color: colors.white }, buttonText_ghost: { color: colors.textSoft },
-  alert: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, borderRadius: radius.sm, padding: 12 },
-  alertDanger: { backgroundColor: colors.dangerSoft, borderWidth: 1, borderColor: '#FFD5D5' },
-  alertSuccess: { backgroundColor: colors.successSoft, borderWidth: 1, borderColor: '#C9EDDE' },
-  alertWarning: { backgroundColor: colors.warningSoft, borderWidth: 1, borderColor: '#F2D6A8' },
-  alertText: { flex: 1, fontFamily: 'PoppinsRegular', fontSize: 13, lineHeight: 20 },
+  alert: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderRadius: radius.sm, padding: 12 },
+  alertDanger: { backgroundColor: colors.dangerSoft, borderWidth: 1, borderColor: colors.dangerBorder },
+  alertSuccess: { backgroundColor: colors.successSoft, borderWidth: 1, borderColor: colors.successBorder },
+  alertWarning: { backgroundColor: colors.warningSoft, borderWidth: 1, borderColor: colors.warningBorder },
+  alertText: { flexShrink: 1, fontFamily: 'PoppinsRegular', fontSize: 13, lineHeight: 20, textAlign: 'center' },
   empty: { alignItems: 'center', justifyContent: 'center', minHeight: 210, paddingVertical: spacing.xl, paddingHorizontal: spacing.lg, gap: spacing.sm },
   emptyIcon: { width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
   emptyMessage: { textAlign: 'center', maxWidth: 440 },
@@ -282,4 +286,4 @@ const styles = StyleSheet.create({
   errorTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 19, color: colors.danger },
   center: { flex: 1, minHeight: 240, gap: 12, alignItems: 'center', justifyContent: 'center' },
   loadingText: { color: colors.muted, fontFamily: 'PoppinsRegular', fontSize: 13 },
-});
+}));

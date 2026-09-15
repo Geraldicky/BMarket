@@ -1,10 +1,11 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Image, Modal, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { AdminEmptyState, AdminStatCard, AdminStatusPill } from '@/components/admin-ui';
+import { FilterSelect } from '@/components/filter-select';
 import { Button, Card, date, ErrorState, FeedbackDialog, Field, Loader, money, Screen, Title } from '@/components/ui';
-import { colors, radius } from '@/constants/theme';
+import { colors, radius, makeStyles } from '@/constants/theme';
 import { endpoints, errorMessage } from '@/lib/api';
 import type { Listing, ListingMode, ListingStatus } from '@/types';
 
@@ -12,6 +13,9 @@ type StatusFilter = 'ALL' | ListingStatus;
 type ModeFilter = 'ALL' | ListingMode;
 type DirectStatus = 'ACTIVE' | 'HIDDEN' | 'REMOVED';
 type PendingAction = { listing: Listing; kind: 'STATUS'; status: DirectStatus } | { listing: Listing; kind: 'MODERATE'; action: 'approve' | 'reject' };
+
+// Non-clickable Pressable areas (backdrop, modal panel) should not show the pointer cursor on web.
+const defaultCursor = Platform.OS === 'web' ? ({ cursor: 'default' } as any) : {};
 
 const statusOptions: { key: StatusFilter; label: string }[] = [
   { key: 'ALL', label: 'Semua' },
@@ -21,6 +25,14 @@ const statusOptions: { key: StatusFilter; label: string }[] = [
   { key: 'SOLD', label: 'Terjual' },
   { key: 'INACTIVE', label: 'Nonaktif' },
   { key: 'PENDING', label: 'Pending' },
+];
+
+const modeOptions: { key: ModeFilter; label: string }[] = [
+  { key: 'ALL', label: 'Semua model' },
+  { key: 'ONE_OFF', label: 'Satuan' },
+  { key: 'STOCKED', label: 'Ready stock' },
+  { key: 'PREORDER', label: 'Pre-order' },
+  { key: 'SERVICE', label: 'Jasa' },
 ];
 
 const statusLabel: Record<ListingStatus, string> = {
@@ -53,8 +65,9 @@ const preorderLabel = (status?: string | null) => ({
 }[status || ''] || '-');
 
 export default function AdminProductsScreen() {
+  const styles = useStyles();
   const client = useQueryClient();
-  const width = useWindowDimensions().width;
+  const { width, height } = useWindowDimensions();
   const desktop = width >= 900;
   const mobile = width < 600;
   const [search, setSearch] = useState('');
@@ -63,7 +76,7 @@ export default function AdminProductsScreen() {
   const [mode, setMode] = useState<ModeFilter>('ALL');
   const [page, setPage] = useState(1);
   const [pending, setPending] = useState<PendingAction | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'danger'; title: string; message: string } | null>(null);
 
@@ -85,6 +98,32 @@ export default function AdminProductsScreen() {
   const result = query.data;
   const listings = result?.data || [];
   const summary = result?.summary;
+  const detail = listings.find(item => item.id === detailId) || null;
+  const [viewer, setViewer] = useState<{ images: string[]; index: number } | null>(null);
+  const viewerUri = viewer ? viewer.images[viewer.index] : null;
+  // Zoom and measured size are keyed by image URI, so switching photos resets them without an effect-driven reset.
+  const [zoomedUri, setZoomedUri] = useState<string | null>(null);
+  const [measured, setMeasured] = useState<{ uri: string; width: number; height: number } | null>(null);
+  const zoomed = Boolean(viewerUri) && zoomedUri === viewerUri;
+  const imageSize = measured && measured.uri === viewerUri ? measured : null;
+  const toggleZoom = () => setZoomedUri(current => current === viewerUri ? null : viewerUri);
+
+  useEffect(() => {
+    if (!viewerUri) return;
+    let active = true;
+    Image.getSize(
+      viewerUri,
+      (w, h) => { if (active) setMeasured({ uri: viewerUri, width: w, height: h }); },
+      () => { if (active) setMeasured({ uri: viewerUri, width: width - 32, height: height - 160 }); },
+    );
+    return () => { active = false; };
+  }, [viewerUri, width, height]);
+
+  const viewportWidth = width;
+  const viewportHeight = height - 130;
+  const fitScale = imageSize ? Math.min(1, (viewportWidth - 32) / imageSize.width, (viewportHeight - 32) / imageSize.height) : 1;
+  const displaySize = imageSize ? { width: imageSize.width * (zoomed ? 1 : fitScale), height: imageSize.height * (zoomed ? 1 : fitScale) } : null;
+  const canZoom = fitScale < 1;
 
   const refresh = async () => {
     await Promise.all([
@@ -106,6 +145,7 @@ export default function AdminProductsScreen() {
         : pending.action === 'approve' ? 'Listing disetujui' : 'Listing ditolak';
       await refresh();
       setFeedback({ tone: 'success', title, message: `${pending.listing.title} berhasil diperbarui oleh admin.` });
+      setDetailId(null);
       setPending(null);
     } catch (error) {
       setFeedback({ tone: 'danger', title: 'Moderasi belum berhasil', message: errorMessage(error) });
@@ -139,21 +179,12 @@ export default function AdminProductsScreen() {
 
       <Card style={styles.toolbar}>
         <View style={[styles.search, mobile && styles.searchMobile]}><Field icon="search-outline" value={search} onChangeText={setSearch} placeholder="Cari judul, deskripsi, seller, atau email..." /></View>
-        <View style={styles.typeFilters}>
-          {([['ALL', 'Semua model'], ['ONE_OFF', 'Satuan'], ['STOCKED', 'Ready stock'], ['PREORDER', 'Pre-order'], ['SERVICE', 'Jasa']] as const).map(([key, label]) => (
-            <Pressable key={key} onPress={() => { setMode(key); setPage(1); }} style={[styles.filter, mode === key && styles.filterActive]}><Text style={[styles.filterText, mode === key && styles.filterTextActive]}>{label}</Text></Pressable>
-          ))}
+        <View style={[styles.selects, mobile && styles.selectsMobile]}>
+          <FilterSelect label="Model" icon="cube-outline" value={mode} options={modeOptions} onChange={key => { setMode(key); setPage(1); }} style={styles.select} />
+          <FilterSelect label="Status" icon="funnel-outline" value={status} options={statusOptions} onChange={key => { setStatus(key); setPage(1); }} style={styles.select} />
+          <Pressable onPress={() => query.refetch()} style={({ pressed }) => [styles.refresh, pressed && { opacity: .6 }]}><Ionicons name="refresh-outline" size={19} color={colors.primary} /></Pressable>
         </View>
-        <Pressable onPress={() => query.refetch()} style={({ pressed }) => [styles.refresh, pressed && { opacity: .6 }]}><Ionicons name="refresh-outline" size={19} color={colors.primary} /></Pressable>
       </Card>
-
-      <View style={styles.statusFilters}>
-        {statusOptions.map(option => (
-          <Pressable key={option.key} onPress={() => { setStatus(option.key); setPage(1); }} style={[styles.statusFilter, status === option.key && styles.statusFilterActive]}>
-            <Text style={[styles.statusFilterText, status === option.key && styles.statusFilterTextActive]}>{option.label}</Text>
-          </Pressable>
-        ))}
-      </View>
 
       {query.isLoading ? <Loader /> : query.isError ? <ErrorState message={errorMessage(query.error)} retry={() => query.refetch()} /> : !listings.length ? (
         <Card><AdminEmptyState icon="search-outline" title="Listing tidak ditemukan" message="Tidak ada listing yang cocok dengan pencarian atau filter saat ini." /></Card>
@@ -161,7 +192,8 @@ export default function AdminProductsScreen() {
         <View style={styles.list}>
           {listings.map(listing => {
             const reportCount = listing.openReportCount || 0;
-            return <Card key={listing.id} style={styles.listingCard}>
+            return <Pressable key={listing.id} onPress={() => setDetailId(listing.id)} style={({ pressed }) => [pressed && { opacity: .75 }]}>
+              <Card style={styles.listingCard}>
               <View style={[styles.listingRow, !desktop && styles.listingRowMobile]}>
                 <View style={[styles.media, mobile && styles.mediaMobile]}>
                   {listing.images?.[0] ? <Image source={{ uri: listing.images[0] }} style={styles.image} resizeMode="cover" /> : <Ionicons name="image-outline" size={27} color={colors.muted} />}
@@ -174,32 +206,11 @@ export default function AdminProductsScreen() {
                 </View>
                 <View style={[styles.side, mobile && styles.sideMobile]}>
                   {reportCount > 0 ? <View style={styles.reportBadge}><Ionicons name="flag-outline" size={15} color={colors.danger} /><Text style={styles.reportBadgeText}>{reportCount} laporan terbuka</Text></View> : <View style={styles.cleanBadge}><Ionicons name="shield-checkmark-outline" size={15} color={colors.success} /><Text style={styles.cleanBadgeText}>Belum ada laporan</Text></View>}
-                  <View style={[styles.actions, mobile && styles.actionsMobile]}>
-                    <Button title={expandedId === listing.id ? 'Tutup detail' : 'Lihat detail'} variant="ghost" icon={expandedId === listing.id ? 'chevron-up-outline' : 'eye-outline'} onPress={() => setExpandedId(value => value === listing.id ? null : listing.id)} style={styles.action} />
-                    {listing.status === 'ACTIVE' ? <><Button title="Sembunyikan" variant="ghost" icon="eye-off-outline" onPress={() => setPending({ listing, kind: 'STATUS', status: 'HIDDEN' })} style={styles.action} /><Button title="Hapus" variant="danger" icon="trash-outline" onPress={() => setPending({ listing, kind: 'STATUS', status: 'REMOVED' })} style={styles.action} /></> : null}
-                    {listing.status === 'HIDDEN' ? <><Button title="Aktifkan" variant="secondary" icon="eye-outline" onPress={() => setPending({ listing, kind: 'STATUS', status: 'ACTIVE' })} style={styles.action} /><Button title="Hapus" variant="danger" icon="trash-outline" onPress={() => setPending({ listing, kind: 'STATUS', status: 'REMOVED' })} style={styles.action} /></> : null}
-                    {listing.status === 'PENDING' ? <><Button title="Setujui" variant="secondary" icon="checkmark-circle-outline" onPress={() => setPending({ listing, kind: 'MODERATE', action: 'approve' })} style={styles.action} /><Button title="Tolak" variant="danger" icon="close-circle-outline" onPress={() => setPending({ listing, kind: 'MODERATE', action: 'reject' })} style={styles.action} /></> : null}
-                    {['SOLD', 'INACTIVE', 'REMOVED', 'REJECTED'].includes(listing.status) ? <Text style={[styles.readOnly, mobile && styles.readOnlyMobile]}>Status ini hanya dipantau. Tidak ada tindakan cepat yang tersedia.</Text> : null}
-                  </View>
+                  <View style={[styles.tapHint, mobile && styles.tapHintMobile]}><Ionicons name="hand-left-outline" size={14} color={colors.muted} /><Text style={styles.tapHintText}>Ketuk untuk detail & tindakan</Text></View>
                 </View>
               </View>
-              {expandedId === listing.id ? <View style={styles.detailPanel}>
-                <View style={styles.detailBlock}><Text style={styles.detailLabel}>DESKRIPSI</Text><Text style={styles.detailText}>{listing.description}</Text></View>
-                <View style={styles.detailFacts}>
-                  <View style={styles.fact}><Text style={styles.detailLabel}>MODEL</Text><Text style={styles.factValue}>{modeLabel[listing.mode]}</Text></View>
-                  <View style={styles.fact}><Text style={styles.detailLabel}>KONDISI</Text><Text style={styles.factValue}>{listing.condition || 'Tidak berlaku'}</Text></View>
-                  <View style={styles.fact}><Text style={styles.detailLabel}>{listing.mode === 'PREORDER' ? 'KUOTA TERSISA' : 'STOK'}</Text><Text style={styles.factValue}>{listing.mode === 'SERVICE' ? 'Tanpa stok' : `${listing.stockLeft ?? 0} / ${listing.stock ?? 0}`}</Text></View>
-                  <View style={styles.fact}><Text style={styles.detailLabel}>PENYERAHAN</Text><Text style={styles.factValue}>{listing.fulfillmentMethods?.join(' · ') || '-'}</Text></View>
-                  {listing.mode === 'PREORDER' ? <>
-                    <View style={styles.fact}><Text style={styles.detailLabel}>STATUS PO</Text><Text style={styles.factValue}>{preorderLabel(listing.preorderStatus)}</Text></View>
-                    <View style={styles.fact}><Text style={styles.detailLabel}>DEADLINE PO</Text><Text style={styles.factValue}>{listing.preorderDeadline ? date(listing.preorderDeadline) : '-'}</Text></View>
-                    <View style={styles.fact}><Text style={styles.detailLabel}>MINIMUM / MAX BUYER</Text><Text style={styles.factValue}>{listing.preorderMinOrder || '-'} / {listing.preorderMaxPerBuyer || '-'}</Text></View>
-                    <View style={styles.fact}><Text style={styles.detailLabel}>PICKUP</Text><Text style={styles.factValue}>{listing.preorderPickupLocation || '-'}</Text></View>
-                  </> : null}
-                  <View style={styles.fact}><Text style={styles.detailLabel}>ID LISTING</Text><Text selectable style={styles.factValue}>{listing.id}</Text></View>
-                </View>
-              </View> : null}
-            </Card>;
+              </Card>
+            </Pressable>;
           })}
         </View>
       )}
@@ -209,28 +220,116 @@ export default function AdminProductsScreen() {
         <View style={styles.pageActions}><Button title="Sebelumnya" variant="ghost" disabled={result.page <= 1} onPress={() => setPage(value => Math.max(1, value - 1))} style={styles.pageButton} /><Button title="Berikutnya" variant="secondary" disabled={result.page >= result.totalPages} onPress={() => setPage(value => Math.min(result.totalPages, value + 1))} style={styles.pageButton} /></View>
       </Card> : null}
 
+      <Modal visible={Boolean(viewerUri)} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setViewer(null)}>
+        <View style={styles.viewerBackdrop}>
+          <View style={styles.viewerBar}>
+            <Text style={styles.viewerCount}>{viewer ? `${viewer.index + 1} / ${viewer.images.length}` : ''}{imageSize && canZoom ? ` · ${zoomed ? 'Ukuran asli' : 'Pas layar'}` : ''}</Text>
+            <View style={styles.viewerTools}>
+              {canZoom ? <Pressable onPress={toggleZoom} style={styles.viewerButton}><Ionicons name={zoomed ? 'contract-outline' : 'expand-outline'} size={21} color={colors.white} /></Pressable> : null}
+              <Pressable onPress={() => setViewer(null)} style={styles.viewerButton}><Ionicons name="close" size={23} color={colors.white} /></Pressable>
+            </View>
+          </View>
+          <ScrollView key={`${viewerUri}-${zoomed}`} horizontal style={styles.flex} contentContainerStyle={{ minWidth: viewportWidth, alignItems: 'center', justifyContent: 'center' }} showsHorizontalScrollIndicator={zoomed}>
+            <ScrollView contentContainerStyle={{ minHeight: viewportHeight, minWidth: viewportWidth, alignItems: 'center', justifyContent: 'center', padding: 16 }} showsVerticalScrollIndicator={zoomed}>
+              {viewerUri && displaySize ? <Pressable disabled={!canZoom} onPress={toggleZoom}>
+                <Image source={{ uri: viewerUri }} style={displaySize} resizeMode="contain" />
+              </Pressable> : <Loader />}
+            </ScrollView>
+          </ScrollView>
+          {viewer && viewer.images.length > 1 ? <>
+            <Pressable disabled={viewer.index === 0} onPress={() => setViewer({ ...viewer, index: viewer.index - 1 })} style={[styles.viewerNav, styles.viewerNavLeft, viewer.index === 0 && { opacity: .3 }]}><Ionicons name="chevron-back" size={26} color={colors.white} /></Pressable>
+            <Pressable disabled={viewer.index === viewer.images.length - 1} onPress={() => setViewer({ ...viewer, index: viewer.index + 1 })} style={[styles.viewerNav, styles.viewerNavRight, viewer.index === viewer.images.length - 1 && { opacity: .3 }]}><Ionicons name="chevron-forward" size={26} color={colors.white} /></Pressable>
+          </> : null}
+          <Text style={styles.viewerHint}>{canZoom ? 'Ketuk gambar untuk memperbesar / memperkecil' : 'Gambar ditampilkan dalam ukuran asli'}</Text>
+        </View>
+      </Modal>
+
+      <Modal visible={Boolean(detail) && !pending && !feedback && !viewer} transparent animationType="fade" onRequestClose={() => setDetailId(null)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setDetailId(null)}>
+          {detail ? <Pressable onPress={() => {}} style={[styles.detailModal, mobile && styles.detailModalMobile]}>
+            <View style={styles.modalHeader}>
+              <View style={styles.flex}><Text style={styles.detailLabel}>DETAIL LISTING</Text><Text numberOfLines={2} style={styles.modalTitle}>{detail.title}</Text></View>
+              <Pressable onPress={() => setDetailId(null)} style={styles.modalClose}><Ionicons name="close" size={20} color={colors.textSoft} /></Pressable>
+            </View>
+            <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
+              <View style={styles.hero}>
+                <Pressable disabled={!detail.images?.[0]} onPress={() => setViewer({ images: detail.images, index: 0 })} style={({ pressed }) => [styles.heroMedia, mobile && styles.heroMediaMobile, pressed && { opacity: .8 }]}>
+                  {detail.images?.[0] ? <>
+                    <Image source={{ uri: detail.images[0] }} style={styles.image} resizeMode="cover" />
+                    <View style={styles.zoomBadge}><Ionicons name="search-outline" size={15} color={colors.white} /></View>
+                  </> : <Ionicons name="image-outline" size={34} color={colors.muted} />}
+                </Pressable>
+                <View style={styles.heroInfo}>
+                  <Text style={[styles.heroPrice, mobile && styles.heroPriceMobile]}>{money(detail.price)}</Text>
+                  <View style={styles.badgeLeft}><AdminStatusPill label={statusLabel[detail.status]} tone={statusTone(detail.status)} /></View>
+                  <View style={styles.heroLine}><Ionicons name="pricetag-outline" size={17} color={colors.muted} /><Text style={styles.heroText}>{detail.category}</Text></View>
+                  <View style={styles.heroLine}><Ionicons name="person-outline" size={17} color={colors.muted} /><Text style={styles.heroText}>{detail.seller?.name || 'Seller BMarket'}</Text></View>
+                  <Text style={styles.heroSub}>{detail.seller?.email || 'Email tidak tersedia'}{detail.seller?.studentId ? ` · NIM ${detail.seller.studentId}` : ''}</Text>
+                  {(detail.openReportCount || 0) > 0 ? <View style={[styles.reportBadge, styles.badgeLeft]}><Ionicons name="flag-outline" size={15} color={colors.danger} /><Text style={styles.reportBadgeText}>{detail.openReportCount} laporan terbuka</Text></View> : null}
+                </View>
+              </View>
+              {(detail.images?.length || 0) > 1 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.gallery}>
+                {detail.images.slice(1).map((uri, index) => <Pressable key={uri} onPress={() => setViewer({ images: detail.images, index: index + 1 })} style={({ pressed }) => [pressed && { opacity: .8 }]}><Image source={{ uri }} style={styles.galleryImage} resizeMode="cover" /></Pressable>)}
+              </ScrollView> : null}
+              <View style={styles.modalSection}><Text style={styles.modalLabel}>Deskripsi</Text><Text style={styles.modalText}>{detail.description}</Text></View>
+              <View style={styles.modalSection}>
+                <Text style={styles.modalLabel}>Informasi produk</Text>
+                <View style={styles.factList}>
+                  {([
+                    ['Model', modeLabel[detail.mode]],
+                    ['Kondisi', detail.condition || 'Tidak berlaku'],
+                    [detail.mode === 'PREORDER' ? 'Kuota tersisa' : 'Stok', detail.mode === 'SERVICE' ? 'Tanpa stok' : `${detail.stockLeft ?? 0} / ${detail.stock ?? 0}`],
+                    ['Penyerahan', detail.mode === 'SERVICE' ? 'Tidak ada (jasa)' : detail.fulfillmentMethods?.join(' · ') || '-'],
+                    ...(detail.mode === 'PREORDER' ? [
+                      ['Status PO', preorderLabel(detail.preorderStatus)],
+                      ['Deadline PO', detail.preorderDeadline ? date(detail.preorderDeadline) : '-'],
+                      ['Minimum / max buyer', `${detail.preorderMinOrder || '-'} / ${detail.preorderMaxPerBuyer || '-'}`],
+                      ['Pickup', detail.preorderPickupLocation || '-'],
+                    ] : []),
+                    ['Dibuat', date(detail.createdAt)],
+                    ['ID listing', detail.id],
+                  ] as [string, string][]).map(([label, value], index) => (
+                    <View key={label} style={[styles.factRow, index > 0 && styles.factRowBorder]}>
+                      <Text style={styles.factRowLabel}>{label}</Text>
+                      <Text selectable style={styles.factRowValue}>{value}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </ScrollView>
+            <View style={styles.modalFooter}>
+              {detail.status === 'ACTIVE' || detail.status === 'HIDDEN' ? <>
+                <Pressable onPress={() => setPending({ listing: detail, kind: 'STATUS', status: detail.status === 'ACTIVE' ? 'HIDDEN' : 'ACTIVE' })} style={({ pressed }) => [styles.toggleRow, pressed && { opacity: .7 }]} accessibilityRole="switch" accessibilityState={{ checked: detail.status === 'ACTIVE' }}>
+                  <View style={[styles.toggleTrack, detail.status === 'ACTIVE' && styles.toggleTrackOn]}><View style={[styles.toggleKnob, detail.status === 'ACTIVE' && styles.toggleKnobOn]} /></View>
+                  <View><Text style={styles.toggleTitle}>{detail.status === 'ACTIVE' ? 'Aktif' : 'Disembunyikan'}</Text><Text style={styles.toggleCaption}>{detail.status === 'ACTIVE' ? 'Ketuk untuk sembunyikan' : 'Ketuk untuk aktifkan'}</Text></View>
+                </Pressable>
+                <Button title="Hapus produk" variant="danger" icon="trash-outline" onPress={() => setPending({ listing: detail, kind: 'STATUS', status: 'REMOVED' })} style={styles.action} />
+              </> : null}
+              {detail.status === 'PENDING' ? <>
+                <Button title="Setujui" variant="secondary" icon="checkmark-circle-outline" onPress={() => setPending({ listing: detail, kind: 'MODERATE', action: 'approve' })} style={styles.action} />
+                <Button title="Tolak" variant="danger" icon="close-circle-outline" onPress={() => setPending({ listing: detail, kind: 'MODERATE', action: 'reject' })} style={styles.action} />
+              </> : null}
+              {['SOLD', 'INACTIVE', 'REMOVED', 'REJECTED'].includes(detail.status) ? <Text style={styles.readOnly}>Status ini hanya dipantau. Tidak ada tindakan yang tersedia.</Text> : null}
+            </View>
+          </Pressable> : null}
+        </Pressable>
+      </Modal>
+
       <FeedbackDialog visible={Boolean(pending && dialog)} tone={dialog?.tone || 'warning'} title={dialog?.title || ''} message={dialog?.message || ''} primaryLabel={dialog?.label || 'Lanjutkan'} secondaryLabel="Batal" loading={working} onClose={() => setPending(null)} onSecondary={() => setPending(null)} onPrimary={execute} />
       <FeedbackDialog visible={Boolean(feedback)} tone={feedback?.tone || 'success'} title={feedback?.title || ''} message={feedback?.message || ''} onClose={() => setFeedback(null)} />
     </Screen>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
   stats: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
-  toolbar: { padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
+  toolbar: { padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
   search: { flex: 1, minWidth: 280 },
   searchMobile: { minWidth: 0, width: '100%', flexBasis: '100%' },
-  typeFilters: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-  filter: { minHeight: 38, paddingHorizontal: 13, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
-  filterActive: { borderColor: '#C5DDF8', backgroundColor: colors.primarySoft },
-  filterText: { color: colors.textSoft, fontFamily: 'PoppinsMedium', fontSize: 11.5 },
-  filterTextActive: { color: colors.primary, fontFamily: 'PoppinsSemiBold' },
-  refresh: { width: 40, height: 40, borderRadius: 11, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
-  statusFilters: { flexDirection: 'row', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginTop: -8 },
-  statusFilter: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  statusFilterActive: { backgroundColor: colors.primaryDeep, borderColor: colors.primaryDeep },
-  statusFilterText: { color: colors.textSoft, fontFamily: 'PoppinsMedium', fontSize: 11 },
-  statusFilterTextActive: { color: colors.white, fontFamily: 'PoppinsSemiBold' },
+  selects: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  selectsMobile: { width: '100%' },
+  select: { flex: 1, minWidth: 150 },
+  refresh: { width: 46, height: 46, borderRadius: 11, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   list: { gap: 10 },
   listingCard: { padding: 15 },
   listingRow: { flexDirection: 'row', alignItems: 'stretch', gap: 15 },
@@ -255,20 +354,61 @@ const styles = StyleSheet.create({
   reportBadgeText: { color: colors.danger, fontFamily: 'PoppinsSemiBold', fontSize: 10.5 },
   cleanBadge: { alignSelf: 'flex-end', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: colors.successSoft },
   cleanBadgeText: { color: colors.success, fontFamily: 'PoppinsSemiBold', fontSize: 10.5 },
-  actions: { flexDirection: 'row', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 7 },
-  actionsMobile: { justifyContent: 'flex-start' },
+  tapHint: { alignSelf: 'flex-end', flexDirection: 'row', alignItems: 'center', gap: 6 },
+  tapHintMobile: { alignSelf: 'flex-start' },
+  tapHintText: { color: colors.muted, fontFamily: 'PoppinsMedium', fontSize: 10.5 },
   action: { minWidth: 126, minHeight: 40 },
-  readOnly: { maxWidth: 255, color: colors.muted, fontFamily: 'PoppinsRegular', fontSize: 10.5, lineHeight: 17, textAlign: 'right' },
-  readOnlyMobile: { maxWidth: '100%', textAlign: 'left' },
-  detailPanel: { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.border, gap: 12 },
-  detailBlock: { gap: 4 },
-  detailLabel: { color: colors.muted, fontFamily: 'PoppinsBold', fontSize: 9.5, letterSpacing: .65 },
-  detailText: { color: colors.textSoft, fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 19 },
-  detailFacts: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  fact: { minWidth: 180, flex: 1, padding: 11, borderRadius: 10, backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border, gap: 3 },
-  factValue: { color: colors.text, fontFamily: 'PoppinsMedium', fontSize: 11.5, lineHeight: 17 },
+  readOnly: { flex: 1, color: colors.muted, fontFamily: 'PoppinsRegular', fontSize: 14, lineHeight: 21 },
+  flex: { flex: 1 },
+  badgeLeft: { alignSelf: 'flex-start' },
+  modalBackdrop: { ...defaultCursor, flex: 1, padding: 12, backgroundColor: colors.overlay, alignItems: 'center', justifyContent: 'center' },
+  detailModal: { ...defaultCursor, width: '100%', maxWidth: 720, maxHeight: '92%', padding: 20, borderRadius: 18, backgroundColor: colors.surface, gap: 14 },
+  detailModalMobile: { maxHeight: '94%', padding: 14, borderRadius: 14 },
+  modalHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  modalTitle: { color: colors.text, fontFamily: 'PoppinsSemiBold', fontSize: 21, lineHeight: 29, marginTop: 2 },
+  hero: { flexDirection: 'row', alignItems: 'flex-start', gap: 16 },
+  heroMedia: { width: 220, height: 220, borderRadius: 14, backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  heroMediaMobile: { width: 130, height: 130 },
+  heroInfo: { flex: 1, gap: 8 },
+  heroPrice: { color: colors.primary, fontFamily: 'PoppinsBold', fontSize: 24 },
+  heroPriceMobile: { fontSize: 19 },
+  heroLine: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  heroText: { flex: 1, color: colors.text, fontFamily: 'PoppinsMedium', fontSize: 15 },
+  heroSub: { color: colors.muted, fontFamily: 'PoppinsRegular', fontSize: 13, marginTop: -4, marginLeft: 24 },
+  modalSection: { gap: 6 },
+  modalLabel: { color: colors.textSoft, fontFamily: 'PoppinsSemiBold', fontSize: 15 },
+  modalText: { color: colors.text, fontFamily: 'PoppinsRegular', fontSize: 15, lineHeight: 24 },
+  factList: { borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceMuted },
+  factRow: { paddingHorizontal: 14, paddingVertical: 11, gap: 2 },
+  factRowBorder: { borderTopWidth: 1, borderTopColor: colors.border },
+  factRowLabel: { color: colors.muted, fontFamily: 'PoppinsMedium', fontSize: 13 },
+  factRowValue: { color: colors.text, fontFamily: 'PoppinsSemiBold', fontSize: 15, lineHeight: 22 },
+  modalClose: { width: 36, height: 36, borderRadius: 9, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  modalScroll: { flexGrow: 0, flexShrink: 1 },
+  modalContent: { gap: 10 },
+  gallery: { gap: 8 },
+  galleryImage: { width: 90, height: 90, borderRadius: 10, backgroundColor: colors.surfaceMuted },
+  zoomBadge: { position: 'absolute', right: 8, bottom: 8, width: 30, height: 30, borderRadius: 15, backgroundColor: colors.overlay, alignItems: 'center', justifyContent: 'center' },
+  viewerBackdrop: { flex: 1, backgroundColor: 'rgba(5,12,20,.94)' },
+  viewerBar: { height: 64, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  viewerCount: { color: colors.white, fontFamily: 'PoppinsMedium', fontSize: 14 },
+  viewerTools: { flexDirection: 'row', gap: 8 },
+  viewerButton: { width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(255,255,255,.14)', alignItems: 'center', justifyContent: 'center' },
+  viewerNav: { position: 'absolute', top: '50%', marginTop: -24, width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,.16)', alignItems: 'center', justifyContent: 'center' },
+  viewerNavLeft: { left: 12 },
+  viewerNavRight: { right: 12 },
+  viewerHint: { height: 66, paddingHorizontal: 16, textAlign: 'center', textAlignVertical: 'center', color: 'rgba(255,255,255,.7)', fontFamily: 'PoppinsRegular', fontSize: 13, lineHeight: 66 },
+  modalFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.border },
+  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 11 },
+  toggleTrack: { width: 50, height: 28, borderRadius: 14, padding: 3, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, justifyContent: 'center' },
+  toggleTrackOn: { backgroundColor: colors.success, borderColor: colors.success },
+  toggleKnob: { width: 20, height: 20, borderRadius: 10, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, shadowColor: '#071727', shadowOpacity: .18, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
+  toggleKnobOn: { alignSelf: 'flex-end', borderColor: colors.white },
+  toggleTitle: { color: colors.text, fontFamily: 'PoppinsSemiBold', fontSize: 15 },
+  toggleCaption: { color: colors.muted, fontFamily: 'PoppinsRegular', fontSize: 13 },
+  detailLabel: { color: colors.muted, fontFamily: 'PoppinsBold', fontSize: 12, letterSpacing: .65 },
   pagination: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', padding: 12 },
   pageText: { color: colors.muted, fontFamily: 'PoppinsMedium', fontSize: 11.5 },
   pageActions: { flexDirection: 'row', gap: 7 },
   pageButton: { minWidth: 120, minHeight: 40 },
-});
+}));

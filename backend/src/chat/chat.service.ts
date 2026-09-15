@@ -1,20 +1,53 @@
 // src/chat/chat.service.ts
 
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
+// Chat history is kept for 7 days; older messages are permanently deleted.
+export const CHAT_RETENTION_DAYS = 7;
+const CHAT_RETENTION_MS = CHAT_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+const PURGE_INTERVAL_MS = 60 * 60 * 1000;
+
 @Injectable()
-export class ChatService {
+export class ChatService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(ChatService.name);
+  private purgeTimer?: NodeJS.Timeout;
+
   constructor(private prisma: PrismaService) {}
 
+  onModuleInit() {
+    const purge = () => void this.purgeExpiredMessages().catch(error =>
+      this.logger.warn(`Pembersihan chat gagal: ${error instanceof Error ? error.message : String(error)}`),
+    );
+    purge();
+    this.purgeTimer = setInterval(purge, PURGE_INTERVAL_MS);
+    this.purgeTimer.unref?.();
+  }
+
+  onModuleDestroy() {
+    if (this.purgeTimer) clearInterval(this.purgeTimer);
+  }
+
+  retentionCutoff(now = new Date()) {
+    return new Date(now.getTime() - CHAT_RETENTION_MS);
+  }
+
+  async purgeExpiredMessages(now = new Date()) {
+    const { count } = await this.prisma.message.deleteMany({ where: { createdAt: { lt: this.retentionCutoff(now) } } });
+    if (count) this.logger.log(`${count} pesan chat lebih dari ${CHAT_RETENTION_DAYS} hari dihapus.`);
+    return count;
+  }
+
   async getMyChatRooms(userId: string) {
+    // Queries also filter by the cutoff so expired messages never show between purge runs.
+    const cutoff = this.retentionCutoff();
     const rooms = await this.prisma.chatRoom.findMany({
       where: { OR: [{ userAId: userId }, { userBId: userId }] },
       include: {
         userA: { select: { id: true, name: true, avatarUrl: true } },
         userB: { select: { id: true, name: true, avatarUrl: true } },
-        messages: { orderBy: { createdAt: 'desc' }, take: 1 },
-        _count: { select: { messages: { where: { isRead: false, senderId: { not: userId } } } } },
+        messages: { where: { createdAt: { gte: cutoff } }, orderBy: { createdAt: 'desc' }, take: 1 },
+        _count: { select: { messages: { where: { isRead: false, senderId: { not: userId }, createdAt: { gte: cutoff } } } } },
       },
       orderBy: { updatedAt: 'desc' },
     });
@@ -57,7 +90,7 @@ export class ChatService {
     if (room.userAId !== userId && room.userBId !== userId) throw new ForbiddenException('Akses ditolak.');
 
     const messages = await this.prisma.message.findMany({
-      where: { chatRoomId: roomId },
+      where: { chatRoomId: roomId, createdAt: { gte: this.retentionCutoff() } },
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * limit,
       take: limit,

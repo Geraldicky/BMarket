@@ -21,8 +21,9 @@ export class CreateTransactionDto {
   @MaxLength(500)
   note?: string;
 
-  @IsEnum(FulfillmentMethod)
-  fulfillmentMethod: FulfillmentMethod;
+  // Tidak diperlukan untuk listing jasa.
+  @IsOptional() @IsEnum(FulfillmentMethod)
+  fulfillmentMethod?: FulfillmentMethod;
 
   @IsOptional() @IsEnum(CourierProvider) courierProvider?: CourierProvider;
   @IsOptional() @IsString() @MaxLength(500) deliveryAddress?: string;

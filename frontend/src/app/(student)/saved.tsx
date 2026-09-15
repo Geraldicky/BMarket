@@ -2,13 +2,14 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, Text, useWindowDimensions, View } from 'react-native';
 import { Empty, ErrorState, Loader, Screen } from '@/components/ui';
 import { ListingCard } from '@/components/listing-card';
-import { colors, layout } from '@/constants/theme';
+import { colors, layout, makeStyles } from '@/constants/theme';
 import { endpoints, errorMessage } from '@/lib/api';
 
 export default function SavedScreen() {
+  const styles = useStyles();
   const [tab, setTab] = useState<'WISHLIST' | 'RECENT'>('WISHLIST');
   const client = useQueryClient();
   const { width } = useWindowDimensions();
@@ -34,6 +35,6 @@ export default function SavedScreen() {
     {query.isLoading ? <Loader/> : query.isError ? <ErrorState message={errorMessage(query.error)} retry={() => query.refetch()}/> : !query.data?.length ? <Empty icon={tab==='WISHLIST'?'heart-outline':'time-outline'} title={tab==='WISHLIST'?'Belum ada listing tersimpan':'Belum ada riwayat'} message={tab==='WISHLIST'?'Tekan ikon hati pada listing yang ingin kamu simpan.':'Listing yang kamu buka akan muncul di sini.'}/> : <View style={[styles.grid,{gap}]}>{query.data.map(entry => <ListingCard key={entry.id} item={entry.listing} saved={tab==='WISHLIST'} onToggleSaved={tab==='WISHLIST'?()=>remove.mutate(entry.listing.id):undefined} onPress={()=>router.push({pathname:'/(student)/listing/[id]',params:{id:entry.listing.id}})} style={{width:cardWidth}} compact/>)}</View>}
   </Screen>;
 }
-const styles=StyleSheet.create({
+const useStyles=makeStyles(() => ({
   page:{gap:22,paddingTop:24,paddingBottom:48},topRow:{gap:18},back:{flexDirection:'row',alignItems:'center',gap:7,alignSelf:'flex-start'},backText:{fontFamily:'PoppinsSemiBold',fontSize:12,color:colors.primary},heading:{gap:3},eyebrow:{fontFamily:'PoppinsBold',fontSize:11.5,letterSpacing:.8,color:colors.primary},title:{fontFamily:'PoppinsBold',fontSize:27,lineHeight:35,color:colors.text},titleMobile:{fontSize:23,lineHeight:30},copy:{fontFamily:'PoppinsRegular',fontSize:12,lineHeight:19,color:colors.muted},tabs:{flexDirection:'row',gap:8,borderBottomWidth:1,borderBottomColor:colors.border},tabsMobile:{gap:2},tab:{minHeight:46,paddingHorizontal:14,flexDirection:'row',alignItems:'center',gap:7,borderBottomWidth:2,borderBottomColor:'transparent'},tabActive:{borderBottomColor:colors.primary},tabText:{fontFamily:'PoppinsMedium',fontSize:12,color:colors.muted},tabTextActive:{fontFamily:'PoppinsSemiBold',color:colors.primary},grid:{flexDirection:'row',flexWrap:'wrap',alignItems:'flex-start'}
-});
+}));

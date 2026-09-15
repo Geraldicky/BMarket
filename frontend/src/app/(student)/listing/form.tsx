@@ -4,14 +4,15 @@ import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Alert, Platform, Pressable, Text, useWindowDimensions, View } from 'react-native';
 import { DateTimePickerField, formatLocalDateTimeValue, parseLocalDateTimeValue } from '@/components/date-time-picker-field';
 import { Button, Card, FeedbackDialog, Field, InlineAlert, Loader, Screen, Title } from '@/components/ui';
-import { colors, radius } from '@/constants/theme';
+import { colors, radius, makeStyles } from '@/constants/theme';
 import { endpoints, errorMessage } from '@/lib/api';
 import type { FulfillmentMethod, ListingMode } from '@/types';
 
-const categories = ['ELECTRONICS', 'BOOKS', 'FASHION', 'FOOD', 'SERVICES', 'SPORTS', 'OTHER'];
+// SERVICES is not selectable: it is assigned automatically when the "Jasa" model is chosen.
+const categories = ['ELECTRONICS', 'BOOKS', 'FASHION', 'FOOD', 'SPORTS', 'OTHER'];
 const categoryLabels: Record<string, string> = {
   ELECTRONICS: 'Elektronik', BOOKS: 'Buku', FASHION: 'Fashion', FOOD: 'Makanan',
   SERVICES: 'Jasa', SPORTS: 'Olahraga', OTHER: 'Lainnya',
@@ -53,11 +54,15 @@ const initialForm: ListingForm = {
 };
 
 export default function ListingFormScreen() {
+  const styles = useStyles();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { width } = useWindowDimensions();
   const desktop = width >= 960;
+  const mobile = width < 600;
   const client = useQueryClient();
   const hydratedId = useRef<string | undefined>(undefined);
+  // Remembers the last goods model so switching Jasa -> Barang restores it.
+  const lastProductMode = useRef<ListingMode>('ONE_OFF');
   const [form, setForm] = useState(initialForm);
   const [photos, setPhotos] = useState<ListingPhoto[]>([]);
   const [fulfillmentMethods, setFulfillmentMethods] = useState<FulfillmentMethod[]>(['CAMPUS_MEETUP', 'INSTANT_COURIER']);
@@ -74,12 +79,14 @@ export default function ListingFormScreen() {
   useEffect(() => {
     if (!existing.data || hydratedId.current === id) return;
     const listing = existing.data;
+    const mode: ListingMode = listing.mode || (listing.type === 'SERVICE' ? 'SERVICE' : Number(listing.stock || 1) > 1 ? 'STOCKED' : 'ONE_OFF');
+    if (mode !== 'SERVICE') lastProductMode.current = mode;
     setForm({
       title: listing.title,
       description: listing.description,
       price: String(listing.price),
-      category: listing.category,
-      mode: listing.mode || (listing.type === 'SERVICE' ? 'SERVICE' : Number(listing.stock || 1) > 1 ? 'STOCKED' : 'ONE_OFF'),
+      category: mode === 'SERVICE' ? 'SERVICES' : listing.category === 'SERVICES' ? 'OTHER' : listing.category,
+      mode,
       condition: listing.condition || 'GOOD',
       stock: String(listing.stock || 5),
       preorderDeadline: listing.preorderDeadline ? formatLocalDateTimeValue(new Date(listing.preorderDeadline)) : '',
@@ -109,9 +116,19 @@ export default function ListingFormScreen() {
     setErrors(current => ({ ...current, category: undefined, condition: undefined }));
   };
 
+  const selectType = (type: 'PRODUCT' | 'SERVICE') => {
+    if (type === 'SERVICE') selectMode('SERVICE');
+    else if (form.mode === 'SERVICE') selectMode(lastProductMode.current);
+  };
+
   const selectMode = (mode: ListingMode) => {
-    setForm(current => ({ ...current, mode }));
-    setErrors(current => ({ ...current, condition: undefined, stock: undefined, preorderDeadline: undefined, preorderReadyAt: undefined }));
+    if (mode !== 'SERVICE') lastProductMode.current = mode;
+    setForm(current => ({
+      ...current,
+      mode,
+      category: mode === 'SERVICE' ? 'SERVICES' : current.category === 'SERVICES' ? 'OTHER' : current.category,
+    }));
+    setErrors(current => ({ ...current, category: undefined, condition: undefined, stock: undefined, preorderDeadline: undefined, preorderReadyAt: undefined, fulfillmentMethods: undefined }));
   };
 
   const toggleFulfillment = (method: FulfillmentMethod) => {
@@ -208,7 +225,7 @@ export default function ListingFormScreen() {
     if (!Number.isFinite(Number(form.price)) || Number(form.price) < 1) next.price = 'Masukkan harga yang valid.';
     if (!form.category) next.category = 'Pilih kategori listing.';
     if (!photos.length) next.photos = 'Tambahkan minimal satu foto.';
-    if (!fulfillmentMethods.length) next.fulfillmentMethods = 'Pilih minimal satu metode penyerahan.';
+    if (isProduct && !fulfillmentMethods.length) next.fulfillmentMethods = 'Pilih minimal satu metode penyerahan.';
     if (conditionApplies && !form.condition) next.condition = 'Pilih kondisi barang.';
     if (form.mode === 'STOCKED' && (!Number.isInteger(Number(form.stock)) || Number(form.stock) < 1)) next.stock = 'Stok minimal 1.';
     if (isPreorder) {
@@ -244,13 +261,14 @@ export default function ListingFormScreen() {
         title: form.title.trim(),
         description: form.description.trim(),
         price: Number(form.price),
-        category: form.category,
+        category: isProduct ? form.category : 'SERVICES',
         type: listingType,
         mode: form.mode,
         condition: conditionApplies ? form.condition : undefined,
         stock: form.mode === 'ONE_OFF' ? 1 : form.mode === 'STOCKED' ? Number(form.stock) : undefined,
         images,
-        fulfillmentMethods,
+        // Jasa tidak memiliki metode penyerahan.
+        fulfillmentMethods: isProduct ? fulfillmentMethods : [],
         preorderDeadline: isPreorder ? parseDate(form.preorderDeadline)?.toISOString() : undefined,
         preorderReadyAt: isPreorder ? (form.preorderReadyAt.trim() ? parseDate(form.preorderReadyAt)?.toISOString() : null) : undefined,
         preorderQuota: isPreorder ? Number(form.preorderQuota) : undefined,
@@ -277,72 +295,73 @@ export default function ListingFormScreen() {
 
   if (id && existing.isLoading) return <Screen><Loader /></Screen>;
 
-  const steps = [
-    { label: 'Informasi', ready: form.title.trim().length >= 3 && form.description.trim().length >= 10 },
-    { label: 'Foto', ready: photos.length > 0 },
-    { label: 'Harga & model', ready: Number(form.price) > 0 && (form.mode !== 'STOCKED' || Number(form.stock) > 0) && (!isPreorder || (Number(form.preorderQuota) > 0 && Boolean(form.preorderDeadline))) },
-    { label: 'Publikasikan', ready: false },
-  ];
-
   return (
     <Screen>
-      <Title eyebrow="MULAI BERJUALAN" subtitle="Foto yang jelas dan informasi yang lengkap membantu pembeli mengambil keputusan.">
+      <Title center eyebrow="MULAI BERJUALAN" subtitle="Foto yang jelas dan informasi yang lengkap membantu pembeli mengambil keputusan.">
         {id ? 'Edit listing' : 'Pasang listing baru'}
       </Title>
 
-      <View style={styles.steps}>
-        {steps.map((step, index) => (
-          <View key={step.label} style={styles.step}>
-            <View style={[styles.stepNumber, step.ready && styles.stepNumberReady]}>
-              {step.ready ? (
-                <Ionicons name="checkmark" size={18} color={colors.white} />
-              ) : index === 3 ? (
-                <Ionicons name="send-outline" size={18} color={colors.muted} />
-              ) : (
-                <Text style={styles.stepNumberText}>{index + 1}</Text>
-              )}
-            </View>
-            {desktop ? <Text style={[styles.stepLabel, step.ready && styles.stepLabelReady]}>{step.label}</Text> : null}
-            {index < steps.length - 1 ? <View style={[styles.stepLine, step.ready && styles.stepLineReady]} /> : null}
-          </View>
-        ))}
-      </View>
-
-      <View style={[styles.columns, !desktop && styles.columnsMobile]}>
+      <View style={styles.column}>
         <Card style={styles.formCard}>
           <View>
             <Text style={styles.cardTitle}>Informasi listing</Text>
             <Text style={styles.cardCopy}>Tulis seperti kamu menjelaskan barang atau jasa ini kepada teman kampus.</Text>
           </View>
 
-          <Text style={styles.label}>Model penjualan</Text>
-          <View style={styles.modeGrid}>
-            {([
-              ['ONE_OFF', 'cube-outline', 'Barang satuan', 'Preloved atau barang unik, dijual sekali.'],
-              ['STOCKED', 'layers-outline', 'Produk dengan stok', 'Produk yang dapat direstock tanpa membuat katalog baru.'],
-              ['PREORDER', 'calendar-outline', 'Pre-order', 'Kumpulkan pesanan sampai deadline dan kuota tertentu.'],
-              ['SERVICE', 'construct-outline', 'Jasa', 'Layanan berulang tanpa stok barang.'],
-            ] as const).map(([mode, icon, title, caption]) => {
-              const active = form.mode === mode;
-              return <Pressable key={mode} onPress={() => selectMode(mode)} style={[styles.modeItem, active && styles.segmentActive]}>
-                <View style={[styles.modeIcon, active && styles.modeIconActive]}><Ionicons name={icon} size={20} color={active ? colors.primary : colors.muted} /></View>
-                <View style={styles.flex}><Text style={[styles.segmentText, active && styles.segmentTextActive]}>{title}</Text><Text style={styles.segmentCaption}>{caption}</Text></View>
-              </Pressable>;
-            })}
+          <View>
+            <Text style={styles.label}>Tipe listing</Text>
+            <View style={styles.modeGrid}>
+              {([
+                ['PRODUCT', 'cube-outline', 'Barang', 'Barang fisik: satuan, dengan stok, atau pre-order.'],
+                ['SERVICE', 'construct-outline', 'Jasa', 'Layanan tanpa stok, kondisi, dan metode penyerahan.'],
+              ] as const).map(([type, icon, title, caption]) => {
+                const active = listingType === type;
+                return <Pressable key={type} onPress={() => selectType(type)} style={[styles.modeItem, mobile && styles.modeItemMobile, active && styles.segmentActive]}>
+                  <View style={[styles.modeIcon, active && styles.modeIconActive]}><Ionicons name={icon} size={20} color={active ? colors.primary : colors.muted} /></View>
+                  <View style={styles.flex}><Text style={[styles.segmentText, active && styles.segmentTextActive]}>{title}</Text><Text style={styles.segmentCaption}>{caption}</Text></View>
+                </Pressable>;
+              })}
+            </View>
           </View>
+
+          {isProduct ? (
+            <View>
+              <Text style={styles.label}>Model penjualan</Text>
+              <View style={styles.modeGrid}>
+                {([
+                  ['ONE_OFF', 'cube-outline', 'Barang satuan', 'Preloved atau barang unik, dijual sekali.'],
+                  ['STOCKED', 'layers-outline', 'Produk dengan stok', 'Produk yang dapat direstock tanpa membuat katalog baru.'],
+                  ['PREORDER', 'calendar-outline', 'Pre-order', 'Kumpulkan pesanan sampai deadline dan kuota tertentu.'],
+                ] as const).map(([mode, icon, title, caption]) => {
+                  const active = form.mode === mode;
+                  return <Pressable key={mode} onPress={() => selectMode(mode)} style={[styles.modeItem, mobile && styles.modeItemMobile, active && styles.segmentActive]}>
+                    <View style={[styles.modeIcon, active && styles.modeIconActive]}><Ionicons name={icon} size={20} color={active ? colors.primary : colors.muted} /></View>
+                    <View style={styles.flex}><Text style={[styles.segmentText, active && styles.segmentTextActive]}>{title}</Text><Text style={styles.segmentCaption}>{caption}</Text></View>
+                  </Pressable>;
+                })}
+              </View>
+            </View>
+          ) : null}
 
           <Field label="Judul listing" value={form.title} onChangeText={setField('title')} maxLength={120} error={errors.title} placeholder="Contoh: ASUS VivoBook 14, RAM 8 GB" hint={`${form.title.length}/120 karakter`} />
 
           <View>
             <Text style={styles.label}>Kategori</Text>
-            <View style={styles.chips}>
-              {categories.map(category => (
-                <Pressable key={category} onPress={() => selectCategory(category)} style={[styles.chip, form.category === category && styles.chipActive]}>
-                  <Text style={[styles.chipText, form.category === category && styles.chipTextActive]}>{categoryLabels[category]}</Text>
-                </Pressable>
-              ))}
-            </View>
-            {errors.category ? <Text style={styles.errorText}>{errors.category}</Text> : null}
+            {isProduct ? <>
+              <View style={styles.chips}>
+                {categories.map(category => (
+                  <Pressable key={category} onPress={() => selectCategory(category)} style={[styles.chip, form.category === category && styles.chipActive]}>
+                    <Text style={[styles.chipText, form.category === category && styles.chipTextActive]}>{categoryLabels[category]}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              {errors.category ? <Text style={styles.errorText}>{errors.category}</Text> : null}
+            </> : (
+              <View style={[styles.chips, styles.serviceCategory]}>
+                <View style={[styles.chip, styles.chipActive]}><Text style={[styles.chipText, styles.chipTextActive]}>Jasa</Text></View>
+                <Text style={styles.serviceCategoryNote}>Otomatis mengikuti model penjualan Jasa.</Text>
+              </View>
+            )}
           </View>
 
           <Field label="Deskripsi" multiline value={form.description} onChangeText={setField('description')} maxLength={5000} error={errors.description} placeholder="Ceritakan kondisi, spesifikasi, kelengkapan, dan cara penyerahan" hint={`${form.description.length}/5000 karakter`} />
@@ -404,7 +423,7 @@ export default function ListingFormScreen() {
             </View>
           ) : null}
 
-          <View>
+          {isProduct ? <View>
             <Text style={styles.label}>Metode penyerahan</Text>
             <Text style={styles.deliveryHelp}>Pilih metode yang dapat kamu layani. Buyer akan memilih salah satunya saat checkout.</Text>
             <View style={styles.deliveryGrid}>
@@ -420,26 +439,19 @@ export default function ListingFormScreen() {
               </Pressable>
             </View>
             {errors.fulfillmentMethods ? <Text style={styles.errorText}>{errors.fulfillmentMethods}</Text> : null}
-          </View>
+          </View> : null}
         </Card>
 
-        <View style={[styles.side, !desktop && styles.sideMobile]}>
+        <View style={styles.side}>
           <Card style={styles.photoCard}>
             <View style={styles.photoHeader}>
               <View style={styles.flex}><Text style={styles.cardTitle}>Foto listing</Text><Text style={styles.cardCopy}>Foto pertama menjadi sampul etalase.</Text></View>
               <View style={styles.photoCount}><Text style={styles.photoCountText}>{photos.length}/4</Text></View>
             </View>
 
-            <Pressable accessibilityRole="button" onPress={pickPhotos} style={[styles.upload, errors.photos && styles.uploadError]}>
-              <View style={styles.uploadIcon}><Ionicons name="images-outline" size={25} color={colors.primary} /></View>
-              <Text style={styles.uploadTitle}>{photos.length ? 'Tambah foto lain' : 'Pilih foto dari galeri'}</Text>
-              <Text style={styles.uploadCopy}>JPG, PNG, atau WebP · maksimal 5 MB per foto</Text>
-            </Pressable>
-            {errors.photos ? <Text style={styles.errorText}>{errors.photos}</Text> : null}
-
             <View style={styles.photos}>
               {photos.map((photo, index) => (
-                <View key={photo.key} style={[styles.photoTile, index === 0 && styles.photoTileCover]}>
+                <View key={photo.key} style={[styles.photoTile, mobile && styles.photoTileMobile, index === 0 && styles.photoTileCover]}>
                   <Image source={photo.uri} style={styles.photo} contentFit="cover" transition={140} />
                   <View style={styles.photoTopRow}>
                     {index === 0 ? <View style={styles.coverBadge}><Ionicons name="star" size={11} color={colors.white} /><Text style={styles.coverBadgeText}>Sampul</Text></View> : <View />}
@@ -452,14 +464,20 @@ export default function ListingFormScreen() {
                   </View>
                 </View>
               ))}
+              {photos.length === 0 ? (
+                <Pressable accessibilityRole="button" onPress={pickPhotos} style={({ pressed }) => [styles.photoTile, mobile && styles.photoTileMobile, styles.upload, errors.photos && styles.uploadError, pressed && { opacity: .75 }]}>
+                  <View style={styles.uploadIcon}><Ionicons name="images-outline" size={25} color={colors.primary} /></View>
+                  <Text style={styles.uploadTitle}>Pilih foto</Text>
+                  <Text style={styles.uploadCopy}>JPG, PNG, WebP · maks. 5 MB</Text>
+                </Pressable>
+              ) : photos.length < 4 ? (
+                <Pressable accessibilityRole="button" accessibilityLabel="Tambah foto" onPress={pickPhotos} style={({ pressed }) => [styles.photoTile, mobile && styles.photoTileMobile, styles.upload, pressed && { opacity: .75 }]}>
+                  <View style={styles.addIcon}><Ionicons name="add" size={30} color={colors.primary} /></View>
+                  <Text style={styles.uploadCopy}>Tambah foto</Text>
+                </Pressable>
+              ) : null}
             </View>
-          </Card>
-
-          <Card style={styles.tips}>
-            <View style={styles.tipHeader}><View style={styles.tipIcon}><Ionicons name="bulb-outline" size={22} color="#F8B13A" /></View><Text style={styles.tipTitle}>Foto yang lebih meyakinkan</Text></View>
-            {['Gunakan cahaya yang terang', 'Tampilkan kondisi dari beberapa sisi', 'Hindari foto buram atau tangkapan layar', 'Jangan cantumkan kontak pribadi'].map(tip => (
-              <View key={tip} style={styles.tip}><Ionicons name="checkmark-circle" size={17} color="#5BD1A3" /><Text style={styles.tipText}>{tip}</Text></View>
-            ))}
+            {errors.photos ? <Text style={styles.errorText}>{errors.photos}</Text> : null}
           </Card>
 
           {uploadProgress !== null ? (
@@ -478,27 +496,16 @@ export default function ListingFormScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  steps: { minHeight: 84, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center' },
-  step: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 9 },
-  stepNumber: { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' },
-  stepNumberReady: { backgroundColor: colors.primary },
-  stepNumberText: { fontFamily: 'PoppinsSemiBold', fontSize: 13, color: colors.muted },
-  stepLabel: { fontFamily: 'PoppinsMedium', fontSize: 12, color: colors.muted },
-  stepLabelReady: { fontFamily: 'PoppinsSemiBold', color: colors.text },
-  stepLine: { height: 2, flex: 1, backgroundColor: colors.border, marginHorizontal: 10 },
-  stepLineReady: { backgroundColor: '#BBD6F5' },
-  columns: { flexDirection: 'row', gap: 22, alignItems: 'flex-start' },
-  columnsMobile: { flexDirection: 'column' },
-  formCard: { flex: 1.55, width: '100%', gap: 22 },
-  side: { flex: 1, width: '100%', minWidth: 320, gap: 14 },
-  sideMobile: { minWidth: 0 },
+const useStyles = makeStyles(() => ({
+  column: { width: '100%', maxWidth: 860, alignSelf: 'center', gap: 18 },
+  formCard: { width: '100%', gap: 22 },
+  side: { width: '100%', gap: 14 },
   cardTitle: { fontFamily: 'PoppinsBold', fontSize: 21, color: colors.text },
   cardCopy: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 19, color: colors.muted, marginTop: 3 },
   label: { fontFamily: 'PoppinsMedium', fontSize: 14, color: colors.textSoft, marginBottom: 8 },
   segment: { flexDirection: 'row', gap: 10 },
   segmentItem: { minHeight: 64, flex: 1, borderRadius: 11, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
-  segmentActive: { borderColor: '#A8C8EF', backgroundColor: colors.primarySoft },
+  segmentActive: { borderColor: colors.primaryBorder, backgroundColor: colors.primarySoft },
   segmentText: { fontFamily: 'PoppinsSemiBold', fontSize: 13, color: colors.textSoft },
   segmentTextActive: { color: colors.primary },
   segmentCaption: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 17, color: colors.muted, marginTop: 1 },
@@ -507,20 +514,22 @@ const styles = StyleSheet.create({
   modeItemMobile: { width: '100%', minWidth: 0 },
   modeIcon: { width: 42, height: 42, borderRadius: 11, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' },
   modeIconActive: { backgroundColor: colors.surface },
-  preorderBox: { gap: 13, padding: 15, borderRadius: 13, borderWidth: 1, borderColor: '#B7D3F3', backgroundColor: '#F7FBFF' },
+  preorderBox: { gap: 13, padding: 15, borderRadius: 13, borderWidth: 1, borderColor: colors.primaryBorder, backgroundColor: colors.primaryMist },
   preorderHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 11 },
   preorderIcon: { width: 42, height: 42, borderRadius: 11, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   preorderTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 14, color: colors.text },
   preorderCopy: { fontFamily: 'PoppinsRegular', fontSize: 11.5, lineHeight: 17, color: colors.muted, marginTop: 2 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  serviceCategory: { alignItems: 'center', columnGap: 10 },
+  serviceCategoryNote: { flexShrink: 1, fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 18, color: colors.muted },
   chip: { minHeight: 40, paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, justifyContent: 'center' },
-  chipActive: { borderColor: '#A8C8EF', backgroundColor: colors.primarySoft },
+  chipActive: { borderColor: colors.primaryBorder, backgroundColor: colors.primarySoft },
   chipText: { fontFamily: 'PoppinsMedium', fontSize: 12, color: colors.textSoft },
   chipTextActive: { fontFamily: 'PoppinsSemiBold', color: colors.primary },
   deliveryHelp: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 18, color: colors.muted, marginTop: -4, marginBottom: 10 },
   deliveryGrid: { gap: 9 },
   deliveryOption: { minHeight: 70, padding: 13, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 11 },
-  deliveryOptionActive: { borderColor: '#A8C8EF', backgroundColor: colors.primarySoft },
+  deliveryOptionActive: { borderColor: colors.primaryBorder, backgroundColor: colors.primarySoft },
   deliveryIcon: { width: 42, height: 42, borderRadius: 11, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   deliveryTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 13, color: colors.text },
   deliveryCaption: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 16, color: colors.muted, marginTop: 1 },
@@ -533,15 +542,18 @@ const styles = StyleSheet.create({
   photoHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   photoCount: { minWidth: 48, height: 34, paddingHorizontal: 10, borderRadius: radius.pill, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   photoCountText: { fontFamily: 'PoppinsSemiBold', fontSize: 12, color: colors.primary },
-  upload: { minHeight: 144, borderRadius: 13, borderWidth: 1, borderStyle: 'dashed', borderColor: '#AFC8E3', backgroundColor: '#F8FBFE', alignItems: 'center', justifyContent: 'center', gap: 6, padding: 18 },
+  upload: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: colors.primaryBorder, backgroundColor: colors.primaryMist, alignItems: 'center', justifyContent: 'center', gap: 6, padding: 12 },
   uploadError: { borderColor: colors.danger, backgroundColor: colors.dangerSoft },
   uploadIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  addIcon: { width: 54, height: 54, borderRadius: 27, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   uploadTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 14, color: colors.text, marginTop: 2 },
   uploadCopy: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 17, textAlign: 'center', color: colors.muted },
-  photos: { gap: 12 },
-  photoTile: { position: 'relative', height: 184, borderRadius: 14, overflow: 'hidden', borderWidth: 2, borderColor: 'transparent', backgroundColor: colors.surfaceMuted },
+  photos: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  // Every tile (photo, placeholder, "+") shares the same size: a square photo plus the 40px action bar.
+  photoTile: { position: 'relative', width: 180, height: 220, borderRadius: 14, overflow: 'hidden', borderWidth: 2, borderColor: 'transparent', backgroundColor: colors.surfaceMuted },
+  photoTileMobile: { width: '47.5%', height: 210 },
   photoTileCover: { borderColor: colors.primary },
-  photo: { width: '100%', height: 142 },
+  photo: { width: '100%', flex: 1 },
   photoTopRow: { position: 'absolute', left: 9, right: 9, top: 9, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   coverBadge: { minHeight: 28, paddingHorizontal: 9, borderRadius: radius.pill, backgroundColor: 'rgba(12,79,168,.92)', flexDirection: 'row', alignItems: 'center', gap: 5 },
   coverBadgeText: { fontFamily: 'PoppinsSemiBold', fontSize: 12, color: colors.white },
@@ -561,7 +573,7 @@ const styles = StyleSheet.create({
   progressHeader: { flexDirection: 'row', justifyContent: 'space-between' },
   progressLabel: { fontFamily: 'PoppinsMedium', fontSize: 12, color: colors.primaryDark },
   progressValue: { fontFamily: 'PoppinsSemiBold', fontSize: 12, color: colors.primary },
-  progressTrack: { height: 7, overflow: 'hidden', borderRadius: radius.pill, backgroundColor: '#CFE1F6' },
+  progressTrack: { height: 7, overflow: 'hidden', borderRadius: radius.pill, backgroundColor: colors.primarySoft },
   progressBar: { height: '100%', borderRadius: radius.pill, backgroundColor: colors.primary },
   reviewNote: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 18, textAlign: 'center', color: colors.muted },
-});
+}));

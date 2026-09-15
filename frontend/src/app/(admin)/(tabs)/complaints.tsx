@@ -1,14 +1,15 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
-import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Text, View, useWindowDimensions } from 'react-native';
 import { AdminEmptyState, AdminStatusPill } from '@/components/admin-ui';
 import { Button, Card, date, ErrorState, FeedbackDialog, Field, Loader, Screen, Title } from '@/components/ui';
 import { endpoints, errorMessage } from '@/lib/api';
-import { colors } from '@/constants/theme';
+import { colors, makeStyles } from '@/constants/theme';
 
 type ComplaintAction = { id: string; status: 'RESOLVED' | 'DISMISSED'; reason: string } | null;
 
 export default function ComplaintsScreen() {
+  const styles = useStyles();
   const client = useQueryClient();
   const desktop = useWindowDimensions().width >= 1100;
   const query = useQuery({ queryKey: ['complaints'], queryFn: () => endpoints.complaints() });
@@ -49,7 +50,7 @@ export default function ComplaintsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
   toolbar: { padding: 14 },
   table: { padding: 0, overflow: 'hidden', gap: 0 },
   tableRow: { minHeight: 70, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: colors.border, gap: 10 },
@@ -57,7 +58,7 @@ const styles = StyleSheet.create({
   headText: { color: colors.muted, fontFamily: 'PoppinsBold', fontSize: 10.5, letterSpacing: .35 },
   cellText: { color: colors.textSoft, fontFamily: 'PoppinsRegular', fontSize: 11.5 },
   idCol: { width: 90 }, typeCol: { width: 82 }, personCol: { flex: 1, minWidth: 110 }, targetCol: { flex: 1.2, minWidth: 130 }, statusCol: { width: 120 }, dateCol: { width: 110 }, actionCol: { width: 205 },
-  rowActions: { flexDirection: 'row', gap: 5, justifyContent: 'flex-end' },
+  rowActions: { flexDirection: 'row', gap: 8, justifyContent: 'flex-end' },
   smallButton: { minWidth: 0, minHeight: 36, paddingHorizontal: 9 },
   noAction: { color: colors.muted, fontFamily: 'PoppinsRegular', fontSize: 12, textAlign: 'center' },
   cards: { gap: 10 },
@@ -67,5 +68,5 @@ const styles = StyleSheet.create({
   mobileReason: { color: colors.text, fontFamily: 'PoppinsSemiBold', fontSize: 14 },
   mobileMeta: { color: colors.muted, fontFamily: 'PoppinsRegular', fontSize: 11.5 },
   mobileDesc: { color: colors.textSoft, fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 19 },
-  mobileActions: { gap: 7, marginTop: 4 },
-});
+  mobileActions: { gap: 10, marginTop: 6 },
+}));

@@ -97,7 +97,11 @@ export class ListingsService {
   }) {
     if (!input.images?.length) throw new BadRequestException('Tambahkan minimal satu foto listing.');
     if (input.images.length > 4) throw new BadRequestException('Maksimal empat foto untuk setiap listing.');
-    if (!input.fulfillmentMethods?.length) throw new BadRequestException('Pilih minimal satu metode penyerahan.');
+    if (input.mode === 'SERVICE') {
+      if (input.fulfillmentMethods?.length) throw new BadRequestException('Jasa tidak memiliki metode penyerahan.');
+    } else if (!input.fulfillmentMethods?.length) {
+      throw new BadRequestException('Pilih minimal satu metode penyerahan.');
+    }
 
     const expectedType = this.typeForMode(input.mode);
     if (input.type !== expectedType) {
@@ -162,7 +166,9 @@ export class ListingsService {
       ? { price: 'asc' as const }
       : filter.sort === 'price_desc'
         ? { price: 'desc' as const }
-        : { createdAt: 'desc' as const };
+        : filter.sort === 'oldest'
+          ? { createdAt: 'asc' as const }
+          : { createdAt: 'desc' as const };
 
     const [listings, total] = await Promise.all([
       this.prisma.listing.findMany({
@@ -235,7 +241,7 @@ export class ListingsService {
         sellerId,
         stock,
         stockLeft: stock,
-        fulfillmentMethods: dto.fulfillmentMethods,
+        fulfillmentMethods: mode === 'SERVICE' ? [] : dto.fulfillmentMethods ?? [],
         preorderStatus: mode === 'PREORDER' ? 'OPEN' : null,
         preorderDeadline: mode === 'PREORDER' ? preorderDeadline : null,
         preorderReadyAt: mode === 'PREORDER' ? preorderReadyAt : null,
@@ -271,7 +277,11 @@ export class ListingsService {
     const nextCategory = dto.category ?? listing.category;
     const nextCondition = this.conditionApplies(nextMode, nextCategory) ? (dto.condition ?? listing.condition) : null;
     const nextImages = dto.images ?? this.parseImages(listing.images);
-    const nextFulfillmentMethods = dto.fulfillmentMethods ?? listing.fulfillmentMethods;
+    // Jasa tidak pernah menyimpan metode penyerahan. Metode yang dikirim untuk jasa tetap diteruskan
+    // ke validasi agar ditolak; nilai lama dari listing jasa tidak dibawa saat berubah menjadi barang.
+    const nextFulfillmentMethods = nextMode === 'SERVICE'
+      ? (dto.fulfillmentMethods?.length ? dto.fulfillmentMethods : [])
+      : (dto.fulfillmentMethods ?? (listing.mode === 'SERVICE' ? [] : listing.fulfillmentMethods));
     const nextDeadline = dto.preorderDeadline ? new Date(dto.preorderDeadline) : listing.preorderDeadline;
     const nextReadyAt = dto.preorderReadyAt === null
       ? null
@@ -326,7 +336,7 @@ export class ListingsService {
         mode: nextMode,
         condition: nextCondition,
         ...(dto.images !== undefined && { images: JSON.stringify(dto.images) }),
-        ...(dto.fulfillmentMethods !== undefined && { fulfillmentMethods: dto.fulfillmentMethods }),
+        fulfillmentMethods: nextFulfillmentMethods,
         ...stockUpdate,
         ...(nextMode === 'PREORDER' ? {
           preorderStatus: listing.mode === 'PREORDER' ? listing.preorderStatus : 'OPEN',

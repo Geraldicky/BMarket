@@ -146,6 +146,39 @@ export interface Transaction {
   seller: Partial<User>;
   review?: Review | null;
   dispute?: Dispute | null;
+  deliverables?: TransactionDeliverable[];
+}
+
+// A result file the seller uploaded for a service transaction.
+export interface TransactionDeliverable {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+  createdAt: string;
+  uploaderId: string;
+}
+
+// Admin dispute review: contents of a ZIP deliverable, and one previewed file inside it.
+export interface DeliverableArchiveEntry {
+  path: string;
+  size: number;
+  compressedSize: number;
+  isDirectory: boolean;
+  previewable: boolean;
+}
+
+export interface DeliverableArchive {
+  fileName: string;
+  truncated: boolean;
+  entries: DeliverableArchiveEntry[];
+}
+
+export interface DeliverableArchiveEntryPreview {
+  path: string;
+  kind: 'text' | 'image';
+  mimeType: string;
+  content: string; // UTF-8 text, or base64 for images
 }
 
 export interface CheckoutOptions {

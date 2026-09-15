@@ -1,13 +1,27 @@
 // src/transactions/transactions.controller.ts
 
 import {
-  BadRequestException, Controller, Get, Post, Patch, Param, Body, Query, UseGuards,
+  BadRequestException, Controller, Delete, Get, Post, Patch, Param, Body, Query, UploadedFiles, UseGuards, UseInterceptors,
 } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import { extname } from 'node:path';
 import { TransactionsService } from './transactions.service';
+import type { PrivateUploadFile } from '../uploads/uploads.service';
 import { ConfirmHandoverDto, CreateTransactionDto, TopupDto, UpdateTransactionStatusDto } from './dto/transaction.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { TransactionStatus } from '@prisma/client';
+
+// Service deliverables: documents, images, archives, and common source-code files.
+const DELIVERABLE_EXTENSIONS = new Set([
+  'pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'txt', 'md', 'csv', 'rtf',
+  'jpg', 'jpeg', 'png', 'webp', 'gif', 'svg',
+  'zip', 'rar', '7z',
+  'js', 'jsx', 'ts', 'tsx', 'py', 'ipynb', 'java', 'kt', 'swift', 'c', 'cpp', 'h', 'cs', 'go', 'rb', 'php', 'html', 'css', 'json', 'sql', 'xml', 'yml', 'yaml',
+]);
+const DELIVERABLE_MAX_BYTES = 20 * 1024 * 1024;
+const DELIVERABLE_MAX_FILES = 5;
 
 @Controller('transactions')
 @UseGuards(JwtAuthGuard)
@@ -74,6 +88,48 @@ export class TransactionsController {
   async confirmHandover(@Param('id') id: string, @CurrentUser() user: any, @Body() dto: ConfirmHandoverDto) {
     const data = await this.transactionsService.confirmHandover(id, user.id, dto.code);
     return { success: true, message: 'Meetup selesai. Dana escrow sudah dilepas ke seller.', data };
+  }
+
+  @Get(':id/deliverables')
+  async listDeliverables(@Param('id') id: string, @CurrentUser() user: any) {
+    const data = await this.transactionsService.listDeliverables(id, user.id);
+    return { success: true, data };
+  }
+
+  @Post(':id/deliverables')
+  @UseInterceptors(FilesInterceptor('files', DELIVERABLE_MAX_FILES, {
+    storage: memoryStorage(),
+    limits: { fileSize: DELIVERABLE_MAX_BYTES, files: DELIVERABLE_MAX_FILES },
+    fileFilter: (_req, file, callback) => {
+      const extension = extname(file.originalname || '').toLowerCase().replace('.', '');
+      if (!DELIVERABLE_EXTENSIONS.has(extension)) {
+        return callback(new BadRequestException('Format file tidak didukung. Gunakan dokumen, gambar, ZIP, atau file kode.'), false);
+      }
+      callback(null, true);
+    },
+  }))
+  async uploadDeliverables(@Param('id') id: string, @CurrentUser() user: any, @UploadedFiles() files: PrivateUploadFile[]) {
+    if (!files?.length) throw new BadRequestException('Pilih minimal satu file hasil jasa.');
+    const data = await this.transactionsService.addDeliverables(id, user.id, files);
+    return { success: true, message: `${files.length} file hasil jasa berhasil diunggah.`, data };
+  }
+
+  @Delete(':id/deliverables/:deliverableId')
+  async removeDeliverable(@Param('id') id: string, @Param('deliverableId') deliverableId: string, @CurrentUser() user: any) {
+    const data = await this.transactionsService.removeDeliverable(id, deliverableId, user.id);
+    return { success: true, message: 'File hasil jasa dihapus.', data };
+  }
+
+  @Post(':id/deliverables/:deliverableId/link')
+  async deliverableLink(@Param('id') id: string, @Param('deliverableId') deliverableId: string, @CurrentUser() user: any) {
+    const data = await this.transactionsService.createDeliverableLink(id, deliverableId, user.id);
+    return { success: true, data };
+  }
+
+  @Post(':id/accept-deliverables')
+  async acceptDeliverables(@Param('id') id: string, @CurrentUser() user: any) {
+    const data = await this.transactionsService.acceptDeliverables(id, user.id);
+    return { success: true, message: 'Hasil jasa diterima. Dana escrow sudah dilepas ke penjual.', data };
   }
 
   @Patch(':id/status')

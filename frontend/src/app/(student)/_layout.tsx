@@ -1,16 +1,17 @@
 import { Stack } from 'expo-router';
 import { useWindowDimensions } from 'react-native';
-import { colors } from '@/constants/theme';
+import { colors, useColorScheme } from '@/constants/theme';
 import { StudentDesktopHeader } from '@/components/student-desktop-header';
+import { StudentMobileHeader } from '@/components/student-mobile-header';
 
 export default function StudentLayout() {
+  useColorScheme();
   const desktop = useWindowDimensions().width >= 960;
 
+  // Mobile uses the same blue BMarket header as Beranda, with a back arrow for pages opened on top of the tabs.
   const mobileOptions = {
-    headerTintColor: colors.text,
-    headerTitleStyle: { fontFamily: 'PoppinsSemiBold' as const },
-    headerShadowVisible: false,
-    headerStyle: { backgroundColor: colors.background },
+    headerShown: true,
+    header: () => <StudentMobileHeader back />,
     contentStyle: { backgroundColor: colors.background },
   };
 
@@ -32,7 +33,6 @@ export default function StudentLayout() {
       <Stack.Screen name="transaction/[id]" options={title('Detail transaksi')} />
       <Stack.Screen name="seller/[id]" options={title('Profil seller')} />
       <Stack.Screen name="chat/[id]" options={title('Percakapan')} />
-      <Stack.Screen name="profile/edit" options={title('Edit profil')} />
       <Stack.Screen name="report" options={title('Laporkan')} />
       <Stack.Screen name="saved" options={title('Tersimpan')} />
       <Stack.Screen name="notifications" options={title('Notifikasi')} />

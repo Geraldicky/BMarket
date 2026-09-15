@@ -16,7 +16,7 @@ test.describe('BMarket public smoke', () => {
 
   test('register page is reachable and validates the form', async ({ page }) => {
     await page.goto('/');
-    await page.getByText('Daftar', { exact: true }).click();
+    await page.getByText('daftar', { exact: true }).click();
 
     await expect(page.getByText('Buat akun BMarket')).toBeVisible();
     await page.getByText('Buat akun', { exact: true }).click();

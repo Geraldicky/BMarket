@@ -3,9 +3,9 @@ import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Modal, Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { Button, Card, ErrorState, FeedbackDialog, Field, InlineAlert, Loader, money, Screen } from '@/components/ui';
-import { colors, radius } from '@/constants/theme';
+import { colors, radius, makeStyles } from '@/constants/theme';
 import { endpoints, errorMessage } from '@/lib/api';
 import { useAuth } from '@/store/auth';
 import type { CourierProvider, FulfillmentMethod } from '@/types';
@@ -28,10 +28,11 @@ function fullDate(value?: string | null) {
 }
 
 export default function ListingDetailScreen() {
+  const styles = useStyles();
   const { id } = useLocalSearchParams<{ id: string }>();
   const user = useAuth(state => state.user);
   const width = useWindowDimensions().width;
-  const desktop = width >= 960;
+  const wide = width >= 760;
   const mobile = width < 600;
   const client = useQueryClient();
   const [quantity, setQuantity] = useState('1');
@@ -75,7 +76,8 @@ export default function ListingDetailScreen() {
         listingId: id,
         quantity: amount,
         note: note.trim() || undefined,
-        fulfillmentMethod: effectiveFulfillmentMethod,
+        // Jasa tidak memiliki metode penyerahan.
+        fulfillmentMethod: query.data?.mode === 'SERVICE' ? undefined : effectiveFulfillmentMethod,
         courierProvider: effectiveFulfillmentMethod === 'INSTANT_COURIER' ? effectiveCourierProvider : undefined,
         deliveryAddress: effectiveFulfillmentMethod === 'INSTANT_COURIER' ? deliveryAddress.trim() : undefined,
         recipientPhone: effectiveFulfillmentMethod === 'INSTANT_COURIER' ? recipientPhone.trim() : undefined,
@@ -185,8 +187,8 @@ export default function ListingDetailScreen() {
         <Text numberOfLines={1} style={[styles.breadcrumbText, styles.breadcrumbCurrent]}>{item.title}</Text>
       </View>
 
-      <View style={[styles.columns, !desktop && styles.columnsMobile]}>
-        <View style={[styles.gallery, !desktop && styles.galleryMobile]}>
+      <View style={[styles.columns, !wide &&styles.columnsMobile]}>
+        <View style={[styles.gallery, !wide &&styles.galleryMobile]}>
           <View style={styles.mainMedia}>
             {activeImage && !imageFailed ? (
               <Image
@@ -199,7 +201,7 @@ export default function ListingDetailScreen() {
               />
             ) : (
               <View style={styles.placeholder}>
-                <View style={styles.placeholderIcon}><Ionicons name={item.type === 'SERVICE' ? 'construct-outline' : 'cube-outline'} size={52} color="#64809A" /></View>
+                <View style={styles.placeholderIcon}><Ionicons name={item.type === 'SERVICE' ? 'construct-outline' : 'cube-outline'} size={52} color={colors.muted} /></View>
                 <Text style={styles.placeholderText}>{imageFailed ? 'Foto tidak dapat dimuat' : 'Foto belum tersedia'}</Text>
               </View>
             )}
@@ -225,13 +227,13 @@ export default function ListingDetailScreen() {
           <Text style={styles.galleryHint}>{images.length > 1 ? 'Pilih thumbnail atau gunakan tombol panah untuk melihat foto lain.' : 'Foto ditampilkan dengan rasio asli agar detail produk tidak terpotong.'}</Text>
         </View>
 
-        <Card style={[styles.purchaseCard, !desktop && styles.purchaseCardMobile]}>
+        <Card style={[styles.purchaseCard, !wide &&styles.purchaseCardMobile]}>
           <View style={styles.topRow}>
             <View style={styles.badgeRow}>
               <View style={styles.typeBadge}><Ionicons name={item.mode === 'PREORDER' ? 'calendar-outline' : item.mode === 'SERVICE' ? 'construct-outline' : item.mode === 'STOCKED' ? 'layers-outline' : 'cube-outline'} size={14} color={colors.primary} /><Text style={styles.typeBadgeText}>{modeLabels[item.mode] || (item.type === 'SERVICE' ? 'JASA' : 'BARANG')}</Text></View>
               <View style={styles.verified}><Ionicons name="checkmark-circle" size={14} color={colors.success} /><Text style={styles.verifiedText}>SELLER TERVERIFIKASI</Text></View>
             </View>
-            {!mine ? <Pressable accessibilityLabel={savedStatus.data?.saved ? 'Hapus dari tersimpan' : 'Simpan listing'} disabled={savedStatus.isLoading || saveMutation.isPending} onPress={() => saveMutation.mutate()} style={[styles.save, (savedStatus.isLoading || saveMutation.isPending) && { opacity: 0.55 }]}><Ionicons name={savedStatus.data?.saved ? 'heart' : 'heart-outline'} size={21} color={savedStatus.data?.saved ? '#E5485D' : colors.textSoft} /></Pressable> : null}
+            {!mine ? <Pressable accessibilityLabel={savedStatus.data?.saved ? 'Hapus dari tersimpan' : 'Simpan listing'} disabled={savedStatus.isLoading || saveMutation.isPending} onPress={() => saveMutation.mutate()} style={[styles.save, (savedStatus.isLoading || saveMutation.isPending) && { opacity: 0.55 }]}><Ionicons name={savedStatus.data?.saved ? 'heart' : 'heart-outline'} size={21} color={savedStatus.data?.saved ? colors.heart : colors.textSoft} /></Pressable> : null}
           </View>
 
           <View style={styles.productHeading}>
@@ -245,10 +247,10 @@ export default function ListingDetailScreen() {
               <View style={styles.factIcon}><Ionicons name={item.mode === 'PREORDER' ? 'calendar-outline' : item.mode === 'STOCKED' ? 'layers-outline' : item.mode === 'SERVICE' ? 'construct-outline' : 'cube-outline'} size={18} color={colors.primary} /></View>
               <View style={styles.flex}><Text style={styles.factLabel}>{item.mode === 'PREORDER' ? 'Kuota tersisa' : item.mode === 'STOCKED' ? 'Stok tersedia' : item.mode === 'ONE_OFF' ? 'Ketersediaan' : 'Jenis penawaran'}</Text><Text style={styles.factValue}>{item.mode === 'PREORDER' ? `${item.stockLeft ?? 0} / ${item.preorderQuota ?? item.stock ?? 0} unit` : item.mode === 'STOCKED' ? `${item.stockLeft ?? 0} unit` : item.mode === 'ONE_OFF' ? (item.status === 'SOLD' ? 'Sudah terjual' : '1 unit') : 'Jasa mahasiswa'}</Text></View>
             </View>
-            <View style={styles.factItem}>
+            {item.mode !== 'SERVICE' ? <View style={styles.factItem}>
               <View style={styles.factIcon}><Ionicons name="swap-horizontal-outline" size={18} color={colors.primary} /></View>
               <View style={styles.flex}><Text style={styles.factLabel}>Penyerahan</Text><Text style={styles.factValue}>{availableMethods.includes('CAMPUS_MEETUP') && availableMethods.includes('INSTANT_COURIER') ? 'Meetup / Kurir' : availableMethods.includes('INSTANT_COURIER') ? 'Kurir Instan' : 'Meetup langsung'}</Text></View>
-            </View>
+            </View> : null}
           </View>
 
           {item.mode === 'PREORDER' ? (
@@ -307,25 +309,20 @@ export default function ListingDetailScreen() {
         <View style={styles.descriptionDivider} />
         <Text style={styles.description}>{item.description}</Text>
         {item.mode === 'PREORDER' && item.preorderPickupNote ? <View style={styles.preorderNote}><Ionicons name="information-circle-outline" size={18} color={colors.primary} /><View style={styles.flex}><Text style={styles.preorderNoteLabel}>CATATAN PRE-ORDER</Text><Text style={styles.preorderNoteText}>{item.preorderPickupNote}</Text></View></View> : null}
-        <View style={styles.deliverySummary}>
+        {item.mode !== 'SERVICE' ? <View style={styles.deliverySummary}>
           <Text style={styles.detailLabel}>METODE PENYERAHAN</Text>
           <View style={styles.availableDeliveryRow}>
             {availableMethods.includes('CAMPUS_MEETUP') ? <View style={styles.availableDeliveryChip}><Ionicons name="people-outline" size={15} color={colors.primary} /><Text style={styles.availableDeliveryText}>Meetup langsung</Text></View> : null}
             {availableMethods.includes('INSTANT_COURIER') ? <View style={styles.availableDeliveryChip}><Ionicons name="bicycle-outline" size={15} color={colors.primary} /><Text style={styles.availableDeliveryText}>Kurir Instan</Text></View> : null}
           </View>
-        </View>
+        </View> : null}
       </Card>
-
-      <View style={styles.safety}>
-        <View style={styles.safetyIcon}><Ionicons name="shield-checkmark-outline" size={22} color={colors.success} /></View>
-        <View style={styles.safetyBody}><Text style={styles.safetyTitle}>Simpan kesepakatan di BMarket</Text><Text style={styles.safetyCopy}>Gunakan chat dan catat status transaksi agar detail mudah ditemukan kembali. Laporkan listing jika informasinya mencurigakan.</Text></View>
-      </View>
 
       <Modal visible={checkoutOpen} transparent animationType="fade" onRequestClose={closeCheckout}>
         <View style={[styles.modalBackdrop, mobile && styles.modalBackdropMobile]}>
           <View style={[styles.checkoutModal, mobile && styles.checkoutModalMobile]}>
             <View style={styles.modalHeader}>
-              <View><Text style={styles.modalEyebrow}>CHECKOUT BMARKET</Text><Text style={styles.modalTitle}>Periksa pesananmu</Text><Text style={styles.modalSubtitle}>{item.mode === 'PREORDER' ? 'Pesanan akan tercatat sebagai pre-order dan pembayaran ditahan di escrow.' : 'Pastikan jumlah dan metode penyerahan sudah sesuai.'}</Text></View>
+              <View><Text style={styles.modalEyebrow}>CHECKOUT BMARKET</Text><Text style={styles.modalTitle}>Periksa pesananmu</Text><Text style={styles.modalSubtitle}>{item.mode === 'PREORDER' ? 'Pesanan akan tercatat sebagai pre-order dan pembayaran ditahan di escrow.' : item.mode === 'SERVICE' ? 'Pastikan jumlah pesanan jasa sudah sesuai.' : 'Pastikan jumlah dan metode penyerahan sudah sesuai.'}</Text></View>
               <Pressable accessibilityLabel="Tutup checkout" onPress={closeCheckout} style={styles.modalClose}><Ionicons name="close" size={21} color={colors.textSoft} /></Pressable>
             </View>
 
@@ -337,7 +334,15 @@ export default function ListingDetailScreen() {
               <View style={styles.checkoutProductBody}><Text numberOfLines={2} style={styles.checkoutTitle}>{item.title}</Text><Text style={styles.checkoutSeller}>Dijual oleh {item.seller?.name || 'Binusian'}</Text><Text style={styles.checkoutPrice}>{money(item.price)}</Text></View>
             </View>
 
-            <View style={styles.fulfillmentSection}>
+            {item.mode === 'SERVICE' ? (
+              <View style={styles.meetupChatInfo}>
+                <View style={styles.meetupChatIcon}><Ionicons name="chatbubbles-outline" size={21} color={colors.primary} /></View>
+                <View style={styles.flex}>
+                  <Text style={styles.meetupChatTitle}>Detail jasa diatur lewat chat</Text>
+                  <Text style={styles.meetupChatText}>Setelah checkout, hubungi seller untuk menyepakati jadwal dan detail pengerjaan jasa. Pembayaran tetap aman melalui escrow BMarket.</Text>
+                </View>
+              </View>
+            ) : <View style={styles.fulfillmentSection}>
               <View><Text style={styles.sectionLabel}>METODE PENYERAHAN</Text><Text style={styles.sectionHelp}>Pembayaran tetap melalui BMarket agar transaksi dan biaya layanan tercatat.</Text></View>
               {checkoutOptions.isError ? <View style={styles.optionsError}><Text style={styles.optionsErrorText}>Pilihan penyerahan belum dapat dimuat.</Text><Button title="Coba lagi" variant="secondary" icon="refresh-outline" onPress={() => checkoutOptions.refetch()} /></View> : null}
               <View style={styles.fulfillmentOptions}>
@@ -380,13 +385,13 @@ export default function ListingDetailScreen() {
                   <Field label="Nomor telepon penerima" value={recipientPhone} onChangeText={setRecipientPhone} keyboardType="phone-pad" placeholder="08xxxxxxxxxx" />
                 </View>
               )}
-            </View>
+            </View>}
 
             <View style={styles.checkoutRows}>
               <View style={styles.checkoutRow}><Text style={styles.checkoutLabel}>Harga satuan</Text><Text style={styles.checkoutValue}>{money(item.price)}</Text></View>
               <View style={styles.checkoutRow}><Text style={styles.checkoutLabel}>Jumlah</Text><Text style={styles.checkoutValue}>{orderQuantity}</Text></View>
               <View style={styles.checkoutRow}><Text style={styles.checkoutLabel}>Subtotal</Text><Text style={styles.checkoutValue}>{money(orderTotal)}</Text></View>
-              <View style={styles.checkoutRow}><Text style={styles.checkoutLabel}>Ongkir</Text><Text style={styles.checkoutValue}>{shippingFee ? money(shippingFee) : 'Gratis'}</Text></View>
+              {item.mode !== 'SERVICE' ? <View style={styles.checkoutRow}><Text style={styles.checkoutLabel}>Ongkir</Text><Text style={styles.checkoutValue}>{shippingFee ? money(shippingFee) : 'Gratis'}</Text></View> : null}
               <View style={styles.checkoutDivider} />
               <View style={styles.checkoutRow}><Text style={styles.checkoutTotalLabel}>Total pembayaran</Text><Text style={styles.checkoutTotal}>{money(orderGrandTotal)}</Text></View>
             </View>
@@ -411,7 +416,7 @@ export default function ListingDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
   page: { maxWidth: 1180, gap: 20 },
   breadcrumb: { flexDirection: 'row', alignItems: 'center', gap: 7, minWidth: 0, minHeight: 28 },
   breadcrumbLink: { fontFamily: 'PoppinsMedium', fontSize: 12, color: colors.primary },
@@ -420,13 +425,13 @@ const styles = StyleSheet.create({
   columns: { flexDirection: 'row', gap: 20, alignItems: 'flex-start' },
   columnsMobile: { flexDirection: 'column', gap: 16 },
   gallery: { flex: 1.28, width: '100%', minWidth: 320, gap: 11 },
-  galleryMobile: { minWidth: 0 },
-  mainMedia: { position: 'relative', width: '100%', aspectRatio: 1.22, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: colors.border, backgroundColor: '#EEF3F7' },
+  galleryMobile: { minWidth: 0, flexGrow: 0, flexShrink: 0, flexBasis: 'auto' },
+  mainMedia: { position: 'relative', width: '100%', aspectRatio: 1.22, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceMuted },
   mainImage: { width: '100%', height: '100%', backgroundColor: colors.surface },
   placeholder: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 },
-  placeholderIcon: { width: 86, height: 86, borderRadius: 24, backgroundColor: 'rgba(255,255,255,.72)', alignItems: 'center', justifyContent: 'center' },
+  placeholderIcon: { width: 86, height: 86, borderRadius: 24, backgroundColor: colors.glassSoft, alignItems: 'center', justifyContent: 'center' },
   placeholderText: { fontFamily: 'PoppinsMedium', fontSize: 13, color: colors.muted },
-  galleryArrow: { position: 'absolute', top: '45%', width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,.96)', borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', shadowColor: '#18324A', shadowOpacity: .10, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
+  galleryArrow: { position: 'absolute', top: '45%', width: 40, height: 40, borderRadius: 12, backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', shadowColor: '#18324A', shadowOpacity: .10, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
   galleryArrowLeft: { left: 12 },
   galleryArrowRight: { right: 12 },
   imageCounter: { position: 'absolute', right: 12, bottom: 12, minHeight: 30, paddingHorizontal: 10, borderRadius: 9, backgroundColor: 'rgba(16,42,67,.84)', flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -440,9 +445,9 @@ const styles = StyleSheet.create({
   thumbNumberText: { fontFamily: 'PoppinsSemiBold', fontSize: 10.5, color: colors.white },
   galleryHint: { fontFamily: 'PoppinsRegular', fontSize: 11.5, lineHeight: 17, color: colors.muted },
   purchaseCard: { flex: .92, width: '100%', minWidth: 350, padding: 20, gap: 16, borderRadius: 16, shadowOpacity: .06 },
-  purchaseCardMobile: { minWidth: 0, padding: 15 },
+  purchaseCardMobile: { minWidth: 0, flexGrow: 0, flexShrink: 0, flexBasis: 'auto', padding: 15 },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  badgeRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
+  badgeRow: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
   typeBadge: { minHeight: 29, paddingHorizontal: 9, borderRadius: 8, backgroundColor: colors.primarySoft, flexDirection: 'row', alignItems: 'center', gap: 5 },
   typeBadgeText: { fontFamily: 'PoppinsBold', fontSize: 10.5, letterSpacing: .45, color: colors.primary },
   verified: { minHeight: 29, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, borderRadius: 8, backgroundColor: colors.successSoft },
@@ -460,7 +465,7 @@ const styles = StyleSheet.create({
   factIcon: { width: 38, height: 38, borderRadius: 10, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   factLabel: { fontFamily: 'PoppinsRegular', fontSize: 10.5, color: colors.muted },
   factValue: { fontFamily: 'PoppinsSemiBold', fontSize: 12, lineHeight: 17, color: colors.text, marginTop: 1 },
-  seller: { minHeight: 82, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: '#FAFCFE', padding: 12, flexDirection: 'row', alignItems: 'center', gap: 11 },
+  seller: { minHeight: 82, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.primaryMist, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 11 },
   avatar: { width: 46, height: 46, borderRadius: 12, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontFamily: 'PoppinsBold', fontSize: 16, color: colors.primary },
   sellerBody: { flex: 1 },
@@ -469,7 +474,7 @@ const styles = StyleSheet.create({
   sellerMeta: { fontFamily: 'PoppinsRegular', fontSize: 10.5, color: colors.muted },
   sellerTrustRow: { flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap', marginTop: 2 },
   sellerRating: { fontFamily: 'PoppinsSemiBold', fontSize: 11.5, color: colors.text },
-  chat: { minHeight: 38, paddingHorizontal: 12, borderRadius: 9, borderWidth: 1, borderColor: '#C8E0FA', backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  chat: { minHeight: 38, paddingHorizontal: 12, borderRadius: 9, borderWidth: 1, borderColor: colors.primaryBorder, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 6 },
   chatText: { fontFamily: 'PoppinsSemiBold', fontSize: 11.5, color: colors.primary },
   purchaseSection: { gap: 12, paddingTop: 2 },
   quantityRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
@@ -498,15 +503,15 @@ const styles = StyleSheet.create({
   availableDeliveryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   availableDeliveryChip: { minHeight: 34, paddingHorizontal: 10, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 6 },
   availableDeliveryText: { fontFamily: 'PoppinsMedium', fontSize: 11.5, color: colors.textSoft },
-  preorderPanel: { padding: 13, borderRadius: 12, borderWidth: 1, borderColor: '#B7D3F3', backgroundColor: '#F4F9FF', gap: 11 },
-  preorderPanelClosed: { borderColor: '#E2D8C4', backgroundColor: '#FFF9EE' },
+  preorderPanel: { padding: 13, borderRadius: 12, borderWidth: 1, borderColor: colors.primaryBorder, backgroundColor: colors.primaryMist, gap: 11 },
+  preorderPanelClosed: { borderColor: colors.warningBorder, backgroundColor: colors.warningSoft },
   preorderPanelHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   preorderPanelIcon: { width: 38, height: 38, borderRadius: 10, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   preorderPanelTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 12.5, color: colors.text },
   preorderPanelCopy: { fontFamily: 'PoppinsRegular', fontSize: 10.5, color: colors.muted, marginTop: 1 },
   preorderProgressRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   preorderProgressText: { fontFamily: 'PoppinsMedium', fontSize: 10.5, color: colors.textSoft },
-  preorderProgressTrack: { height: 7, borderRadius: 4, backgroundColor: '#DDEAF8', overflow: 'hidden' },
+  preorderProgressTrack: { height: 7, borderRadius: 4, backgroundColor: colors.primarySoft, overflow: 'hidden' },
   preorderProgressFill: { height: '100%', borderRadius: 4, backgroundColor: colors.primary },
   preorderFacts: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   preorderFact: { minWidth: 116, flex: 1, padding: 9, borderRadius: 9, backgroundColor: colors.surface },
@@ -517,15 +522,15 @@ const styles = StyleSheet.create({
   preorderNote: { padding: 11, borderRadius: 10, backgroundColor: colors.primarySoft, flexDirection: 'row', alignItems: 'flex-start', gap: 9 },
   preorderNoteLabel: { fontFamily: 'PoppinsBold', fontSize: 9.5, letterSpacing: .55, color: colors.primary },
   preorderNoteText: { fontFamily: 'PoppinsRegular', fontSize: 11, lineHeight: 17, color: colors.textSoft, marginTop: 2 },
-  unavailable: { padding: 12, borderRadius: 11, borderWidth: 1, borderColor: '#EED7AD', backgroundColor: '#FFF9EE', flexDirection: 'row', alignItems: 'flex-start', gap: 9 },
+  unavailable: { padding: 12, borderRadius: 11, borderWidth: 1, borderColor: colors.warningBorder, backgroundColor: colors.warningSoft, flexDirection: 'row', alignItems: 'flex-start', gap: 9 },
   unavailableTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 11.5, color: colors.text },
   unavailableText: { fontFamily: 'PoppinsRegular', fontSize: 10.5, lineHeight: 16, color: colors.muted, marginTop: 1 },
-  safety: { minHeight: 82, borderRadius: 13, backgroundColor: colors.successSoft, borderWidth: 1, borderColor: '#CDEBDD', padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  safety: { minHeight: 82, borderRadius: 13, backgroundColor: colors.successSoft, borderWidth: 1, borderColor: colors.successBorder, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
   safetyIcon: { width: 42, height: 42, borderRadius: 11, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   safetyBody: { flex: 1 },
   safetyTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 13, color: colors.text },
   safetyCopy: { fontFamily: 'PoppinsRegular', fontSize: 11.5, lineHeight: 18, color: colors.muted, marginTop: 2 },
-  modalBackdrop: { flex: 1, padding: 18, backgroundColor: 'rgba(10,26,41,.58)', alignItems: 'center', justifyContent: 'center' },
+  modalBackdrop: { flex: 1, padding: 18, backgroundColor: colors.overlay, alignItems: 'center', justifyContent: 'center' },
   modalBackdropMobile: { padding: 10 },
   checkoutModal: { width: '100%', maxWidth: 680, maxHeight: '92%', padding: 22, borderRadius: 18, backgroundColor: colors.surface, gap: 16, shadowColor: '#071727', shadowOpacity: .22, shadowRadius: 26, shadowOffset: { width: 0, height: 12 } },
   modalScroll: { flexShrink: 1 },
@@ -536,7 +541,7 @@ const styles = StyleSheet.create({
   modalTitle: { fontFamily: 'PoppinsBold', fontSize: 22, lineHeight: 29, color: colors.text },
   modalSubtitle: { fontFamily: 'PoppinsRegular', fontSize: 11.5, color: colors.muted, marginTop: 2 },
   modalClose: { width: 38, height: 38, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
-  checkoutProduct: { minHeight: 92, padding: 11, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: '#FAFCFE', flexDirection: 'row', alignItems: 'center', gap: 12 },
+  checkoutProduct: { minHeight: 92, padding: 11, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.primaryMist, flexDirection: 'row', alignItems: 'center', gap: 12 },
   checkoutMedia: { width: 76, height: 72, borderRadius: 10, overflow: 'hidden', backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   checkoutImage: { width: '100%', height: '100%' },
   checkoutProductBody: { flex: 1, gap: 2 },
@@ -550,12 +555,12 @@ const styles = StyleSheet.create({
   optionsErrorText: { fontFamily: 'PoppinsMedium', fontSize: 11.5, color: colors.danger },
   fulfillmentOptions: { flexDirection: 'row', gap: 8 },
   fulfillmentOption: { flex: 1, minHeight: 70, padding: 11, borderRadius: 11, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', gap: 9 },
-  fulfillmentOptionActive: { borderColor: '#A8C8EF', backgroundColor: colors.primarySoft },
+  fulfillmentOptionActive: { borderColor: colors.primaryBorder, backgroundColor: colors.primarySoft },
   fulfillmentIcon: { width: 38, height: 38, borderRadius: 10, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   fulfillmentTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 11.5, color: colors.text },
   fulfillmentCaption: { fontFamily: 'PoppinsRegular', fontSize: 10.5, lineHeight: 14, color: colors.muted, marginTop: 1 },
   deliveryFields: { gap: 10, padding: 12, borderRadius: 11, backgroundColor: colors.background },
-  meetupChatInfo: { padding: 12, borderRadius: 11, borderWidth: 1, borderColor: '#B7D3F3', backgroundColor: colors.primarySoft, flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  meetupChatInfo: { padding: 12, borderRadius: 11, borderWidth: 1, borderColor: colors.primaryBorder, backgroundColor: colors.primarySoft, flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   meetupChatIcon: { width: 38, height: 38, borderRadius: 10, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   meetupChatTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 11.5, color: colors.text },
   meetupChatText: { fontFamily: 'PoppinsRegular', fontSize: 10.5, lineHeight: 16, color: colors.textSoft, marginTop: 2 },
@@ -563,7 +568,7 @@ const styles = StyleSheet.create({
   loadingOptions: { fontFamily: 'PoppinsRegular', fontSize: 11.5, color: colors.muted },
   courierOptions: { gap: 7 },
   courierOption: { minHeight: 54, padding: 10, borderRadius: 9, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  courierOptionActive: { borderColor: '#A8C8EF', backgroundColor: colors.primarySoft },
+  courierOptionActive: { borderColor: colors.primaryBorder, backgroundColor: colors.primarySoft },
   courierName: { fontFamily: 'PoppinsSemiBold', fontSize: 11.5, color: colors.text },
   courierEta: { fontFamily: 'PoppinsRegular', fontSize: 10.5, color: colors.muted, marginTop: 1 },
   courierFee: { fontFamily: 'PoppinsBold', fontSize: 11.5, color: colors.primaryDark },
@@ -577,11 +582,11 @@ const styles = StyleSheet.create({
   checkoutNote: { padding: 11, borderRadius: 10, backgroundColor: colors.primarySoft, flexDirection: 'row', alignItems: 'flex-start', gap: 9 },
   checkoutNoteLabel: { fontFamily: 'PoppinsSemiBold', fontSize: 11.5, color: colors.text },
   checkoutNoteText: { fontFamily: 'PoppinsRegular', fontSize: 10.5, lineHeight: 16, color: colors.textSoft, marginTop: 2 },
-  escrowInfo: { padding: 12, borderRadius: 11, borderWidth: 1, borderColor: '#CDEBDD', backgroundColor: colors.successSoft, flexDirection: 'row', alignItems: 'flex-start', gap: 9 },
+  escrowInfo: { padding: 12, borderRadius: 11, borderWidth: 1, borderColor: colors.successBorder, backgroundColor: colors.successSoft, flexDirection: 'row', alignItems: 'flex-start', gap: 9 },
   escrowText: { flex: 1, fontFamily: 'PoppinsRegular', fontSize: 10.5, lineHeight: 17, color: colors.textSoft },
   modalActions: { flexDirection: 'row', gap: 9, paddingTop: 2 },
   modalActionsMobile: { flexDirection: 'column-reverse' },
   modalButton: { flex: 1 },
   modalButtonPrimary: { flex: 1.45 },
   flex: { flex: 1 },
-});
+}));

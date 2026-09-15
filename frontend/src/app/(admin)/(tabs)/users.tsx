@@ -1,16 +1,17 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, Text, View, useWindowDimensions } from 'react-native';
 import { AdminEmptyState, AdminStatusPill } from '@/components/admin-ui';
 import { Button, Card, ErrorState, FeedbackDialog, Field, Loader, Screen, Title } from '@/components/ui';
-import { colors, radius } from '@/constants/theme';
+import { colors, radius, makeStyles } from '@/constants/theme';
 import { endpoints, errorMessage } from '@/lib/api';
 
 type TargetUser = { id: string; name: string; isActive: boolean } | null;
 type StatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
 
 export default function UsersScreen() {
+  const styles = useStyles();
   const mobile = useWindowDimensions().width < 600;
   const client = useQueryClient();
   const query = useQuery({ queryKey: ['admin-users'], queryFn: endpoints.adminUsers });
@@ -70,13 +71,13 @@ export default function UsersScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
   toolbar: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, flexWrap: 'wrap' },
   search: { flex: 1, minWidth: 280 },
   searchMobile: { minWidth: 0, width: '100%', flexBasis: '100%' },
   filters: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   filter: { minHeight: 38, paddingHorizontal: 13, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
-  filterActive: { borderColor: '#C5DDF8', backgroundColor: colors.primarySoft },
+  filterActive: { borderColor: colors.primaryBorder, backgroundColor: colors.primarySoft },
   filterText: { color: colors.textSoft, fontFamily: 'PoppinsMedium', fontSize: 11.5 },
   filterTextActive: { color: colors.primary, fontFamily: 'PoppinsSemiBold' },
   count: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 5 },
@@ -94,4 +95,4 @@ const styles = StyleSheet.create({
   nim: { color: colors.primary, fontFamily: 'PoppinsMedium', fontSize: 11.5, marginTop: 2 },
   action: { minWidth: 138, minHeight: 42 },
   actionMobile: { minWidth: 0, width: '100%', flexBasis: '100%' },
-});
+}));

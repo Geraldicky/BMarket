@@ -1,16 +1,17 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Link, useRouter } from 'expo-router';
+import { Pressable, Text, useWindowDimensions, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { AuthShell } from '@/components/auth-shell';
 import { Button, Field, InlineAlert } from '@/components/ui';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, spacing, makeStyles } from '@/constants/theme';
 import { errorCode, errorMessage } from '@/lib/api';
 import { useAuth } from '@/store/auth';
 
 export default function LoginScreen() {
+  const styles = useStyles();
   const router = useRouter();
   const login = useAuth(state => state.login);
+  const mobile = useWindowDimensions().width < 900;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -43,10 +44,11 @@ export default function LoginScreen() {
 
   return (
     <AuthShell eyebrow="AKUN BINUS" title="Masuk ke BMarket" subtitle="Gunakan akun BINUS-mu untuk melanjutkan ke marketplace kampus.">
-      <View style={styles.form}>
+      <View style={[styles.form, mobile && styles.formMobile]}>
         {formError ? <InlineAlert message={formError} /> : null}
 
         <Field
+          dense={mobile}
           label="Email BINUS"
           value={email}
           onChangeText={value => { setEmail(value); setErrors(current => ({ ...current, email: undefined })); }}
@@ -60,6 +62,7 @@ export default function LoginScreen() {
 
         <View style={styles.passwordBlock}>
           <Field
+            dense={mobile}
             label="Password"
             value={password}
             onChangeText={value => { setPassword(value); setErrors(current => ({ ...current, password: undefined })); }}
@@ -79,29 +82,31 @@ export default function LoginScreen() {
 
         <Button title="Masuk" icon="log-in-outline" loading={loading} onPress={submit} style={styles.primaryButton} />
 
-        <View style={styles.switchCard}>
-          <View style={styles.switchIcon}><Ionicons name="person-add-outline" size={18} color={colors.primary} /></View>
-          <View style={styles.switchCopy}>
-            <Text style={styles.switchTitle}>Belum punya akun?</Text>
-            <Text style={styles.switchText}>Daftar menggunakan email dan identitas BINUS.</Text>
-          </View>
-          <Link href="/(auth)/register" style={styles.switchAction}>Daftar</Link>
+        <View style={styles.divider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>atau</Text>
+          <View style={styles.dividerLine} />
         </View>
+
+        <Text style={styles.switchText}>
+          Belum punya akun?{' '}
+          <Text accessibilityRole="link" onPress={() => router.push('/(auth)/register')} style={styles.switchLink}>daftar</Text>
+        </Text>
       </View>
     </AuthShell>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
   form: { gap: spacing.md },
+  formMobile: { gap: 12 },
   passwordBlock: { gap: 5 },
   forgotButton: { alignSelf: 'flex-end', minHeight: 30, justifyContent: 'center', paddingHorizontal: 2 },
   forgotLink: { color: colors.primary, fontFamily: 'PoppinsSemiBold', fontSize: 12.5 },
   primaryButton: { marginTop: 2 },
-  switchCard: { marginTop: 2, padding: 13, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: '#FBFDFF', flexDirection: 'row', alignItems: 'center', gap: 11 },
-  switchIcon: { width: 38, height: 38, borderRadius: 10, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
-  switchCopy: { flex: 1, gap: 1 },
-  switchTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 12.5, color: colors.text },
-  switchText: { fontFamily: 'PoppinsRegular', fontSize: 10.5, lineHeight: 16, color: colors.muted },
-  switchAction: { color: colors.primary, fontFamily: 'PoppinsSemiBold', fontSize: 12.5 },
-});
+  divider: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
+  dividerText: { fontFamily: 'PoppinsMedium', fontSize: 12, color: colors.muted },
+  switchText: { textAlign: 'center', fontFamily: 'PoppinsRegular', fontSize: 13, color: colors.textSoft },
+  switchLink: { fontFamily: 'PoppinsSemiBold', color: colors.primary, textDecorationLine: 'underline' },
+}));

@@ -1,6 +1,6 @@
 // src/admin/admin.controller.ts
 
-import { BadRequestException, Controller, Get, Patch, Param, Body, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Patch, Post, Param, Body, Query, UseGuards } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { AdminGuard } from '../common/guards/roles.guard';
@@ -139,6 +139,24 @@ export class AdminController {
   @Patch('disputes/:id')
   async resolveDispute(@Param('id') id: string, @CurrentUser() admin: any, @Body() dto: ResolveDisputeDto) {
     return { success: true, message: 'Keputusan sengketa berhasil disimpan.', data: await this.adminService.resolveDispute(id, admin.id, dto.action, dto.note) };
+  }
+
+  // Service result files attached to a dispute: preview/download any file and inspect ZIP contents.
+  @Post('deliverables/:deliverableId/link')
+  async deliverableLink(@Param('deliverableId') deliverableId: string, @Body('mode') mode: 'preview' | 'download') {
+    if (!['preview', 'download'].includes(mode)) throw new BadRequestException('Mode file tidak valid.');
+    return { success: true, data: await this.adminService.deliverableLink(deliverableId, mode) };
+  }
+
+  @Get('deliverables/:deliverableId/archive')
+  async deliverableArchive(@Param('deliverableId') deliverableId: string) {
+    return { success: true, data: await this.adminService.deliverableArchive(deliverableId) };
+  }
+
+  @Get('deliverables/:deliverableId/archive/entry')
+  async deliverableArchiveEntry(@Param('deliverableId') deliverableId: string, @Query('path') path?: string) {
+    if (!path) throw new BadRequestException('Path file di dalam ZIP wajib diisi.');
+    return { success: true, data: await this.adminService.deliverableArchiveEntry(deliverableId, path) };
   }
 
   // ── Commission ────────────────────────────

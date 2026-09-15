@@ -1,10 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Button, Card, FeedbackDialog, Field, Screen, Title } from '@/components/ui';
 import { endpoints, errorMessage } from '@/lib/api';
-import { colors, radius } from '@/constants/theme';
+import { colors, radius, makeStyles } from '@/constants/theme';
 
 const reportReasons = [
   { label: 'Penipuan atau harga mencurigakan', icon: 'warning-outline' },
@@ -17,6 +17,7 @@ const reportReasons = [
 ] as const;
 
 export default function ReportScreen() {
+  const styles = useStyles();
   const params = useLocalSearchParams<{ targetType?: string; targetId?: string; title?: string }>();
   const [reason, setReason] = useState('');
   const [description, setDescription] = useState('');
@@ -53,7 +54,7 @@ export default function ReportScreen() {
   </Screen>;
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
   targetCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 18 },
   targetIcon: { width: 50, height: 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.dangerSoft },
   targetBody: { flex: 1, gap: 2 },
@@ -74,4 +75,4 @@ const styles = StyleSheet.create({
   privacyText: { flex: 1, fontFamily: 'PoppinsRegular', fontSize: 13, lineHeight: 20, color: colors.textSoft },
   actions: { flexDirection: 'row', gap: 10 },
   action: { flex: 1 },
-});
+}));

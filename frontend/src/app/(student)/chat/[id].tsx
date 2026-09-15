@@ -1,13 +1,13 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { io, Socket } from 'socket.io-client';
 import { Button, Empty, ErrorState, Field, InlineAlert, Loader } from '@/components/ui';
 import { endpoints, errorMessage, SOCKET_URL, TOKEN_KEY } from '@/lib/api';
 import { getStoredValue } from '@/lib/token-storage';
-import { colors, radius, shadowSoft, spacing } from '@/constants/theme';
+import { colors, radius, shadowSoft, spacing, makeStyles } from '@/constants/theme';
 import { useAuth } from '@/store/auth';
 import type { ChatRoom, Message } from '@/types';
 
@@ -32,6 +32,7 @@ const statusLabel: Record<string, string> = {
 };
 
 function RoomItem({ room, currentUserId, active }: { room: ChatRoom; currentUserId?: string; active: boolean }) {
+  const styles = useStyles();
   const other = room.userAId === currentUserId ? room.userB : room.userA;
   const message = room.messages?.[0];
   return (
@@ -57,6 +58,7 @@ type ChatRoomContentProps = {
 };
 
 function ChatRoomContent({ id, transactionId, name, desktop }: ChatRoomContentProps) {
+  const styles = useStyles();
   const user = useAuth(state => state.user);
   const [liveMessages, setLiveMessages] = useState<Message[]>([]);
   const [content, setContent] = useState('');
@@ -118,7 +120,7 @@ function ChatRoomContent({ id, transactionId, name, desktop }: ChatRoomContentPr
     <View style={[styles.conversation, desktop && styles.conversationDesktop]}>
       {desktop ? <View style={styles.chatHeader}>
         <View style={styles.chatAvatar}><Text style={styles.chatAvatarText}>{otherName[0]?.toUpperCase() || '?'}</Text></View>
-        <View style={styles.chatHeaderBody}><Text numberOfLines={1} style={styles.chatName}>{otherName}</Text><Text style={styles.chatStatus}>Percakapan BMarket · gunakan chat untuk koordinasi meetup</Text></View>
+        <View style={styles.chatHeaderBody}><Text numberOfLines={1} style={styles.chatName}>{otherName}</Text><Text style={styles.chatStatus}>Percakapan BMarket · pesan otomatis terhapus setelah 7 hari</Text></View>
         {transaction.data ? <Pressable onPress={() => router.push({ pathname: '/(student)/transaction/[id]', params: { id: transaction.data!.id } })} style={styles.orderButton}><Ionicons name="receipt-outline" size={16} color={colors.primary} /><Text style={styles.orderButtonText}>Lihat pesanan</Text></Pressable> : null}
       </View> : null}
 
@@ -127,6 +129,8 @@ function ChatRoomContent({ id, transactionId, name, desktop }: ChatRoomContentPr
         <View style={styles.contextBody}><Text numberOfLines={1} style={styles.contextTitle}>{transaction.data.listing.title}</Text><Text style={styles.contextMeta}>{statusLabel[transaction.data.status] || transaction.data.status} · Meetup dibahas di chat ini</Text></View>
         {!desktop ? <><Text style={styles.contextLink}>Lihat pesanan</Text><Ionicons name="chevron-forward" size={17} color={colors.primary} /></> : null}
       </Pressable> : null}
+
+      {!desktop ? <Text style={styles.retentionNote}>Pesan otomatis terhapus setelah 7 hari.</Text> : null}
 
       {sendError ? <View style={styles.alertWrap}><InlineAlert message={sendError} /></View> : null}
 
@@ -192,10 +196,10 @@ export default function ChatRoomScreen() {
   return <ChatRoomContent key={id} id={id} transactionId={transactionId} name={name} desktop={desktop} />;
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
   full: { flex: 1, padding: spacing.lg, backgroundColor: colors.background },
   page: { flex: 1, backgroundColor: colors.background },
-  desktopPage: { flex: 1, backgroundColor: '#F5F7FA', paddingHorizontal: 24, paddingVertical: 22 },
+  desktopPage: { flex: 1, backgroundColor: colors.surfaceMuted, paddingHorizontal: 24, paddingVertical: 22 },
   desktopWorkspace: { width: '100%', maxWidth: 1200, flex: 1, minHeight: 620, maxHeight: 780, alignSelf: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 16, backgroundColor: colors.surface, overflow: 'hidden', flexDirection: 'row', ...shadowSoft },
   sidebar: { width: 330, minWidth: 330, borderRightWidth: 1, borderRightColor: colors.border, backgroundColor: colors.surface },
   sidebarHeader: { minHeight: 70, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
@@ -205,7 +209,7 @@ const styles = StyleSheet.create({
   sidebarSearch: { padding: 11, borderBottomWidth: 1, borderBottomColor: colors.border },
   sidebarScroll: { flex: 1 },
   sidebarList: { paddingVertical: 4 },
-  roomRow: { minHeight: 72, paddingHorizontal: 13, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 10, borderBottomWidth: 1, borderBottomColor: '#EEF2F6' },
+  roomRow: { minHeight: 72, paddingHorizontal: 13, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
   roomRowActive: { backgroundColor: colors.primarySoft, borderLeftWidth: 3, borderLeftColor: colors.primary, paddingLeft: 10 },
   sidebarAvatar: { width: 41, height: 41, borderRadius: 13, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   sidebarAvatarText: { fontFamily: 'PoppinsBold', fontSize: 13, color: colors.primary },
@@ -218,7 +222,7 @@ const styles = StyleSheet.create({
   sidebarCount: { minWidth: 20, height: 20, paddingHorizontal: 5, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
   sidebarCountText: { fontFamily: 'PoppinsBold', fontSize: 9.5, color: colors.white },
   conversation: { flex: 1, minWidth: 0, backgroundColor: colors.background },
-  conversationDesktop: { backgroundColor: '#F7F8FA' },
+  conversationDesktop: { backgroundColor: colors.surfaceMuted },
   chatHeader: { minHeight: 70, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 11 },
   chatAvatar: { width: 42, height: 42, borderRadius: 13, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   chatAvatarText: { fontFamily: 'PoppinsBold', fontSize: 14, color: colors.primary },
@@ -227,14 +231,15 @@ const styles = StyleSheet.create({
   chatStatus: { marginTop: 1, fontFamily: 'PoppinsRegular', fontSize: 10.5, color: colors.muted },
   orderButton: { minHeight: 38, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.borderStrong, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 6 },
   orderButtonText: { fontFamily: 'PoppinsSemiBold', fontSize: 11, color: colors.primary },
-  contextCard: { marginHorizontal: spacing.lg, marginTop: spacing.md, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#C8E0FA', backgroundColor: colors.primarySoft, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  contextCardDesktop: { marginHorizontal: 14, marginTop: 12, paddingVertical: 9, backgroundColor: '#EEF5FD' },
+  contextCard: { marginHorizontal: spacing.lg, marginTop: spacing.md, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.primaryBorder, backgroundColor: colors.primarySoft, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  contextCardDesktop: { marginHorizontal: 14, marginTop: 12, paddingVertical: 9, backgroundColor: colors.primaryMist },
   contextIcon: { width: 40, height: 40, borderRadius: 11, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   contextBody: { flex: 1 },
   contextTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 12, color: colors.text },
   contextMeta: { marginTop: 2, fontFamily: 'PoppinsRegular', fontSize: 11, color: colors.muted },
   contextLink: { fontFamily: 'PoppinsSemiBold', fontSize: 12, color: colors.primary },
   alertWrap: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
+  retentionNote: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, textAlign: 'center', fontFamily: 'PoppinsRegular', fontSize: 11, color: colors.muted },
   messageScroll: { flex: 1 },
   messages: { padding: spacing.lg, gap: 10, flexGrow: 1, justifyContent: 'flex-end' },
   messagesDesktop: { paddingHorizontal: 18, paddingVertical: 16, justifyContent: 'flex-start', gap: 9 },
@@ -243,7 +248,7 @@ const styles = StyleSheet.create({
   bubbleWrapMine: { alignSelf: 'flex-end', alignItems: 'flex-end' },
   bubbleWrapTheirs: { alignSelf: 'flex-start', alignItems: 'flex-start' },
   bubble: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: radius.md },
-  mine: { backgroundColor: '#DCEBFF', borderBottomRightRadius: 4 },
+  mine: { backgroundColor: colors.primarySoft, borderBottomRightRadius: 4 },
   theirs: { backgroundColor: colors.surface, borderBottomLeftRadius: 4, borderWidth: 1, borderColor: colors.border },
   message: { color: colors.text, fontFamily: 'PoppinsRegular', fontSize: 13, lineHeight: 20 },
   messageMine: { color: colors.text },
@@ -256,4 +261,4 @@ const styles = StyleSheet.create({
   input: { flex: 1, minHeight: 50, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 15, color: colors.text, fontFamily: 'PoppinsRegular', fontSize: 15 },
   inputDesktop: { minHeight: 42, height: 42, fontSize: 12.5, backgroundColor: colors.surface, borderRadius: 11 },
   sendButton: { width: 42, height: 42, borderRadius: 11, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
-});
+}));

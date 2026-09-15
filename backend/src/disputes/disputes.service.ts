@@ -3,6 +3,7 @@ import { DisputeResolution, DisputeStatus, ListingType, Prisma } from '@prisma/c
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateDisputeDto } from './dto/dispute.dto';
+import { deliverableSelect } from '../transactions/transactions.service';
 
 @Injectable()
 export class DisputesService {
@@ -13,13 +14,23 @@ export class DisputesService {
     openedBy: { select: { id: true, name: true, email: true, avatarUrl: true } },
     resolvedBy: { select: { id: true, name: true } },
     transaction: { include: {
-      listing: { select: { id: true, title: true, type: true, mode: true, images: true, status: true } },
+      // Full listing content and result files so the admin can judge whether the dispute is valid.
+      listing: { select: { id: true, title: true, description: true, price: true, category: true, condition: true, type: true, mode: true, images: true, status: true } },
       buyer: { select: { id: true, name: true, email: true, avatarUrl: true } },
       seller: { select: { id: true, name: true, email: true, avatarUrl: true } },
+      deliverables: { orderBy: { createdAt: 'asc' }, select: deliverableSelect },
     } },
   } as const;
 
-  private map<T extends { evidenceUrls: string }>(item: T) { return { ...item, evidenceUrls: this.parseEvidence(item.evidenceUrls) }; }
+  private map<T extends { evidenceUrls: string }>(item: T) {
+    const mapped = { ...item, evidenceUrls: this.parseEvidence(item.evidenceUrls) };
+    const transaction = (item as { transaction?: { handoverCodeHash?: string | null; listing?: { images: string } } }).transaction;
+    if (!transaction) return mapped;
+    // The handover code hash is a secret; never send it to participants or admins.
+    const { handoverCodeHash: _handoverCodeHash, ...safeTransaction } = transaction;
+    const listing = safeTransaction.listing ? { ...safeTransaction.listing, images: this.parseEvidence(safeTransaction.listing.images) } : safeTransaction.listing;
+    return { ...mapped, transaction: { ...safeTransaction, listing } };
+  }
 
   async create(userId: string, dto: CreateDisputeDto) {
     const transaction = await this.prisma.transaction.findUnique({ where: { id: dto.transactionId }, include: { dispute: true } });

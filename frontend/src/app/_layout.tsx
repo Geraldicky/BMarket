@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuth } from '@/store/auth';
+import { palettes, useThemeStore } from '@/constants/theme';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -19,6 +20,8 @@ function NavigationGate() {
   const router = useRouter();
   const segments = useSegments();
   const { user, hydrated, bootstrap } = useAuth();
+  const scheme = useThemeStore(state => state.scheme);
+  const hydrateTheme = useThemeStore(state => state.hydrate);
   const [fontsLoaded] = useFonts({
     PoppinsRegular: require('../../assets/fonts/Poppins-Regular.ttf'),
     PoppinsMedium: require('../../assets/fonts/Poppins-Medium.ttf'),
@@ -26,10 +29,23 @@ function NavigationGate() {
     PoppinsBold: require('../../assets/fonts/Poppins-Bold.ttf'),
   });
   const group = segments[0];
+  const palette = palettes[scheme];
 
   useEffect(() => {
     bootstrap();
   }, [bootstrap]);
+
+  // Load the saved Light / Dark / System preference (native storage is async).
+  useEffect(() => {
+    hydrateTheme();
+  }, [hydrateTheme]);
+
+  // On web, paint the page behind the app and native form controls in the active theme.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.style.colorScheme = scheme;
+    document.body.style.backgroundColor = palette.background;
+  }, [palette.background, scheme]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -78,8 +94,8 @@ function NavigationGate() {
 
   return (
     <>
-      <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false }} />
+      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: palette.background } }} />
     </>
   );
 }

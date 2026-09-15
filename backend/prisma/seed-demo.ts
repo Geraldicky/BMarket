@@ -64,7 +64,7 @@ async function main() {
     {
       id: 'demo-v27-service', title: 'Jasa Desain Poster Organisasi', description: 'Desain poster event, seminar, dan kebutuhan organisasi kampus.', price: 90000,
       category: 'SERVICES' as const, type: 'SERVICE' as const, mode: 'SERVICE' as const, condition: null,
-      sellerId: seller2.id, stock: null, stockLeft: null, images: image('Poster Design Service'), fulfillmentMethods: ['CAMPUS_MEETUP'] as const,
+      sellerId: seller2.id, stock: null, stockLeft: null, images: image('Poster Design Service'), fulfillmentMethods: [],
     },
   ];
 

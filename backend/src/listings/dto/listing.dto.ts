@@ -42,11 +42,12 @@ export class CreateListingDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1, { message: 'Stok minimal 1.' })
   stock?: number;
 
+  // Wajib untuk barang; jasa tidak memiliki metode penyerahan (divalidasi di ListingsService).
+  @IsOptional()
   @IsArray()
-  @ArrayMinSize(1, { message: 'Pilih minimal satu metode penyerahan.' })
   @ArrayUnique()
   @IsEnum(FulfillmentMethod, { each: true })
-  fulfillmentMethods: FulfillmentMethod[];
+  fulfillmentMethods?: FulfillmentMethod[];
 
   // PREORDER only
   @IsOptional() @IsDateString()
@@ -81,7 +82,7 @@ export class UpdateListingDto {
   @IsOptional() @IsEnum(Condition) condition?: Condition;
   @IsOptional() @IsArray() @ArrayMinSize(1, { message: 'Listing harus memiliki minimal satu foto.' }) @ArrayMaxSize(4) @IsUrl({ require_protocol: true, require_tld: false, protocols: ['http', 'https'] }, { each: true }) images?: string[];
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) stock?: number;
-  @IsOptional() @IsArray() @ArrayMinSize(1, { message: 'Pilih minimal satu metode penyerahan.' }) @ArrayUnique() @IsEnum(FulfillmentMethod, { each: true }) fulfillmentMethods?: FulfillmentMethod[];
+  @IsOptional() @IsArray() @ArrayUnique() @IsEnum(FulfillmentMethod, { each: true }) fulfillmentMethods?: FulfillmentMethod[];
   @IsOptional() @IsDateString() preorderDeadline?: string;
   @IsOptional() @IsDateString() preorderReadyAt?: string | null;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(9999) preorderQuota?: number;
@@ -108,7 +109,7 @@ export class ListingFilterDto {
   @IsOptional() @IsEnum(ListingMode) mode?: ListingMode;
   @IsOptional() @IsEnum(Condition) condition?: Condition;
   @IsOptional() @IsEnum(FulfillmentMethod) fulfillmentMethod?: FulfillmentMethod;
-  @IsOptional() @IsIn(['newest', 'price_asc', 'price_desc']) sort?: 'newest' | 'price_asc' | 'price_desc';
+  @IsOptional() @IsIn(['newest', 'oldest', 'price_asc', 'price_desc']) sort?: 'newest' | 'oldest' | 'price_asc' | 'price_desc';
   @IsOptional() @IsString() @MaxLength(120) keyword?: string;
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) minPrice?: number;
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) maxPrice?: number;

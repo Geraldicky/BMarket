@@ -1,13 +1,14 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
 import { io, Socket } from 'socket.io-client';
 import { Card, Empty, ErrorState, Field, InlineAlert, Loader, Screen, Title } from '@/components/ui';
+import { BackButton } from '@/components/back-button';
 import { endpoints, errorMessage, SOCKET_URL, TOKEN_KEY } from '@/lib/api';
 import { getStoredValue } from '@/lib/token-storage';
-import { colors, radius, shadowSoft } from '@/constants/theme';
+import { colors, radius, shadowSoft, makeStyles } from '@/constants/theme';
 import { useAuth } from '@/store/auth';
 import type { ChatRoom, Message } from '@/types';
 
@@ -32,6 +33,7 @@ const statusLabel: Record<string, string> = {
 };
 
 function RoomRow({ room, currentUserId, active = false, onPress }: { room: ChatRoom; currentUserId?: string; active?: boolean; onPress?: () => void }) {
+  const styles = useStyles();
   const other = room.userAId === currentUserId ? room.userB : room.userA;
   const message = room.messages?.[0];
   return (
@@ -50,6 +52,7 @@ function RoomRow({ room, currentUserId, active = false, onPress }: { room: ChatR
 }
 
 function DesktopConversation({ roomId, transactionId, rooms, currentUserId }: { roomId: string; transactionId?: string; rooms: ChatRoom[]; currentUserId?: string }) {
+  const styles = useStyles();
   const [liveMessages, setLiveMessages] = useState<Message[]>([]);
   const [content, setContent] = useState('');
   const [sendError, setSendError] = useState('');
@@ -108,7 +111,7 @@ function DesktopConversation({ roomId, transactionId, rooms, currentUserId }: { 
         <View style={styles.chatAvatar}><Text style={styles.chatAvatarText}>{otherName[0]?.toUpperCase() || '?'}</Text></View>
         <View style={styles.chatHeaderBody}>
           <Text numberOfLines={1} style={styles.chatName}>{otherName}</Text>
-          <Text style={styles.chatStatus}>Percakapan BMarket · gunakan chat untuk koordinasi meetup</Text>
+          <Text style={styles.chatStatus}>Percakapan BMarket · pesan otomatis terhapus setelah 7 hari</Text>
         </View>
         {transaction.data ? <Pressable onPress={() => router.push({ pathname: '/(student)/transaction/[id]', params: { id: transaction.data!.id } })} style={styles.orderButton}><Ionicons name="receipt-outline" size={16} color={colors.primary} /><Text style={styles.orderButtonText}>Lihat pesanan</Text></Pressable> : null}
       </View>
@@ -146,10 +149,12 @@ function DesktopConversation({ roomId, transactionId, rooms, currentUserId }: { 
 }
 
 export default function ChatsScreen() {
+  const styles = useStyles();
   const user = useAuth(state => state.user);
   const params = useLocalSearchParams<{ roomId?: string; transactionId?: string }>();
   const { width } = useWindowDimensions();
   const desktop = width >= 960;
+  const narrow = width < 600;
   const [search, setSearch] = useState('');
   const selectedRoomId = typeof params.roomId === 'string' ? params.roomId : '';
   const selectedTransactionId = typeof params.transactionId === 'string' ? params.transactionId : undefined;
@@ -167,6 +172,7 @@ export default function ChatsScreen() {
   if (desktop) {
     return (
       <Screen scroll={false} style={styles.desktopPage}>
+        <View style={styles.desktopBack}><BackButton /></View>
         <View style={styles.desktopWorkspace}>
           <View style={styles.sidebar}>
             <View style={styles.sidebarHeader}>
@@ -191,15 +197,16 @@ export default function ChatsScreen() {
   }
 
   return <Screen>
-    <Title eyebrow="PESAN BMARKET" subtitle="Tanyakan kondisi, sepakati lokasi, dan simpan detail transaksi.">Pesan</Title>
-    <View style={styles.safety}><View style={styles.safetyIcon}><Ionicons name="shield-checkmark-outline" size={21} color={colors.success} /></View><View style={styles.safetyBody}><Text style={styles.safetyTitle}>Jaga percakapan tetap di BMarket</Text><Text style={styles.safetyText}>Hindari membagikan OTP atau data pribadi kepada pengguna lain.</Text></View></View>
-    <View style={styles.toolbar}><View style={styles.search}><Field value={search} onChangeText={setSearch} icon="search-outline" placeholder="Cari nama pengguna..." /></View><View style={styles.unread}><View style={[styles.unreadDot, !unread && styles.unreadDotIdle]} /><Text style={styles.unreadText}>{unread ? `${unread} belum dibaca` : 'Semua sudah dibaca'}</Text></View></View>
+    <BackButton />
+    <Title eyebrow="PESAN BMARKET" subtitle="Tanyakan kondisi dan sepakati detail transaksi. Pesan otomatis terhapus setelah 7 hari.">Pesan</Title>
+    <View style={[styles.toolbar, narrow && styles.toolbarNarrow]}><View style={[styles.search, narrow && styles.searchNarrow]}><Field value={search} onChangeText={setSearch} icon="search-outline" placeholder="Cari nama pengguna..." /></View><View style={[styles.unread, narrow && styles.unreadNarrow]}><View style={[styles.unreadDot, !unread && styles.unreadDotIdle]} /><Text style={styles.unreadText}>{unread ? `${unread} belum dibaca` : 'Semua sudah dibaca'}</Text></View></View>
     {query.isLoading ? <Loader /> : query.isError ? <ErrorState message={errorMessage(query.error)} retry={() => query.refetch()} /> : !rooms.length ? <Empty title={search ? 'Percakapan tidak ditemukan' : 'Belum ada percakapan'} message={search ? 'Coba nama pengguna yang lain.' : 'Mulai percakapan dari halaman detail barang atau jasa.'} icon="chatbubble-ellipses-outline" /> : <Card style={styles.list}>{rooms.map(room => <RoomRow key={room.id} room={room} currentUserId={user?.id} />)}</Card>}
   </Screen>;
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
   desktopPage: { maxWidth: 1220, paddingVertical: 24, paddingHorizontal: 20, gap: 0 },
+  desktopBack: { marginBottom: 14 },
   desktopWorkspace: { flex: 1, minHeight: 620, maxHeight: 760, borderWidth: 1, borderColor: colors.border, borderRadius: 16, backgroundColor: colors.surface, overflow: 'hidden', flexDirection: 'row', ...shadowSoft },
   sidebar: { width: 338, minWidth: 338, borderRightWidth: 1, borderRightColor: colors.border, backgroundColor: colors.surface },
   sidebarHeader: { minHeight: 72, paddingHorizontal: 18, borderBottomWidth: 1, borderBottomColor: colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
@@ -210,7 +217,7 @@ const styles = StyleSheet.create({
   sidebarSearch: { padding: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
   roomScroll: { flex: 1 },
   roomList: { paddingVertical: 4 },
-  roomRow: { minHeight: 74, paddingHorizontal: 14, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 11, borderBottomWidth: 1, borderBottomColor: '#EEF2F6' },
+  roomRow: { minHeight: 74, paddingHorizontal: 14, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 11, borderBottomWidth: 1, borderBottomColor: colors.border },
   roomRowActive: { backgroundColor: colors.primarySoft, borderLeftWidth: 3, borderLeftColor: colors.primary, paddingLeft: 11 },
   avatar: { width: 42, height: 42, borderRadius: 13, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontFamily: 'PoppinsBold', fontSize: 14, color: colors.primary },
@@ -223,14 +230,14 @@ const styles = StyleSheet.create({
   count: { minWidth: 21, height: 21, paddingHorizontal: 6, borderRadius: 11, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
   countText: { fontFamily: 'PoppinsBold', fontSize: 10, color: colors.white },
   pressed: { opacity: .65 },
-  emptyConversation: { flex: 1, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center', padding: 40 },
+  emptyConversation: { flex: 1, backgroundColor: colors.surfaceMuted, alignItems: 'center', justifyContent: 'center', padding: 40 },
   emptyIcon: { width: 70, height: 70, borderRadius: 22, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   emptyTitle: { fontFamily: 'PoppinsBold', fontSize: 20, color: colors.text },
   emptyCopy: { maxWidth: 460, marginTop: 6, textAlign: 'center', fontFamily: 'PoppinsRegular', fontSize: 13, lineHeight: 21, color: colors.muted },
   safeInline: { marginTop: 18, flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 13, paddingVertical: 9, borderRadius: 10, backgroundColor: colors.successSoft },
   safeInlineText: { fontFamily: 'PoppinsMedium', fontSize: 11.5, color: colors.success },
-  conversationLoading: { flex: 1, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center' },
-  conversation: { flex: 1, minWidth: 0, backgroundColor: '#F8FAFC' },
+  conversationLoading: { flex: 1, backgroundColor: colors.surfaceMuted, alignItems: 'center', justifyContent: 'center' },
+  conversation: { flex: 1, minWidth: 0, backgroundColor: colors.surfaceMuted },
   chatHeader: { minHeight: 72, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 11 },
   chatAvatar: { width: 42, height: 42, borderRadius: 13, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   chatAvatarText: { fontFamily: 'PoppinsBold', fontSize: 14, color: colors.primary },
@@ -239,7 +246,7 @@ const styles = StyleSheet.create({
   chatStatus: { marginTop: 1, fontFamily: 'PoppinsRegular', fontSize: 10.5, color: colors.muted },
   orderButton: { minHeight: 38, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.borderStrong, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 6 },
   orderButtonText: { fontFamily: 'PoppinsSemiBold', fontSize: 11, color: colors.primary },
-  contextCard: { marginHorizontal: 14, marginTop: 12, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 12, borderWidth: 1, borderColor: '#C8E0FA', backgroundColor: '#EEF5FD', flexDirection: 'row', alignItems: 'center', gap: 10 },
+  contextCard: { marginHorizontal: 14, marginTop: 12, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 12, borderWidth: 1, borderColor: colors.primaryBorder, backgroundColor: colors.primaryMist, flexDirection: 'row', alignItems: 'center', gap: 10 },
   contextIcon: { width: 38, height: 38, borderRadius: 10, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   contextBody: { flex: 1 },
   contextTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 12, color: colors.text },
@@ -251,7 +258,7 @@ const styles = StyleSheet.create({
   bubbleWrapMine: { alignSelf: 'flex-end', alignItems: 'flex-end' },
   bubbleWrapTheirs: { alignSelf: 'flex-start', alignItems: 'flex-start' },
   bubble: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: radius.md },
-  mine: { backgroundColor: '#DCEBFF', borderBottomRightRadius: 4 },
+  mine: { backgroundColor: colors.primarySoft, borderBottomRightRadius: 4 },
   theirs: { backgroundColor: colors.surface, borderBottomLeftRadius: 4, borderWidth: 1, borderColor: colors.border },
   message: { color: colors.text, fontFamily: 'PoppinsRegular', fontSize: 13, lineHeight: 20 },
   metaRow: { flexDirection: 'row', gap: 6, alignItems: 'center' },
@@ -261,16 +268,19 @@ const styles = StyleSheet.create({
   composer: { flexDirection: 'row', paddingHorizontal: 12, paddingVertical: 10, gap: 8, backgroundColor: colors.surface, borderTopWidth: 1, borderColor: colors.border },
   input: { flex: 1, height: 42, borderRadius: 11, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 15, color: colors.text, backgroundColor: colors.surface, fontFamily: 'PoppinsRegular', fontSize: 12.5 },
   sendButton: { width: 42, height: 42, borderRadius: 11, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
-  safety: { minHeight: 72, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: '#C9EDDE', backgroundColor: colors.successSoft, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  safety: { minHeight: 72, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: colors.successBorder, backgroundColor: colors.successSoft, flexDirection: 'row', alignItems: 'center', gap: 12 },
   safetyIcon: { width: 42, height: 42, borderRadius: 12, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   safetyBody: { flex: 1 },
   safetyTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 13, color: colors.text },
   safetyText: { marginTop: 2, fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 18, color: colors.textSoft },
   toolbar: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   search: { flex: 1 },
+  toolbarNarrow: { flexDirection: 'column', alignItems: 'stretch', gap: 8 },
+  searchNarrow: { flexGrow: 0, flexShrink: 0, flexBasis: 'auto' },
+  unreadNarrow: { alignSelf: 'flex-start', minHeight: 36 },
   unread: { minHeight: 48, paddingHorizontal: 15, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 8 },
   unreadDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.primary },
   unreadDotIdle: { backgroundColor: colors.success },
   unreadText: { fontFamily: 'PoppinsMedium', fontSize: 11.5, color: colors.textSoft },
   list: { padding: 0, overflow: 'hidden' },
-});
+}));

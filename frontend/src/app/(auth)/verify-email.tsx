@@ -1,10 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { AuthShell } from '@/components/auth-shell';
 import { Button, InlineAlert } from '@/components/ui';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, makeStyles } from '@/constants/theme';
 import { endpoints, errorMessage, errorRetryAfter } from '@/lib/api';
 import { useAuth } from '@/store/auth';
 
@@ -22,6 +22,7 @@ function maskEmail(email: string): string {
 }
 
 export default function VerifyEmailScreen() {
+  const styles = useStyles();
   const params = useLocalSearchParams<{ email?: string; maskedEmail?: string; cooldown?: string }>();
   const router = useRouter();
   const verifyEmail = useAuth(state => state.verifyEmail);
@@ -181,20 +182,20 @@ export default function VerifyEmailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
   form: { gap: spacing.lg },
-  mailNotice: { flexDirection: 'row', alignItems: 'center', gap: 13, padding: 15, borderRadius: radius.sm, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: '#C8E0FA' },
-  mailIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' },
+  mailNotice: { flexDirection: 'row', alignItems: 'center', gap: 13, padding: 15, borderRadius: radius.sm, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primaryBorder },
+  mailIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   mailCopy: { flex: 1, gap: 2 },
   mailTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 14, color: colors.text },
   mailText: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 18, color: colors.muted },
   codeRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
   codeInput: { flex: 1, minWidth: 0, maxWidth: 64, height: 64, borderWidth: 1.5, borderColor: colors.borderStrong, borderRadius: 12, backgroundColor: colors.surface, textAlign: 'center', fontFamily: 'PoppinsBold', fontSize: 24, color: colors.text },
-  codeInputFilled: { borderColor: colors.primary, backgroundColor: '#F7FBFF' },
+  codeInputFilled: { borderColor: colors.primary, backgroundColor: colors.primaryMist },
   resendRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 5 },
   resendCopy: { fontFamily: 'PoppinsRegular', fontSize: 13, color: colors.muted },
   resendAction: { fontFamily: 'PoppinsSemiBold', fontSize: 13, color: colors.primary },
   resendDisabled: { color: colors.muted },
   changeEmail: { minHeight: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
   changeEmailText: { fontFamily: 'PoppinsMedium', fontSize: 13, color: colors.textSoft },
-});
+}));

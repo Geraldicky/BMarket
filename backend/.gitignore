@@ -8,4 +8,6 @@ dist/
 .env.*.local
 
 /uploads/
+# Private files (service deliverables) - never commit or serve publicly
+/private-uploads/
 *.log

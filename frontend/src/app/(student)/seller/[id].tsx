@@ -3,18 +3,20 @@ import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, Text, useWindowDimensions, View } from 'react-native';
 import { ListingCard } from '@/components/listing-card';
 import { Button, Card, date, Empty, ErrorState, FeedbackDialog, Loader, Screen } from '@/components/ui';
-import { colors } from '@/constants/theme';
+import { colors, makeStyles } from '@/constants/theme';
 import { endpoints, errorMessage } from '@/lib/api';
 import { useAuth } from '@/store/auth';
 
 function Stars({ rating, size = 17 }: { rating: number; size?: number }) {
+  const styles = useStyles();
   return <View style={styles.stars}>{[1, 2, 3, 4, 5].map(star => <Ionicons key={star} name={star <= Math.round(rating) ? 'star' : 'star-outline'} size={size} color="#F4A928" />)}</View>;
 }
 
 export default function SellerProfileScreen() {
+  const styles = useStyles();
   const { id } = useLocalSearchParams<{ id: string }>();
   const me = useAuth(state => state.user);
   const width = useWindowDimensions().width;
@@ -88,7 +90,7 @@ export default function SellerProfileScreen() {
   </Screen>;
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
   back: { alignSelf: 'flex-start', minHeight: 38, flexDirection: 'row', alignItems: 'center', gap: 7 },
   backText: { fontFamily: 'PoppinsSemiBold', fontSize: 12, color: colors.primary },
   hero: { minHeight: 190, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 20, padding: 24 },
@@ -131,4 +133,4 @@ const styles = StyleSheet.create({
   reviewMeta: { marginTop: 2, fontFamily: 'PoppinsRegular', fontSize: 12, color: colors.muted },
   reviewComment: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 20, color: colors.textSoft },
   reviewEmpty: { fontFamily: 'PoppinsRegular', fontSize: 12, fontStyle: 'italic', color: colors.muted },
-});
+}));

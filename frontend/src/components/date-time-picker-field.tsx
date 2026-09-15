@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useMemo, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { colors, shadow } from '@/constants/theme';
+import { Modal, Pressable, Text, TextInput, View } from 'react-native';
+import { colors, shadow, makeStyles } from '@/constants/theme';
 
 const MONTHS = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 const DAYS = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
@@ -57,6 +57,7 @@ export function DateTimePickerField({
   minDate,
   optional,
 }: Props) {
+  const styles = useStyles();
   const [open, setOpen] = useState(false);
   const selected = parseLocalDateTimeValue(value);
   const initial = selected || minDate || new Date();
@@ -176,7 +177,7 @@ export function DateTimePickerField({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
   wrap: { gap: 6 },
   label: { fontFamily: 'PoppinsMedium', fontSize: 14, color: colors.textSoft },
   field: { minHeight: 50, borderRadius: 11, borderWidth: 1, borderColor: colors.borderStrong, backgroundColor: colors.surface, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -186,7 +187,7 @@ const styles = StyleSheet.create({
   placeholder: { fontFamily: 'PoppinsRegular', color: colors.muted },
   hint: { fontFamily: 'PoppinsRegular', fontSize: 11.5, lineHeight: 17, color: colors.muted },
   error: { fontFamily: 'PoppinsRegular', fontSize: 11.5, lineHeight: 17, color: colors.danger },
-  backdrop: { flex: 1, backgroundColor: 'rgba(15, 35, 55, .32)', alignItems: 'center', justifyContent: 'center', padding: 18 },
+  backdrop: { flex: 1, backgroundColor: colors.overlay, alignItems: 'center', justifyContent: 'center', padding: 18 },
   modal: { width: '100%', maxWidth: 500, borderRadius: 18, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, padding: 20, gap: 16 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: 14 },
   modalTitle: { fontFamily: 'PoppinsBold', fontSize: 19, color: colors.text },
@@ -216,4 +217,4 @@ const styles = StyleSheet.create({
   secondaryText: { fontFamily: 'PoppinsSemiBold', fontSize: 12, color: colors.textSoft },
   primaryButton: { minHeight: 42, paddingHorizontal: 16, borderRadius: 10, backgroundColor: colors.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   primaryText: { fontFamily: 'PoppinsSemiBold', fontSize: 12, color: colors.white },
-});
+}));

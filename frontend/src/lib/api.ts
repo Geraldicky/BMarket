@@ -1,7 +1,7 @@
 import { create, isAxiosError } from 'axios';
 import Constants from 'expo-constants';
 import { getStoredValue } from './token-storage';
-import type { ActivityListingEntry, AdminListingPage, ApiEnvelope, ChatRoom, CheckoutOptions, Complaint, CourierProvider, Dispute, DisputeReason, FulfillmentMethod, Listing, ListingMode, ListingStatus, Message, Notification, Page, PreorderStatus, PublicProfile, Review, Transaction, TransactionStatus, User, WalletLedger } from '@/types';
+import type { ActivityListingEntry, AdminListingPage, ApiEnvelope, ChatRoom, CheckoutOptions, Complaint, CourierProvider, DeliverableArchive, DeliverableArchiveEntryPreview, Dispute, DisputeReason, FulfillmentMethod, Listing, ListingMode, ListingStatus, Message, Notification, Page, PreorderStatus, PublicProfile, Review, Transaction, TransactionDeliverable, TransactionStatus, User, WalletLedger } from '@/types';
 
 export type AuthResult = { user: User; token: string };
 export type VerificationPending = {
@@ -46,11 +46,32 @@ export const endpoints = {
   transactions: (role?: 'buyer' | 'seller') => api.get<ApiEnvelope<Transaction[]>>('/transactions', { params: role ? { role } : undefined }).then(unwrap),
   transaction: (id: string) => api.get<ApiEnvelope<Transaction>>(`/transactions/${id}`).then(unwrap),
   checkoutOptions: (listingId: string) => api.get<ApiEnvelope<CheckoutOptions>>(`/transactions/checkout-options/${listingId}`).then(unwrap),
-  buy: (body: { listingId: string; quantity: number; note?: string; fulfillmentMethod: FulfillmentMethod; courierProvider?: CourierProvider; deliveryAddress?: string; recipientPhone?: string }) => api.post<ApiEnvelope<Transaction>>('/transactions', body).then(unwrap),
+  buy: (body: { listingId: string; quantity: number; note?: string; fulfillmentMethod?: FulfillmentMethod; courierProvider?: CourierProvider; deliveryAddress?: string; recipientPhone?: string }) => api.post<ApiEnvelope<Transaction>>('/transactions', body).then(unwrap),
   pay: (id: string) => api.post<ApiEnvelope<Transaction>>(`/transactions/${id}/pay`).then(unwrap),
   issueHandoverCode: (id: string) => api.post<ApiEnvelope<{ code: string; expiresAt: string; expiresInSeconds: number }>>(`/transactions/${id}/handover-code`).then(unwrap),
   confirmHandover: (id: string, code: string) => api.post<ApiEnvelope<Transaction>>(`/transactions/${id}/confirm-handover`, { code }).then(unwrap),
   setTransactionStatus: (id: string, status: Exclude<TransactionStatus, 'PENDING' | 'PAID'>, cancellationReason?: string) => api.patch<ApiEnvelope<Transaction>>(`/transactions/${id}/status`, { status, cancellationReason }).then(unwrap),
+  uploadDeliverables: (
+    id: string,
+    files: { uri: string; name: string; mimeType?: string | null; file?: File | null }[],
+    onProgress?: (percent: number) => void,
+  ) => {
+    const form = new FormData();
+    files.forEach(file => {
+      if (file.file) form.append('files', file.file, file.name);
+      else form.append('files', { uri: file.uri, name: file.name, type: file.mimeType || 'application/octet-stream' } as never);
+    });
+    return api.post<ApiEnvelope<TransactionDeliverable[]>>(`/transactions/${id}/deliverables`, form, {
+      timeout: 180_000,
+      onUploadProgress: event => {
+        if (!event.total) return;
+        onProgress?.(Math.min(99, Math.round((event.loaded / event.total) * 100)));
+      },
+    }).then(unwrap);
+  },
+  deleteDeliverable: (id: string, deliverableId: string) => api.delete<ApiEnvelope<TransactionDeliverable[]>>(`/transactions/${id}/deliverables/${deliverableId}`).then(unwrap),
+  deliverableLink: (id: string, deliverableId: string) => api.post<ApiEnvelope<{ token: string; expiresAt: string; fileName: string; mode: 'preview' | 'download' }>>(`/transactions/${id}/deliverables/${deliverableId}/link`).then(unwrap),
+  acceptDeliverables: (id: string) => api.post<ApiEnvelope<Transaction>>(`/transactions/${id}/accept-deliverables`).then(unwrap),
   balance: () => api.get<ApiEnvelope<{ balance: number; escrow: number }>>('/transactions/balance').then(unwrap),
   topup: (amount: number) => api.post('/transactions/topup', { amount }),
   walletLedger: () => api.get<ApiEnvelope<WalletLedger[]>>('/transactions/wallet/ledger').then(unwrap),
@@ -109,10 +130,16 @@ export const endpoints = {
   complaints: (params?: { status?: string; targetType?: 'USER' | 'LISTING'; unresolved?: boolean }) => api.get<ApiEnvelope<Complaint[]>>('/admin/complaints', { params }).then(unwrap),
   adminDisputes: (status?: string) => api.get<ApiEnvelope<Dispute[]>>('/admin/disputes', { params: status ? { status } : undefined }).then(unwrap),
   resolveDispute: (id: string, action: 'START_REVIEW' | 'REFUND_BUYER' | 'RELEASE_SELLER' | 'REJECT', note?: string) => api.patch<ApiEnvelope<Dispute>>(`/admin/disputes/${id}`, { action, note }).then(unwrap),
+  adminDeliverableLink: (deliverableId: string, mode: 'preview' | 'download') => api.post<ApiEnvelope<{ token: string; expiresAt: string; fileName: string; mode: 'preview' | 'download' }>>(`/admin/deliverables/${deliverableId}/link`, { mode }).then(unwrap),
+  adminDeliverableArchive: (deliverableId: string) => api.get<ApiEnvelope<DeliverableArchive>>(`/admin/deliverables/${deliverableId}/archive`).then(unwrap),
+  adminDeliverableArchiveEntry: (deliverableId: string, path: string) => api.get<ApiEnvelope<DeliverableArchiveEntryPreview>>(`/admin/deliverables/${deliverableId}/archive/entry`, { params: { path } }).then(unwrap),
   complaintStatus: (id: string, status: string, listingAction?: 'KEEP_ACTIVE' | 'HIDE_LISTING' | 'REMOVE_LISTING', adminNote?: string) => api.patch(`/admin/complaints/${id}`, { status, listingAction, adminNote }),
   commission: () => api.get<ApiEnvelope<{ rate: number }>>('/admin/commission').then(unwrap),
   setCommission: (rate: number) => api.patch('/admin/commission', { rate }),
 };
+// Short-lived public download URL for a service deliverable (token from endpoints.deliverableLink).
+export const deliverableDownloadUrl = (token: string) => `${API_URL}/deliverable-files/${encodeURIComponent(token)}`;
+
 export function errorMessage(error: unknown) {
   if (isAxiosError(error)) {
     const serverMessage = error.response?.data?.message;

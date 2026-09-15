@@ -4,7 +4,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { ListingsService } from '../listings/listings.service';
 import { ComplaintsService } from '../complaints/complaints.service';
-import { TransactionsService } from '../transactions/transactions.service';
+import { TransactionsService, type DeliverableLinkMode } from '../transactions/transactions.service';
 import { DisputesService } from '../disputes/disputes.service';
 
 @Injectable()
@@ -130,6 +130,9 @@ export class AdminService {
   // ── Disputes ──────────────────────────────
   getDisputes(status?: any) { return this.disputesService.findAll(status); }
   resolveDispute(id: string, adminId: string, action: 'START_REVIEW' | 'REFUND_BUYER' | 'RELEASE_SELLER' | 'REJECT', note?: string) { return this.disputesService.resolve(id, adminId, action, note); }
+  deliverableLink(deliverableId: string, mode: DeliverableLinkMode) { return this.transactionsService.createAdminDeliverableLink(deliverableId, mode); }
+  deliverableArchive(deliverableId: string) { return this.transactionsService.listDeliverableArchive(deliverableId); }
+  deliverableArchiveEntry(deliverableId: string, path: string) { return this.transactionsService.readDeliverableArchiveEntry(deliverableId, path); }
 
   // ── Commission ────────────────────────────
 

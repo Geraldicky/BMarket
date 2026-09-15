@@ -1,13 +1,14 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { AuthShell } from '@/components/auth-shell';
 import { Button, Field, InlineAlert } from '@/components/ui';
-import { colors, radius, spacing } from '@/constants/theme';
+import { colors, radius, spacing, makeStyles } from '@/constants/theme';
 import { endpoints, errorMessage } from '@/lib/api';
 
 export default function ForgotPasswordScreen() {
+  const styles = useStyles();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
@@ -89,13 +90,13 @@ export default function ForgotPasswordScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
   form: { gap: spacing.lg },
-  notice: { flexDirection: 'row', alignItems: 'center', gap: 13, padding: 15, borderRadius: radius.sm, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: '#C8E0FA' },
-  noticeIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' },
+  notice: { flexDirection: 'row', alignItems: 'center', gap: 13, padding: 15, borderRadius: radius.sm, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primaryBorder },
+  noticeIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   noticeCopy: { flex: 1, gap: 2 },
   noticeTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 14, color: colors.text },
   noticeText: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 18, color: colors.muted },
   back: { minHeight: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
   backText: { fontFamily: 'PoppinsMedium', fontSize: 13, color: colors.textSoft },
-});
+}));

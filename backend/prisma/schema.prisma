@@ -56,6 +56,7 @@ model User {
   blocksReceived     UserBlock[]       @relation("Blocked")
   notifications      Notification[]
   walletLedger       WalletLedger[]
+  deliverablesUploaded TransactionDeliverable[] @relation("DeliverableUploader")
 
   @@map("users")
 }
@@ -270,6 +271,7 @@ model Transaction {
   review  Review?
   dispute      Dispute?
   walletLedger WalletLedger[]
+  deliverables TransactionDeliverable[]
 
   @@index([buyerId, createdAt])
   @@index([sellerId, createdAt])
@@ -278,6 +280,24 @@ model Transaction {
   @@index([fulfillmentMethod, status])
   @@index([listingId])
   @@map("transactions")
+}
+
+// Hasil jasa: file yang diunggah penjual untuk transaksi jasa. storageKey bersifat privat
+// (tidak pernah dikirim ke client); unduhan memakai tautan bertanda tangan berdurasi singkat.
+model TransactionDeliverable {
+  id            String      @id @default(uuid())
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  uploaderId    String
+  uploader      User        @relation("DeliverableUploader", fields: [uploaderId], references: [id])
+  fileName      String
+  mimeType      String
+  size          Int
+  storageKey    String
+  createdAt     DateTime    @default(now())
+
+  @@index([transactionId, createdAt])
+  @@map("transaction_deliverables")
 }
 
 enum TransactionStatus {
@@ -516,6 +536,7 @@ model Message {
 
   @@index([chatRoomId, createdAt])
   @@index([chatRoomId, isRead, senderId])
+  @@index([createdAt]) // chat retention purge (7 hari)
   @@map("messages")
 }
 

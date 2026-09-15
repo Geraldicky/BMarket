@@ -110,7 +110,7 @@ describe('ListingsService', () => {
     await service.update('listing-1', 'seller-1', { type: 'SERVICE', mode: 'SERVICE' });
 
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ type: 'SERVICE', condition: null, stock: null, stockLeft: null }),
+      data: expect.objectContaining({ type: 'SERVICE', condition: null, stock: null, stockLeft: null, fulfillmentMethods: [] }),
     }));
   });
   it('creates a one-off listing with exactly one unit', async () => {
@@ -247,6 +247,42 @@ describe('ListingsService', () => {
 
     await expect(service.archiveInactive('listing-1', 'seller-1')).rejects.toThrow(/nonaktifkan, selesaikan, atau jual/i);
     expect(update).not.toHaveBeenCalled();
+  });
+
+  const serviceDto = {
+    ...productDto,
+    category: 'SERVICES' as const,
+    type: 'SERVICE' as const,
+    mode: 'SERVICE' as const,
+    condition: undefined,
+    stock: undefined,
+  };
+
+  it('creates a service without any fulfillment method', async () => {
+    const create = vi.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'service-1', ...data }));
+    const service = new ListingsService({ listing: { create } } as never);
+
+    await service.create('seller-1', { ...serviceDto, fulfillmentMethods: undefined });
+
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ mode: 'SERVICE', fulfillmentMethods: [] }),
+    }));
+  });
+
+  it('rejects fulfillment methods on a service', async () => {
+    const create = vi.fn();
+    const service = new ListingsService({ listing: { create } } as never);
+
+    await expect(service.create('seller-1', serviceDto)).rejects.toThrow(/jasa tidak memiliki metode penyerahan/i);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('still requires a fulfillment method for products', async () => {
+    const create = vi.fn();
+    const service = new ListingsService({ listing: { create } } as never);
+
+    await expect(service.create('seller-1', { ...productDto, fulfillmentMethods: [] })).rejects.toThrow(/minimal satu metode penyerahan/i);
+    expect(create).not.toHaveBeenCalled();
   });
 
 });

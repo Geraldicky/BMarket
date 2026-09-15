@@ -6,7 +6,7 @@ function createPrisma() {
     user: { findUnique: vi.fn() },
     userBlock: { count: vi.fn() },
     chatRoom: { findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn() },
-    message: { findMany: vi.fn(), updateMany: vi.fn() },
+    message: { findMany: vi.fn(), updateMany: vi.fn(), deleteMany: vi.fn() },
   };
 }
 
@@ -71,6 +71,31 @@ describe('ChatService — meetup coordination safety', () => {
     expect(prisma.message.updateMany).toHaveBeenCalledWith({
       where: { chatRoomId: 'room-1', senderId: { not: 'user-1' }, isRead: false },
       data: { isRead: true },
+    });
+  });
+
+  it('only returns messages from the last 7 days', async () => {
+    prisma.chatRoom.findUnique.mockResolvedValue({ id: 'room-1', userAId: 'user-1', userBId: 'user-2' });
+    prisma.message.findMany.mockResolvedValue([]);
+    prisma.message.updateMany.mockResolvedValue({ count: 0 });
+
+    const before = Date.now();
+    await service.getRoomMessages('room-1', 'user-1');
+
+    const where = prisma.message.findMany.mock.calls[0][0].where;
+    const cutoff = where.createdAt.gte as Date;
+    expect(where.chatRoomId).toBe('room-1');
+    expect(before - cutoff.getTime()).toBeGreaterThanOrEqual(7 * 24 * 60 * 60 * 1000 - 1000);
+    expect(before - cutoff.getTime()).toBeLessThanOrEqual(7 * 24 * 60 * 60 * 1000 + 1000);
+  });
+
+  it('deletes messages older than 7 days', async () => {
+    prisma.message.deleteMany.mockResolvedValue({ count: 3 });
+    const now = new Date('2026-09-14T12:00:00Z');
+
+    await expect(service.purgeExpiredMessages(now)).resolves.toBe(3);
+    expect(prisma.message.deleteMany).toHaveBeenCalledWith({
+      where: { createdAt: { lt: new Date('2026-09-07T12:00:00Z') } },
     });
   });
 });

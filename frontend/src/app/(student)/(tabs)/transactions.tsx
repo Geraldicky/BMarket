@@ -3,9 +3,10 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, Text, useWindowDimensions, View } from 'react-native';
 import { Button, Card, date, Empty, ErrorState, Field, Loader, money, Screen, Title } from '@/components/ui';
-import { colors, radius } from '@/constants/theme';
+import { BackButton } from '@/components/back-button';
+import { colors, radius, makeStyles } from '@/constants/theme';
 import { endpoints, errorMessage } from '@/lib/api';
 import { useAuth } from '@/store/auth';
 import type { Transaction, TransactionStatus } from '@/types';
@@ -15,13 +16,14 @@ type StatusFilter = 'ALL' | 'ACTION' | 'PROCESS' | 'COMPLETED' | 'CANCELLED';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
-const statusMeta: Record<TransactionStatus, { label: string; color: string; tint: string; icon: IconName }> = {
+// A function (not a constant) so the colors follow the active theme at render time.
+const statusMeta = (): Record<TransactionStatus, { label: string; color: string; tint: string; icon: IconName }> => ({
   PENDING: { label: 'Menunggu pembayaran', color: colors.warning, tint: colors.warningSoft, icon: 'time-outline' },
   PAID: { label: 'Dana di escrow', color: colors.primary, tint: colors.primarySoft, icon: 'shield-checkmark-outline' },
-  CONFIRMED: { label: 'Sedang diproses', color: '#7656C5', tint: '#F0EBFF', icon: 'cube-outline' },
+  CONFIRMED: { label: 'Sedang diproses', color: colors.purple, tint: colors.purpleSoft, icon: 'cube-outline' },
   COMPLETED: { label: 'Selesai', color: colors.success, tint: colors.successSoft, icon: 'checkmark-circle-outline' },
   CANCELLED: { label: 'Dibatalkan', color: colors.danger, tint: colors.dangerSoft, icon: 'close-circle-outline' },
-};
+});
 
 function isBuyer(transaction: Transaction, userId?: string) {
   return transaction.buyerId === userId || transaction.buyer?.id === userId;
@@ -44,15 +46,16 @@ function actionLabel(transaction: Transaction, userId?: string) {
   const meetup = transaction.fulfillmentMethod === 'CAMPUS_MEETUP';
   if (!needsAction(transaction, userId)) return 'Lihat detail';
   if (buyer && transaction.status === 'PENDING') return 'Bayar sekarang';
-  if (buyer && meetup && transaction.status === 'PAID') return 'Koordinasi meetup';
+  if (buyer && meetup && transaction.status === 'PAID') return transaction.listing.mode === 'SERVICE' ? 'Koordinasi jasa' : 'Koordinasi meetup';
   if (!buyer && meetup && transaction.status === 'PAID') return 'Koordinasi & kode';
   if (!buyer && transaction.status === 'PAID') return 'Proses pengiriman';
   return 'Konfirmasi diterima';
 }
 
-function Metric({ label, value, icon, color, tint, active, onPress }: { label: string; value: number; icon: IconName; color: string; tint: string; active?: boolean; onPress: () => void }) {
+function Metric({ label, value, icon, color, tint, active, compact, onPress }: { label: string; value: number; icon: IconName; color: string; tint: string; active?: boolean; compact?: boolean; onPress: () => void }) {
+  const styles = useStyles();
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.metric, active && styles.metricActive, pressed && styles.pressed]}>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.metric, compact && styles.metricMobile, active && styles.metricActive, pressed && styles.pressed]}>
       <View style={[styles.metricIcon, { backgroundColor: tint }]}><Ionicons name={icon} size={20} color={color} /></View>
       <View style={styles.metricCopy}><Text style={styles.metricValue}>{value}</Text><Text style={styles.metricLabel}>{label}</Text></View>
       <Ionicons name={active ? 'checkmark-circle' : 'chevron-forward'} size={17} color={active ? colors.primary : colors.borderStrong} />
@@ -61,10 +64,12 @@ function Metric({ label, value, icon, color, tint, active, onPress }: { label: s
 }
 
 export default function TransactionsScreen() {
+  const styles = useStyles();
   const user = useAuth(state => state.user);
   const { width } = useWindowDimensions();
   const mobile = width < 720;
   const compactMobile = width < 480;
+  const twoColumnMetrics = width < 900;
   const [role, setRole] = useState<RoleFilter>('ALL');
   const [status, setStatus] = useState<StatusFilter>('ALL');
   const [keyword, setKeyword] = useState('');
@@ -106,6 +111,7 @@ export default function TransactionsScreen() {
 
   return (
     <Screen style={styles.page}>
+      <BackButton />
       <Title eyebrow="TRANSAKSI BMARKET" subtitle="Semua pembelian dan penjualanmu, dengan status dan tindakan yang jelas.">Transaksi</Title>
 
       <Card style={styles.controlPanel}>
@@ -119,14 +125,14 @@ export default function TransactionsScreen() {
           ))}
         </View>
         <View style={styles.metrics}>
-          {stats.map(stat => <Metric key={stat.label} {...stat} active={status === stat.filter} onPress={() => setStatus(current => current === stat.filter ? 'ALL' : stat.filter)} />)}
+          {stats.map(stat => <Metric key={stat.label} {...stat} compact={twoColumnMetrics} active={status === stat.filter} onPress={() => setStatus(current => current === stat.filter ? 'ALL' : stat.filter)} />)}
         </View>
       </Card>
 
-      <View style={styles.sectionHead}>
+      <View style={[styles.sectionHead, mobile && styles.sectionHeadMobile]}>
         <View><Text style={styles.heading}>{status === 'ALL' ? 'Daftar transaksi' : stats.find(item => item.filter === status)?.label}</Text><Text style={styles.copy}>{visibleItems.length} dari {roleItems.length} transaksi ditampilkan</Text></View>
         <View style={[styles.sectionActions, mobile && styles.sectionActionsMobile]}>
-          <View style={styles.searchWrap}><Field value={keyword} onChangeText={setKeyword} icon="search-outline" placeholder="Cari produk atau pengguna..." /></View>
+          <View style={[styles.searchWrap, mobile && styles.searchWrapMobile]}><Field value={keyword} onChangeText={setKeyword} icon="search-outline" placeholder="Cari produk atau pengguna..." /></View>
           <View style={[styles.filters, mobile && styles.filtersMobile]}>
             {([['ALL', 'Semua'], ['ACTION', 'Perlu tindakan'], ['PROCESS', 'Diproses'], ['COMPLETED', 'Selesai'], ['CANCELLED', 'Dibatalkan']] as const).map(([value, label]) => (
               <Pressable key={value} onPress={() => setStatus(value)} style={[styles.filter, status === value && styles.filterActive]}><Text style={[styles.filterText, status === value && styles.filterActiveText]}>{label}</Text></Pressable>
@@ -141,7 +147,7 @@ export default function TransactionsScreen() {
         <View style={styles.list}>
           {visibleItems.map(transaction => {
             const buyer = isBuyer(transaction, user?.id);
-            const meta = statusMeta[transaction.status];
+            const meta = statusMeta()[transaction.status];
             const action = needsAction(transaction, user?.id);
             const counterpart = buyer ? transaction.seller?.name : transaction.buyer?.name;
             const meetup = transaction.fulfillmentMethod === 'CAMPUS_MEETUP';
@@ -157,7 +163,7 @@ export default function TransactionsScreen() {
                       <Text style={styles.dot}>•</Text><Text style={styles.orderId}>#{transaction.id.slice(0, 8).toUpperCase()}</Text>
                     </View>
                     <Text numberOfLines={2} style={styles.itemTitle}>{transaction.listing.title}</Text>
-                    <View style={styles.metaRow}><Ionicons name="person-outline" size={13} color={colors.muted} /><Text numberOfLines={1} style={styles.metaText}>{buyer ? 'Penjual' : 'Pembeli'}: {counterpart || 'Binusian'}</Text><Text style={styles.metaDot}>·</Text><Text style={styles.metaText}>{transaction.quantity} item</Text><Text style={styles.metaDot}>·</Text><Ionicons name={meetup ? 'people-outline' : 'bicycle-outline'} size={13} color={colors.muted} /><Text style={styles.metaText}>{meetup ? 'Meetup' : 'Kurir'}</Text></View>
+                    <View style={styles.metaRow}><Ionicons name="person-outline" size={13} color={colors.muted} /><Text numberOfLines={1} style={styles.metaText}>{buyer ? 'Penjual' : 'Pembeli'}: {counterpart || 'Binusian'}</Text><Text style={styles.metaDot}>·</Text><Text style={styles.metaText}>{transaction.quantity} item</Text><Text style={styles.metaDot}>·</Text><Ionicons name={transaction.listing.mode === 'SERVICE' ? 'construct-outline' : meetup ? 'people-outline' : 'bicycle-outline'} size={13} color={colors.muted} /><Text style={styles.metaText}>{transaction.listing.mode === 'SERVICE' ? 'Jasa' : meetup ? 'Meetup' : 'Kurir'}</Text></View>
                     <View style={styles.badgeRow}><View style={[styles.statusBadge, { backgroundColor: meta.tint }]}><Ionicons name={meta.icon} size={14} color={meta.color} /><Text style={[styles.statusText, { color: meta.color }]}>{meta.label}</Text></View><Text style={styles.orderDate}>{date(transaction.createdAt)}</Text></View>
                   </View>
                   <View style={[styles.itemEnd, mobile && styles.itemEndMobile]}>
@@ -174,10 +180,10 @@ export default function TransactionsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
   page: { maxWidth: 1180, gap: 20 },
   controlPanel: { padding: 0, overflow: 'hidden', gap: 0 },
-  roleTabs: { padding: 10, borderBottomWidth: 1, borderBottomColor: colors.border, flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  roleTabs: { padding: 12, borderBottomWidth: 1, borderBottomColor: colors.border, flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   roleTab: { minHeight: 42, paddingHorizontal: 13, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 7 },
   roleTabActive: { backgroundColor: colors.primarySoft },
   roleTabText: { fontFamily: 'PoppinsMedium', fontSize: 12.5, color: colors.textSoft },
@@ -188,9 +194,8 @@ const styles = StyleSheet.create({
   roleCountTextActive: { color: colors.primary },
   metrics: { flexDirection: 'row', flexWrap: 'wrap' },
   metric: { minWidth: 210, minHeight: 82, flex: 1, paddingHorizontal: 16, paddingVertical: 13, borderRightWidth: 1, borderRightColor: colors.border, flexDirection: 'row', alignItems: 'center', gap: 11 },
-  metricMobile: { minWidth: 0, flexBasis: '47%' },
-  metricCompact: { flexBasis: '100%', borderRightWidth: 0, borderBottomWidth: 1, borderBottomColor: colors.border },
-  metricActive: { backgroundColor: '#F8FBFF' },
+  metricMobile: { minWidth: 0, flexGrow: 0, flexShrink: 0, flexBasis: '50%', paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
+  metricActive: { backgroundColor: colors.primaryMist },
   metricIcon: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   metricCopy: { flex: 1 },
   metricValue: { fontFamily: 'PoppinsBold', fontSize: 21, lineHeight: 25, color: colors.text },
@@ -199,18 +204,20 @@ const styles = StyleSheet.create({
   heading: { fontFamily: 'PoppinsBold', fontSize: 20, color: colors.text },
   copy: { marginTop: 2, fontFamily: 'PoppinsRegular', fontSize: 12.5, lineHeight: 19, color: colors.muted },
   sectionActions: { flex: 1, minWidth: 320, alignItems: 'flex-end', gap: 9 },
-  sectionActionsMobile: { width: '100%', minWidth: 0, alignItems: 'stretch' },
+  sectionHeadMobile: { flexDirection: 'column', alignItems: 'stretch', gap: 12 },
+  sectionActionsMobile: { flexGrow: 0, flexShrink: 0, flexBasis: 'auto', width: '100%', minWidth: 0, alignItems: 'stretch' },
   searchWrap: { width: '100%', maxWidth: 360 },
-  filters: { flexDirection: 'row', gap: 7, flexWrap: 'wrap', justifyContent: 'flex-end' },
+  searchWrapMobile: { maxWidth: '100%' },
+  filters: { flexDirection: 'row', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' },
   filtersMobile: { justifyContent: 'flex-start' },
-  filter: { minHeight: 35, paddingHorizontal: 12, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, justifyContent: 'center' },
-  filterActive: { borderColor: '#B7D3F3', backgroundColor: colors.primarySoft },
+  filter: { minHeight: 40, paddingHorizontal: 14, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, justifyContent: 'center' },
+  filterActive: { borderColor: colors.primaryBorder, backgroundColor: colors.primarySoft },
   filterText: { fontFamily: 'PoppinsMedium', fontSize: 11.5, color: colors.textSoft },
   filterActiveText: { fontFamily: 'PoppinsSemiBold', color: colors.primary },
   list: { gap: 10 },
   item: { minHeight: 122, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 14 },
   itemMobile: { flexWrap: 'wrap', alignItems: 'flex-start' },
-  itemAction: { borderColor: '#A9CCF4', backgroundColor: '#FCFEFF' },
+  itemAction: { borderColor: colors.primaryBorder, backgroundColor: colors.primaryMist },
   product: { width: 88, height: 88, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   productCompact: { width: 72, height: 72 },
   productImage: { width: '100%', height: '100%' },
@@ -239,4 +246,4 @@ const styles = StyleSheet.create({
   detailActionText: { fontFamily: 'PoppinsSemiBold', fontSize: 11.5, color: colors.primary },
   detailActionTextUrgent: { color: colors.white },
   pressed: { opacity: .7, transform: [{ scale: .994 }] },
-});
+}));

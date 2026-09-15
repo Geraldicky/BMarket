@@ -1,25 +1,31 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Modal, Pressable, Text, useWindowDimensions, View } from 'react-native';
 import { Button, Card, date, ErrorState, FeedbackDialog, Field, InlineAlert, Loader, money, Screen, Title } from '@/components/ui';
-import { colors, radius } from '@/constants/theme';
+import { colors, radius, makeStyles } from '@/constants/theme';
 import { endpoints, errorMessage } from '@/lib/api';
+import { canPreviewDeliverable, deliverableIcon, fileSizeLabel, openSignedFile, reservePreviewTab } from '@/lib/deliverables';
 import { useAuth } from '@/store/auth';
-import type { DisputeReason, Transaction, TransactionStatus } from '@/types';
+import type { DisputeReason, Transaction, TransactionDeliverable, TransactionStatus } from '@/types';
+
+const DELIVERABLE_MAX_BYTES = 20 * 1024 * 1024;
+const DELIVERABLE_MAX_FILES = 5;
 
 type ActionKind = 'PAY' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
 
-const statusMeta: Record<TransactionStatus, { title: string; description: string; color: string; tint: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> = {
+// A function (not a constant) so the colors follow the active theme at render time.
+const statusMeta = (): Record<TransactionStatus, { title: string; description: string; color: string; tint: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> => ({
   PENDING: { title: 'Menunggu pembayaran', description: 'Stok sudah direservasi. Buyer perlu membayar dari saldo BMarket.', color: colors.warning, tint: colors.warningSoft, icon: 'time-outline' },
   PAID: { title: 'Pembayaran aman di escrow', description: 'Dana tersimpan aman sampai penyerahan pesanan selesai.', color: colors.primary, tint: colors.primarySoft, icon: 'shield-checkmark-outline' },
-  CONFIRMED: { title: 'Penyerahan sedang berlangsung', description: 'Ikuti detail meetup atau pengiriman, lalu selesaikan setelah pesanan diterima.', color: '#7656C5', tint: '#F0EBFF', icon: 'cube-outline' },
+  CONFIRMED: { title: 'Penyerahan sedang berlangsung', description: 'Ikuti detail meetup atau pengiriman, lalu selesaikan setelah pesanan diterima.', color: colors.purple, tint: colors.purpleSoft, icon: 'cube-outline' },
   COMPLETED: { title: 'Transaksi selesai', description: 'Dana escrow sudah dilepas ke seller setelah dikurangi biaya layanan.', color: colors.success, tint: colors.successSoft, icon: 'checkmark-circle-outline' },
   CANCELLED: { title: 'Transaksi dibatalkan', description: 'Dana dan stok telah dikembalikan sesuai kondisi terakhir transaksi.', color: colors.danger, tint: colors.dangerSoft, icon: 'close-circle-outline' },
-};
+});
 
 const actionCopy: Record<ActionKind, { eyebrow: string; title: string; description: string; confirm: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> = {
   PAY: { eyebrow: 'PEMBAYARAN', title: 'Bayar pesanan sekarang?', description: 'Saldo akan dipindahkan ke escrow dan baru diterima seller setelah transaksi selesai.', confirm: 'Bayar sekarang', icon: 'wallet-outline' },
@@ -50,12 +56,14 @@ function dateTime(value?: string | null) {
 }
 
 function Timeline({ transaction }: { transaction: Transaction }) {
+  const styles = useStyles();
   const meetup = transaction.fulfillmentMethod === 'CAMPUS_MEETUP';
+  const service = transaction.listing.mode === 'SERVICE';
   const standard = [
     { title: 'Pesanan dibuat', copy: 'Stok direservasi untuk buyer.', time: transaction.createdAt, icon: 'receipt-outline' as const, reached: true },
     { title: 'Pembayaran diterima', copy: 'Dana dipindahkan ke escrow BMarket.', time: transaction.paidAt, icon: 'wallet-outline' as const, reached: ['PAID', 'CONFIRMED', 'COMPLETED'].includes(transaction.status) },
-    { title: meetup ? 'Koordinasi meetup' : 'Pengiriman diproses', copy: meetup ? 'Buyer dan seller menyepakati waktu serta lokasi melalui chat BMarket.' : 'Kurir simulasi mulai memproses kiriman.', time: meetup ? transaction.paidAt : transaction.confirmedAt, icon: meetup ? 'chatbubbles-outline' as const : 'bicycle-outline' as const, reached: meetup ? ['PAID', 'CONFIRMED', 'COMPLETED'].includes(transaction.status) : ['CONFIRMED', 'COMPLETED'].includes(transaction.status) },
-    { title: 'Transaksi selesai', copy: meetup ? 'Kode serah-terima valid dan dana dilepas.' : 'Kiriman diterima dan dana dilepas.', time: transaction.completedAt, icon: 'checkmark-circle-outline' as const, reached: transaction.status === 'COMPLETED' },
+    { title: service ? 'Pengerjaan jasa' : meetup ? 'Koordinasi meetup' : 'Pengiriman diproses', copy: service ? 'Penjual mengerjakan jasa lalu mengunggah file hasilnya di halaman transaksi.' : meetup ? 'Buyer dan seller menyepakati waktu serta lokasi melalui chat BMarket.' : 'Kurir simulasi mulai memproses kiriman.', time: meetup ? transaction.paidAt : transaction.confirmedAt, icon: meetup ? 'chatbubbles-outline' as const : 'bicycle-outline' as const, reached: meetup ? ['PAID', 'CONFIRMED', 'COMPLETED'].includes(transaction.status) : ['CONFIRMED', 'COMPLETED'].includes(transaction.status) },
+    { title: 'Transaksi selesai', copy: service ? 'Buyer menerima hasil jasa dan dana dilepas.' : meetup ? 'Kode serah-terima valid dan dana dilepas.' : 'Kiriman diterima dan dana dilepas.', time: transaction.completedAt, icon: 'checkmark-circle-outline' as const, reached: transaction.status === 'COMPLETED' },
   ];
   const steps = transaction.status === 'CANCELLED'
     ? [...standard.filter((step, index) => index === 0 || Boolean(step.time)), { title: 'Transaksi dibatalkan', copy: transaction.cancellationReason || 'Transaksi dihentikan.', time: transaction.cancelledAt, icon: 'close-circle-outline' as const, reached: true, cancelled: true }]
@@ -77,6 +85,7 @@ function Timeline({ transaction }: { transaction: Transaction }) {
 }
 
 export default function TransactionDetailScreen() {
+  const styles = useStyles();
   const { id } = useLocalSearchParams<{ id: string }>();
   const user = useAuth(state => state.user);
   const width = useWindowDimensions().width;
@@ -101,6 +110,8 @@ export default function TransactionDetailScreen() {
   const [disputeReason, setDisputeReason] = useState<DisputeReason>('ITEM_NOT_AS_DESCRIBED');
   const [disputeDescription, setDisputeDescription] = useState('');
   const [disputeEvidence, setDisputeEvidence] = useState<ImagePicker.ImagePickerAsset[]>([]);
+  const [acceptVisible, setAcceptVisible] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
   const query = useQuery({ queryKey: ['transaction', id], queryFn: () => endpoints.transaction(id), refetchInterval: 5000 });
   const transaction = query.data;
@@ -191,6 +202,59 @@ export default function TransactionDetailScreen() {
     onError: error => setActionError(errorMessage(error)),
   });
 
+  const refreshTransaction = () => {
+    client.invalidateQueries({ queryKey: ['transaction', id] });
+    client.invalidateQueries({ queryKey: ['transactions'] });
+  };
+
+  // Seller picks result files (documents, images, code, ZIP) and uploads them to the transaction.
+  const uploadDeliverables = useMutation({
+    mutationFn: async () => {
+      const picked = await DocumentPicker.getDocumentAsync({ multiple: true, copyToCacheDirectory: true });
+      if (picked.canceled || !picked.assets?.length) return null;
+      if (picked.assets.length > DELIVERABLE_MAX_FILES) throw new Error(`Pilih maksimal ${DELIVERABLE_MAX_FILES} file sekali unggah.`);
+      const tooLarge = picked.assets.find(asset => (asset.size || 0) > DELIVERABLE_MAX_BYTES);
+      if (tooLarge) throw new Error(`${tooLarge.name} lebih dari 20 MB.`);
+      setUploadProgress(0);
+      return endpoints.uploadDeliverables(id, picked.assets.map(asset => ({ uri: asset.uri, name: asset.name, mimeType: asset.mimeType, file: asset.file })), setUploadProgress);
+    },
+    onSuccess: result => {
+      setUploadProgress(null);
+      if (!result) return;
+      setActionError('');
+      refreshTransaction();
+      setSuccess('File hasil jasa berhasil diunggah. Buyer sudah bisa mempratinjaunya.');
+    },
+    onError: error => { setUploadProgress(null); setActionError(errorMessage(error)); },
+  });
+
+  const removeDeliverable = useMutation({
+    mutationFn: (deliverableId: string) => endpoints.deleteDeliverable(id, deliverableId),
+    onSuccess: () => { setActionError(''); refreshTransaction(); },
+    onError: error => setActionError(errorMessage(error)),
+  });
+
+  // Files open through a short-lived signed link, so they are only reachable by the buyer/seller.
+  // Before accepting, the buyer gets an inline preview; the original download unlocks after acceptance.
+  const openDeliverable = useMutation({
+    mutationFn: ({ file, popup }: { file: TransactionDeliverable; popup: Window | null }) => openSignedFile(() => endpoints.deliverableLink(id, file.id), popup),
+    onError: error => setActionError(errorMessage(error)),
+  });
+
+  const acceptResult = useMutation({
+    mutationFn: () => endpoints.acceptDeliverables(id),
+    onSuccess: updated => {
+      setAcceptVisible(false);
+      setActionError('');
+      client.setQueryData(['transaction', id], updated);
+      client.invalidateQueries({ queryKey: ['transactions'] });
+      client.invalidateQueries({ queryKey: ['balance'] });
+      client.invalidateQueries({ queryKey: ['notification-count'] });
+      setSuccess('Hasil jasa diterima. Transaksi selesai dan dana sudah dilepas ke penjual.');
+    },
+    onError: error => { setAcceptVisible(false); setActionError(errorMessage(error)); },
+  });
+
   const pickEvidence = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: Math.max(1, 4 - disputeEvidence.length), quality: .82 });
     if (!result.canceled) setDisputeEvidence(current => [...current, ...result.assets].slice(0, 4));
@@ -234,14 +298,23 @@ export default function TransactionDetailScreen() {
   if (query.isError || !transaction) return <Screen><ErrorState message={errorMessage(query.error)} retry={() => query.refetch()} /></Screen>;
 
   const meetup = transaction.fulfillmentMethod === 'CAMPUS_MEETUP';
+  const service = transaction.listing.mode === 'SERVICE';
   const meta = meetup && transaction.status === 'PAID'
-    ? { ...statusMeta.PAID, title: 'Siap koordinasi meetup', description: 'Dana aman di escrow. Atur waktu dan lokasi lewat chat; setelah barang diterima, gunakan kode serah-terima.' }
-    : statusMeta[transaction.status];
+    ? service
+      ? { ...statusMeta().PAID, title: 'Jasa sedang dikerjakan', description: 'Dana aman di escrow. Penjual mengunggah file hasil jasa di halaman ini; setelah diperiksa, buyer menekan Terima hasil.' }
+      : { ...statusMeta().PAID, title: 'Siap koordinasi meetup', description: 'Dana aman di escrow. Atur waktu dan lokasi lewat chat; setelah barang diterima, gunakan kode serah-terima.' }
+    : statusMeta()[transaction.status];
   const counterpart = buyer ? transaction.seller : transaction.buyer;
   const active = ['PENDING', 'PAID', 'CONFIRMED'].includes(transaction.status);
   const disputeActive = Boolean(transaction.dispute && ['OPEN', 'IN_REVIEW'].includes(transaction.dispute.status));
   const canOpenDispute = ['PAID', 'CONFIRMED'].includes(transaction.status) && transaction.isEscrowHeld && !transaction.dispute;
-  const canCancel = ['PENDING', 'PAID'].includes(transaction.status) && !disputeActive;
+  const deliverables = transaction.deliverables || [];
+  // The backend also blocks this: after result files exist, a buyer must open a dispute instead of cancelling.
+  const canCancel = ['PENDING', 'PAID'].includes(transaction.status) && !disputeActive && !(buyer && service && deliverables.length > 0);
+  const previewOnly = buyer && transaction.status !== 'COMPLETED';
+  const serviceInProgress = service && ['PAID', 'CONFIRMED'].includes(transaction.status) && transaction.isEscrowHeld;
+  const canManageResult = !buyer && serviceInProgress && !disputeActive;
+  const canAcceptResult = buyer && serviceInProgress && !disputeActive && deliverables.length > 0;
   const preorder = transaction.listing.mode === 'PREORDER';
   const preorderReady = !preorder || ['READY', 'COMPLETED'].includes(transaction.listing.preorderStatus || '');
   const preorderStatusText = ({ OPEN: 'PO masih dibuka', CLOSED: 'PO sudah ditutup', PROCESSING: 'Sedang diproduksi/disiapkan', READY: 'Siap diambil/dikirim', COMPLETED: 'Batch PO selesai', CANCELLED: 'PO dibatalkan' } as Record<string, string>)[transaction.listing.preorderStatus || ''] || 'Status PO belum tersedia';
@@ -272,7 +345,7 @@ export default function TransactionDetailScreen() {
         <View style={[styles.statusAside, mobile && styles.statusAsideMobile]}>
           <Text style={styles.statusAsideLabel}>{buyer ? 'TOTAL PEMBAYARAN' : 'NILAI PESANAN'}</Text>
           <Text style={styles.statusAsideValue}>{money(buyer ? grandTotal : transaction.totalPrice)}</Text>
-          <Text style={styles.statusAsideMeta}>{meetup ? 'Meetup kampus' : 'Kurir instan'} · {buyer ? 'Pembelian' : 'Penjualan'}</Text>
+          <Text style={styles.statusAsideMeta}>{service ? 'Jasa' : meetup ? 'Meetup kampus' : 'Kurir instan'} · {buyer ? 'Pembelian' : 'Penjualan'}</Text>
         </View>
       </View>
 
@@ -288,7 +361,39 @@ export default function TransactionDetailScreen() {
             {transaction.note ? <View style={styles.noteBox}><Ionicons name="document-text-outline" size={18} color={colors.primary} /><View style={styles.flex}><Text style={styles.noteLabel}>Catatan pesanan</Text><Text style={styles.noteText}>{transaction.note}</Text></View></View> : null}
           </Card>
 
-          <Card style={styles.fulfillmentCard}>
+          {service ? (
+            <Card style={styles.fulfillmentCard}>
+              <View style={styles.fulfillmentHeader}>
+                <View style={styles.fulfillmentHeading}><View style={styles.fulfillmentIcon}><Ionicons name="folder-open-outline" size={22} color={colors.primary} /></View><View style={styles.flex}><Text style={styles.cardTitle}>Hasil jasa</Text><Text style={styles.cardCopy}>{buyer ? (previewOnly ? 'File hasil pengerjaan dari penjual. Pratinjau dan periksa sebelum menerima hasil.' : 'File hasil pengerjaan dari penjual. Kamu sudah dapat mengunduh file aslinya.') : 'Unggah file hasil pengerjaan agar buyer bisa mengunduh dan memeriksanya.'}</Text></View></View>
+                <View style={styles.fulfillmentBadge}><Text style={styles.fulfillmentBadgeText}>{deliverables.length} FILE</Text></View>
+              </View>
+              {deliverables.length ? (
+                <View style={styles.fulfillmentDetails}>
+                  {deliverables.map(file => (
+                    <View key={file.id} style={styles.detailRow}>
+                      <View style={styles.detailIcon}><Ionicons name={deliverableIcon(file)}size={18} color={colors.primary} /></View>
+                      <View style={styles.flex}><Text numberOfLines={1} style={styles.detailValue}>{file.fileName}</Text><Text style={styles.detailLabel}>{fileSizeLabel(file.size)} · {dateTime(file.createdAt)}</Text></View>
+                      {previewOnly && !canPreviewDeliverable(file.fileName)
+                        ? <View accessible accessibilityLabel={`${file.fileName} dapat diunduh setelah hasil diterima`} style={[styles.fileAction, { opacity: .55 }]}><Ionicons name="lock-closed-outline" size={17} color={colors.muted} /></View>
+                        : <Pressable accessibilityRole="button" accessibilityLabel={`${previewOnly ? 'Pratinjau' : 'Unduh'} ${file.fileName}`} disabled={openDeliverable.isPending} onPress={() => openDeliverable.mutate({ file, popup: previewOnly ? reservePreviewTab() : null })} style={({ pressed }) => [styles.fileAction, pressed && { opacity: .7 }]}><Ionicons name={previewOnly ? 'eye-outline' : 'download-outline'} size={18} color={colors.primary} /></Pressable>}
+                      {canManageResult ? <Pressable accessibilityRole="button" accessibilityLabel={`Hapus ${file.fileName}`} disabled={removeDeliverable.isPending} onPress={() => removeDeliverable.mutate(file.id)} style={({ pressed }) => [styles.fileAction, styles.fileActionDanger, pressed && { opacity: .7 }]}><Ionicons name="trash-outline" size={17} color={colors.danger} /></Pressable> : null}
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.fileEmpty}>
+                  <Ionicons name="cloud-upload-outline" size={26} color={colors.muted} />
+                  <Text style={styles.fileEmptyText}>{serviceInProgress ? (buyer ? 'Penjual belum mengunggah hasil jasa.' : 'Belum ada file. Unggah hasil jasa setelah pengerjaan selesai.') : 'Tidak ada file hasil jasa pada transaksi ini.'}</Text>
+                </View>
+              )}
+              {previewOnly && deliverables.length ? <Text style={styles.fileHint}>Sebelum hasil diterima, file hanya dapat dipratinjau (PDF, gambar, teks/kode). File asli, termasuk ZIP dan dokumen Office, dapat diunduh setelah kamu menekan Terima hasil. Jika hasil tidak sesuai, buka sengketa; transaksi tidak dapat dibatalkan sepihak setelah file diunggah.</Text> : null}
+              {canManageResult ? <>
+                {uploadProgress !== null ? <Text style={styles.fileHint}>Mengunggah file… {uploadProgress}%</Text> : null}
+                <Button title="Unggah file hasil jasa" icon="cloud-upload-outline" loading={uploadDeliverables.isPending} onPress={() => { setSuccess(''); setActionError(''); uploadDeliverables.mutate(); }} />
+                <Text style={styles.fileHint}>PDF, Office, TXT, gambar, ZIP, atau file kode · maks. 20 MB per file, 5 file sekali unggah.</Text>
+              </> : null}
+            </Card>
+          ) : <Card style={styles.fulfillmentCard}>
             <View style={styles.fulfillmentHeader}>
               <View style={styles.fulfillmentHeading}><View style={styles.fulfillmentIcon}><Ionicons name={meetup ? 'people-outline' : 'bicycle-outline'} size={22} color={colors.primary} /></View><View><Text style={styles.cardTitle}>{meetup ? 'Meetup langsung' : 'Kurir Instan'}</Text><Text style={styles.cardCopy}>{meetup ? 'Atur waktu dan lokasi lewat chat. Dana dilepas setelah seller memverifikasi kode dari buyer.' : 'Pengiriman ini merupakan simulasi untuk pengembangan BMarket.'}</Text></View></View>
               <View style={styles.fulfillmentBadge}><Text style={styles.fulfillmentBadgeText}>{meetup ? 'MEETUP' : 'SIMULASI'}</Text></View>
@@ -307,7 +412,7 @@ export default function TransactionDetailScreen() {
                 {transaction.trackingNumber ? <DetailRow icon="navigate-outline" label="Nomor tracking" value={transaction.trackingNumber} /> : null}
               </View>
             )}
-          </Card>
+          </Card>}
 
           <Card style={styles.timelineCard}><Text style={styles.cardTitle}>Progres transaksi</Text><Text style={styles.cardCopy}>Tahapan diperbarui sesuai tindakan buyer dan seller.</Text><Timeline transaction={transaction} /></Card>
         </View>
@@ -335,12 +440,13 @@ export default function TransactionDetailScreen() {
 
           <Card style={styles.actionCard}>
             <Text style={styles.cardEyebrow}>TINDAKAN</Text><Text style={styles.cardTitle}>Tindakan berikutnya</Text>
-            <Text style={styles.actionHelp}>{buyer && transaction.status === 'PENDING' ? 'Bayar pesanan agar dana masuk escrow. Setelah itu, gunakan chat untuk menyepakati meetup.' : meetup && ['PAID', 'CONFIRMED'].includes(transaction.status) ? (buyer ? 'Chat dengan seller untuk menyepakati waktu dan lokasi. Setelah barang benar-benar kamu terima, buat kode dan berikan 6 angka tersebut kepada seller.' : 'Chat dengan buyer untuk menyepakati waktu dan lokasi. Setelah barang diserahkan, minta kode 6 angka dari buyer lalu masukkan di bawah.') : !buyer && transaction.status === 'PAID' ? 'Siapkan pengiriman setelah detail penerima sesuai.' : buyer && transaction.status === 'CONFIRMED' ? 'Selesaikan hanya setelah kiriman benar-benar diterima.' : active ? 'Menunggu tindakan dari pihak lain.' : 'Tidak ada tindakan lain untuk transaksi ini.'}</Text>
+            <Text style={styles.actionHelp}>{buyer && transaction.status === 'PENDING' ? 'Bayar pesanan agar dana masuk escrow. Setelah itu, gunakan chat untuk menyepakati meetup.' : serviceInProgress ? (buyer ? (deliverables.length ? 'Pratinjau dan periksa file hasil jasa. Jika sudah sesuai, tekan Terima hasil untuk menyelesaikan transaksi dan membuka unduhan file. Jika tidak sesuai, buka sengketa.' : 'Tunggu penjual mengunggah file hasil jasa. Gunakan chat untuk membahas detail pengerjaan.') : 'Kerjakan jasa sesuai kesepakatan, lalu unggah file hasilnya di kartu Hasil jasa. Dana dilepas setelah buyer menerima hasil.') : meetup && ['PAID', 'CONFIRMED'].includes(transaction.status) ? (buyer ? 'Chat dengan seller untuk menyepakati waktu dan lokasi. Setelah barang benar-benar kamu terima, buat kode dan berikan 6 angka tersebut kepada seller.' : 'Chat dengan buyer untuk menyepakati waktu dan lokasi. Setelah barang diserahkan, minta kode 6 angka dari buyer lalu masukkan di bawah.') : !buyer && transaction.status === 'PAID' ? 'Siapkan pengiriman setelah detail penerima sesuai.' : buyer && transaction.status === 'CONFIRMED' ? 'Selesaikan hanya setelah kiriman benar-benar diterima.' : active ? 'Menunggu tindakan dari pihak lain.' : 'Tidak ada tindakan lain untuk transaksi ini.'}</Text>
             {buyer && transaction.status === 'PENDING' ? <Button title={insufficientBalance ? 'Saldo tidak cukup' : 'Bayar dari saldo'} icon="wallet-outline" disabled={Boolean(insufficientBalance)} onPress={() => openDialog('PAY')} /> : null}
             {insufficientBalance ? <Button title="Tambah saldo di profil" variant="secondary" icon="add-circle-outline" onPress={() => router.push('/(student)/(tabs)/profile')} /> : null}
             {!buyer && transaction.status === 'PAID' && !meetup && preorderReady ? <Button title="Siapkan pengiriman" icon="cube-outline" onPress={() => openDialog('CONFIRMED')} /> : null}
             {!buyer && transaction.status === 'PAID' && !meetup && preorder && !preorderReady ? <InlineAlert tone="warning" message="Pengiriman belum dapat diproses. Ubah status batch pre-order menjadi Siap diambil/dikirim dari Etalase Saya terlebih dahulu." /> : null}
-            {buyer && meetup && ['PAID', 'CONFIRMED'].includes(transaction.status) ? (
+            {canAcceptResult ? <Button title="Terima hasil" icon="checkmark-done-outline" onPress={() => { setActionError(''); setAcceptVisible(true); }} /> : null}
+            {buyer && meetup && !service && ['PAID', 'CONFIRMED'].includes(transaction.status) ? (
               <View style={styles.handoverBox}>
                 {preorder && !preorderReady ? <>
                   <Text style={styles.handoverLabel}>MENUNGGU PRE-ORDER SIAP</Text>
@@ -351,7 +457,7 @@ export default function TransactionDetailScreen() {
                 </>}
               </View>
             ) : null}
-            {!buyer && meetup && ['PAID', 'CONFIRMED'].includes(transaction.status) ? (
+            {!buyer && meetup && !service && ['PAID', 'CONFIRMED'].includes(transaction.status) ? (
               <View style={styles.handoverBox}>
                 {preorder && !preorderReady ? <>
                   <Text style={styles.handoverLabel}>BATCH BELUM SIAP</Text>
@@ -398,6 +504,20 @@ export default function TransactionDetailScreen() {
           </View> : null}
         </View>
       </Modal>
+
+      <FeedbackDialog
+        visible={acceptVisible}
+        tone="warning"
+        eyebrow="TERIMA HASIL JASA"
+        title="Terima hasil jasa?"
+        message="Pastikan semua file sudah kamu pratinjau dan periksa. Setelah diterima, transaksi selesai, dana escrow diteruskan ke penjual, dan file asli dapat kamu unduh."
+        primaryLabel="Ya, terima hasil"
+        secondaryLabel="Periksa dulu"
+        loading={acceptResult.isPending}
+        onPrimary={() => acceptResult.mutate()}
+        onSecondary={() => setAcceptVisible(false)}
+        onClose={() => setAcceptVisible(false)}
+      />
 
       <FeedbackDialog
         visible={Boolean(handoverFeedback)}
@@ -455,14 +575,16 @@ export default function TransactionDetailScreen() {
 }
 
 function SummaryRow({ label, value, total, muted }: { label: string; value: string; total?: boolean; muted?: boolean }) {
+  const styles = useStyles();
   return <View style={styles.summaryRow}><Text style={[styles.summaryLabel, total && styles.summaryLabelTotal]}>{label}</Text><Text style={[styles.summaryValue, total && styles.summaryValueTotal, muted && styles.summaryValueMuted]}>{value}</Text></View>;
 }
 
 function DetailRow({ icon, label, value, success }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; value: string; success?: boolean }) {
+  const styles = useStyles();
   return <View style={styles.detailRow}><View style={[styles.detailIcon, success && styles.detailIconSuccess]}><Ionicons name={icon} size={17} color={success ? colors.success : colors.primary} /></View><View style={styles.flex}><Text style={styles.detailLabel}>{label}</Text><Text style={[styles.detailValue, success && styles.detailValueSuccess]}>{value}</Text></View></View>;
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
   page: { maxWidth: 1180, gap: 18 },
   backRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   backButton: { minHeight: 38, flexDirection: 'row', alignItems: 'center', gap: 7 },
@@ -519,6 +641,11 @@ const styles = StyleSheet.create({
   detailLabel: { fontFamily: 'PoppinsRegular', fontSize: 12, color: colors.muted },
   detailValue: { fontFamily: 'PoppinsSemiBold', fontSize: 12, lineHeight: 18, color: colors.text },
   detailValueSuccess: { color: colors.success },
+  fileAction: { width: 38, height: 38, borderRadius: 10, borderWidth: 1, borderColor: colors.primaryBorder, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  fileActionDanger: { borderColor: colors.dangerBorder },
+  fileEmpty: { minHeight: 110, padding: 16, borderRadius: 12, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.borderStrong, backgroundColor: colors.surfaceMuted, alignItems: 'center', justifyContent: 'center', gap: 8 },
+  fileEmptyText: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 18, textAlign: 'center', color: colors.muted },
+  fileHint: { fontFamily: 'PoppinsRegular', fontSize: 11.5, lineHeight: 17, textAlign: 'center', color: colors.muted },
   timelineCard: { gap: 12 },
   timeline: { marginTop: 2 },
   timelineStep: { minHeight: 82, flexDirection: 'row', gap: 12 },
@@ -527,7 +654,7 @@ const styles = StyleSheet.create({
   timelineDotReached: { backgroundColor: colors.primary },
   timelineDotCancelled: { backgroundColor: colors.danger },
   timelineLine: { width: 2, flex: 1, backgroundColor: colors.border, marginVertical: 4 },
-  timelineLineReached: { backgroundColor: '#B7D3F3' },
+  timelineLineReached: { backgroundColor: colors.primaryBorder },
   timelineBody: { flex: 1, paddingTop: 2 },
   timelineTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 13, color: colors.text },
   timelineTitlePending: { color: colors.muted },
@@ -557,11 +684,11 @@ const styles = StyleSheet.create({
   personLink: { fontFamily: 'PoppinsSemiBold', fontSize: 12, color: colors.primary, marginTop: 3 },
   actionCard: { gap: 11, padding: 17 },
   actionHelp: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 18, color: colors.muted, paddingBottom: 2 },
-  handoverBox: { gap: 10, padding: 13, borderRadius: 12, borderWidth: 1, borderColor: '#B7D3F3', backgroundColor: colors.primarySoft },
+  handoverBox: { gap: 10, padding: 13, borderRadius: 12, borderWidth: 1, borderColor: colors.primaryBorder, backgroundColor: colors.primarySoft },
   handoverLabel: { fontFamily: 'PoppinsBold', fontSize: 12, letterSpacing: 0.8, textAlign: 'center', color: colors.primary },
   handoverCode: { fontFamily: 'PoppinsBold', fontSize: 31, letterSpacing: 8, textAlign: 'center', color: colors.primaryDark },
   handoverHint: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 17, textAlign: 'center', color: colors.muted },
-  disputeLock: { padding: 13, borderRadius: 12, backgroundColor: colors.warningSoft, borderWidth: 1, borderColor: '#F0D8A5', flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  disputeLock: { padding: 13, borderRadius: 12, backgroundColor: colors.warningSoft, borderWidth: 1, borderColor: colors.warningBorder, flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   disputeLockTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 12, color: colors.text },
   disputeLockCopy: { marginTop: 2, fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 16, color: colors.textSoft },
   evidenceBox: { padding: 12, borderRadius: 11, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -570,7 +697,7 @@ const styles = StyleSheet.create({
   evidenceList: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   evidenceChip: { maxWidth: 130, minHeight: 32, paddingHorizontal: 9, borderRadius: 9, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 5 },
   evidenceChipText: { flex: 1, fontFamily: 'PoppinsMedium', fontSize: 12, color: colors.textSoft },
-  reviewDone: { gap: 6, padding: 13, borderRadius: 12, backgroundColor: '#FFF9EA', borderWidth: 1, borderColor: '#F4E0A7' },
+  reviewDone: { gap: 6, padding: 13, borderRadius: 12, backgroundColor: colors.warningSoft, borderWidth: 1, borderColor: colors.warningBorder },
   reviewStars: { flexDirection: 'row', gap: 3 },
   reviewDoneTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 12, color: colors.text },
   reviewDoneCopy: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 18, color: colors.textSoft },
@@ -578,7 +705,7 @@ const styles = StyleSheet.create({
   cancelReasonLabel: { fontFamily: 'PoppinsBold', fontSize: 12, letterSpacing: 0.6, color: colors.danger },
   cancelReasonText: { fontFamily: 'PoppinsMedium', fontSize: 12, color: colors.text },
   cancelledBy: { fontFamily: 'PoppinsRegular', fontSize: 12, color: colors.muted },
-  modalBackdrop: { flex: 1, padding: 18, backgroundColor: 'rgba(10,26,41,.58)', alignItems: 'center', justifyContent: 'center' },
+  modalBackdrop: { flex: 1, padding: 18, backgroundColor: colors.overlay, alignItems: 'center', justifyContent: 'center' },
   modalBackdropMobile: { padding: 10 },
   dialog: { width: '100%', maxWidth: 520, maxHeight: '94%', padding: 24, borderRadius: 18, backgroundColor: colors.surface, gap: 11, shadowColor: '#071727', shadowOpacity: 0.22, shadowRadius: 26, shadowOffset: { width: 0, height: 12 } },
   dialogMobile: { padding: 15, borderRadius: 15 },
@@ -596,7 +723,7 @@ const styles = StyleSheet.create({
   reasonLabel: { fontFamily: 'PoppinsMedium', fontSize: 12, color: colors.textSoft },
   reasonList: { gap: 7 },
   reason: { minHeight: 43, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', gap: 9 },
-  reasonActive: { borderColor: '#F1B2B2', backgroundColor: colors.dangerSoft },
+  reasonActive: { borderColor: colors.dangerBorder, backgroundColor: colors.dangerSoft },
   reasonRadio: { width: 18, height: 18, borderRadius: 9, borderWidth: 1, borderColor: colors.borderStrong, alignItems: 'center', justifyContent: 'center' },
   reasonRadioActive: { borderColor: colors.danger },
   reasonRadioDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.danger },
@@ -610,10 +737,10 @@ const styles = StyleSheet.create({
   checkRow: { flexDirection: 'row', alignItems: 'center', gap: 9 },
   checkText: { flex: 1, fontFamily: 'PoppinsMedium', fontSize: 12, lineHeight: 18, color: colors.textSoft },
   codeDialog: { maxWidth: 470 },
-  codeCard: { marginVertical: 5, paddingVertical: 22, paddingHorizontal: 16, borderRadius: 15, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: '#B7D3F3', alignItems: 'center', gap: 8 },
+  codeCard: { marginVertical: 5, paddingVertical: 22, paddingHorizontal: 16, borderRadius: 15, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primaryBorder, alignItems: 'center', gap: 8 },
   codeNumber: { fontFamily: 'PoppinsBold', fontSize: 38, letterSpacing: 9, color: colors.primaryDark },
   codeTimer: { fontFamily: 'PoppinsSemiBold', fontSize: 12, color: colors.primary },
   ratingPicker: { flexDirection: 'row', justifyContent: 'center', gap: 7, marginTop: 5 },
   starButton: { width: 43, height: 43, alignItems: 'center', justifyContent: 'center' },
   ratingLabel: { fontFamily: 'PoppinsMedium', fontSize: 12, textAlign: 'center', color: colors.textSoft },
-});
+}));

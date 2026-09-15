@@ -1,14 +1,15 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
-import { Image, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Image, Text, View, useWindowDimensions } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AdminEmptyState, AdminInfoRow, AdminStatCard, AdminStatusPill } from '@/components/admin-ui';
+import { AdminEmptyState, AdminStatCard, AdminStatusPill } from '@/components/admin-ui';
 import { Button, Card, date, ErrorState, FeedbackDialog, Field, Loader, money, Screen, Title } from '@/components/ui';
 import { endpoints, errorMessage } from '@/lib/api';
-import { colors, radius } from '@/constants/theme';
+import { colors, radius, makeStyles } from '@/constants/theme';
 import type { Complaint } from '@/types';
 
 export default function ModerationScreen() {
+  const styles = useStyles();
   const mobile = useWindowDimensions().width < 600;
   const client = useQueryClient();
   const [workingId, setWorkingId] = useState<string | null>(null);
@@ -62,14 +63,13 @@ export default function ModerationScreen() {
           })}
         </View>}
       </Card>
-      <Card style={styles.guide}><Text style={styles.guideTitle}>Panduan moderasi</Text><View style={styles.guideGrid}><AdminInfoRow icon="shield-checkmark-outline" title="Tinjau setiap laporan" message="Periksa detail laporan dan bukti sebelum mengambil tindakan." /><AdminInfoRow icon="scale-outline" title="Bersikap adil" message="Terapkan kebijakan secara konsisten dan tidak memihak." /><AdminInfoRow icon="lock-closed-outline" title="Lindungi komunitas" message="Tindak listing yang melanggar kebijakan untuk keamanan bersama." /><AdminInfoRow icon="bookmark-outline" title="Catat keputusan" message="Semua tindakan tetap tercatat di riwayat moderasi." /></View></Card>
       <FeedbackDialog visible={Boolean(pending)} tone={pending?.action === 'KEEP_ACTIVE' ? 'warning' : 'danger'} title={pending?.action === 'KEEP_ACTIVE' ? 'Pertahankan listing?' : pending?.action === 'HIDE_LISTING' ? 'Sembunyikan listing?' : 'Hapus listing?'} message={pending?.action === 'KEEP_ACTIVE' ? 'Laporan akan ditolak dan listing tetap dapat dilihat pengguna.' : pending?.action === 'HIDE_LISTING' ? 'Listing tidak lagi muncul di etalase. Laporan terbuka untuk listing ini akan diselesaikan.' : 'Listing ditandai melanggar aturan dan tidak dapat dikelola lagi oleh seller.'} primaryLabel={pending?.action === 'KEEP_ACTIVE' ? 'Pertahankan' : pending?.action === 'HIDE_LISTING' ? 'Sembunyikan' : 'Hapus listing'} secondaryLabel="Batal" loading={Boolean(pending && workingId === pending.report.id)} onClose={() => setPending(null)} onSecondary={() => setPending(null)} onPrimary={() => pending && update(pending.report, pending.action === 'KEEP_ACTIVE' ? 'DISMISSED' : 'RESOLVED', pending.action)} />
       <FeedbackDialog visible={Boolean(feedback)} tone={feedback?.tone || 'success'} title={feedback?.title || ''} message={feedback?.message || ''} onClose={() => setFeedback(null)} />
     </Screen>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
   stats: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
   queueCard: { padding: 0, overflow: 'hidden', gap: 0 },
   toolbar: { padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderBottomColor: colors.border, flexWrap: 'wrap' },
@@ -89,16 +89,13 @@ const styles = StyleSheet.create({
   listingLabel: { fontFamily: 'PoppinsBold', fontSize: 10.5, letterSpacing: .55, color: colors.muted },
   listingTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 15, color: colors.text },
   listingMeta: { fontFamily: 'PoppinsRegular', fontSize: 11.5, lineHeight: 18, color: colors.textSoft },
-  reasonBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 14, borderRadius: radius.md, backgroundColor: '#FFF9F9', borderWidth: 1, borderColor: '#F3DEDE' },
+  reasonBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 14, borderRadius: radius.md, backgroundColor: colors.dangerSoft, borderWidth: 1, borderColor: colors.dangerBorder },
   reasonIcon: { width: 38, height: 38, borderRadius: 11, backgroundColor: colors.dangerSoft, alignItems: 'center', justifyContent: 'center' },
   reasonBody: { flex: 1, gap: 3 },
   reason: { fontFamily: 'PoppinsSemiBold', fontSize: 13.5, color: colors.text },
   description: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 19, color: colors.textSoft },
   reporter: { fontFamily: 'PoppinsRegular', fontSize: 11.5, color: colors.muted, marginTop: 2 },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   actionsMobile: { alignItems: 'stretch' },
   action: { minWidth: 135, flexGrow: 1 },
-  guide: { gap: 8 },
-  guideTitle: { color: colors.text, fontFamily: 'PoppinsSemiBold', fontSize: 15 },
-  guideGrid: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 26 },
-});
+}));
