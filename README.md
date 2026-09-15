@@ -25,11 +25,12 @@ Buy, sell, pre-order, and chat with other Binusians — all in one place.
 2. [Features](#-features)
 3. [Tech Stack](#-tech-stack)
 4. [Quick Start](#-quick-start)
-5. [Environment Variables](#-environment-variables)
-6. [Useful Commands](#-useful-commands)
-7. [Project Structure](#-project-structure)
-8. [Deployment](#-deployment)
-9. [Project Scope](#%EF%B8%8F-project-scope)
+5. [Dummy Accounts](#-dummy-accounts)
+6. [Environment Variables](#-environment-variables)
+7. [Useful Commands](#-useful-commands)
+8. [Project Structure](#-project-structure)
+9. [Deployment](#-deployment)
+10. [Project Scope](#%EF%B8%8F-project-scope)
 
 ---
 
@@ -150,6 +151,33 @@ npm start             # or: npm run web / android / ios
 
 ---
 
+## 👤 Dummy Accounts
+
+All accounts below are already verified, so you can log in right away.
+
+### Basic seed — `npm run db:seed`
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Admin | `admin@binus.ac.id` | `password123` |
+| Student | `alice@binus.ac.id` | `password123` |
+| Student | `bob@binus.ac.id` | `password123` |
+
+### Demo seed — `npm run db:seed:demo`
+
+| Role | Name | Email | Password |
+| --- | --- | --- | --- |
+| Admin | Demo Admin | `demo.admin@binus.ac.id` | `demo12345` |
+| Seller | Nadia Seller | `demo.seller@binus.ac.id` | `demo12345` |
+| Seller | Raka Merchant | `demo.seller2@binus.ac.id` | `demo12345` |
+| Buyer | Kevin Buyer | `demo.buyer@binus.ac.id` | `demo12345` |
+| Buyer | Salsa Buyer | `demo.buyer2@binus.ac.id` | `demo12345` |
+| Student | Demo Reported User | `demo.reported@binus.ac.id` | `demo12345` |
+
+> ⚠️ These accounts are for **development and demos only**. Change or delete them before a public deployment.
+
+---
+
 ## 🔐 Environment Variables
 
 ### Backend (development)
@@ -250,6 +278,7 @@ EXPO_PUBLIC_API_URL=https://bmarket-api-production.up.railway.app/api
 | `npm run db:deploy` | Apply migrations |
 | `npm run db:studio` | Open database GUI |
 | `npm run db:seed` | Add sample data |
+| `npm run db:seed:demo` | Add full demo data (listings, transactions, disputes, chat) |
 
 ### Frontend (`cd frontend`)
 
