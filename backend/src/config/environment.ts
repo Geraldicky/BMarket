@@ -15,6 +15,10 @@ export function validateEnvironment(config: Environment) {
     throw new Error('JWT_SECRET minimal 32 karakter.');
   }
 
+  if (String(config.MIDTRANS_IS_PRODUCTION || 'false').toLowerCase() !== 'false') {
+    throw new Error('Integrasi BMarket saat ini hanya mendukung MIDTRANS_IS_PRODUCTION=false (Sandbox).');
+  }
+
   if (config.NODE_ENV === 'production') {
     const required = [
       'OTP_HASH_SECRET',
@@ -22,6 +26,8 @@ export function validateEnvironment(config: Environment) {
       'SUPABASE_URL',
       'SUPABASE_SERVICE_ROLE_KEY',
       'SUPABASE_STORAGE_BUCKET',
+      'MIDTRANS_SERVER_KEY',
+      'MIDTRANS_CLIENT_KEY',
     ];
 
     const missingProduction = required.filter(

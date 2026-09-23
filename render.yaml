@@ -52,3 +52,11 @@ services:
         value: bmarket-public
       - key: CHECKOUT_RESERVATION_MINUTES
         value: 15
+      - key: MIDTRANS_SERVER_KEY
+        sync: false
+      - key: MIDTRANS_CLIENT_KEY
+        sync: false
+      - key: MIDTRANS_IS_PRODUCTION
+        value: false
+      - key: MIDTRANS_FINISH_URL
+        value: "https://binus-market.vercel.app/transaction/{transactionId}"

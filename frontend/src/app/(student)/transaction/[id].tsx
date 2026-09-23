@@ -2,10 +2,11 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+import * as WebBrowser from 'expo-web-browser';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, Text, useWindowDimensions, View } from 'react-native';
+import { Modal, Platform, Pressable, Text, useWindowDimensions, View } from 'react-native';
 import { Button, Card, date, ErrorState, FeedbackDialog, Field, InlineAlert, Loader, money, Screen, Title } from '@/components/ui';
 import { colors, radius, makeStyles } from '@/constants/theme';
 import { endpoints, errorMessage } from '@/lib/api';
@@ -20,7 +21,7 @@ type ActionKind = 'PAY' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
 
 // A function (not a constant) so the colors follow the active theme at render time.
 const statusMeta = (): Record<TransactionStatus, { title: string; description: string; color: string; tint: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> => ({
-  PENDING: { title: 'Menunggu pembayaran', description: 'Stok sudah direservasi. Buyer perlu membayar dari saldo BMarket.', color: colors.warning, tint: colors.warningSoft, icon: 'time-outline' },
+  PENDING: { title: 'Menunggu pembayaran', description: 'Stok sudah direservasi. Buyer perlu menyelesaikan pembayaran Midtrans.', color: colors.warning, tint: colors.warningSoft, icon: 'time-outline' },
   PAID: { title: 'Pembayaran aman di escrow', description: 'Dana tersimpan aman sampai penyerahan pesanan selesai.', color: colors.primary, tint: colors.primarySoft, icon: 'shield-checkmark-outline' },
   CONFIRMED: { title: 'Penyerahan sedang berlangsung', description: 'Ikuti detail meetup atau pengiriman, lalu selesaikan setelah pesanan diterima.', color: colors.purple, tint: colors.purpleSoft, icon: 'cube-outline' },
   COMPLETED: { title: 'Transaksi selesai', description: 'Dana escrow sudah dilepas ke seller setelah dikurangi biaya layanan.', color: colors.success, tint: colors.successSoft, icon: 'checkmark-circle-outline' },
@@ -28,7 +29,7 @@ const statusMeta = (): Record<TransactionStatus, { title: string; description: s
 });
 
 const actionCopy: Record<ActionKind, { eyebrow: string; title: string; description: string; confirm: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> = {
-  PAY: { eyebrow: 'PEMBAYARAN', title: 'Bayar pesanan sekarang?', description: 'Saldo akan dipindahkan ke escrow dan baru diterima seller setelah transaksi selesai.', confirm: 'Bayar sekarang', icon: 'wallet-outline' },
+  PAY: { eyebrow: 'MIDTRANS SNAP SANDBOX', title: 'Buka halaman pembayaran?', description: 'Kamu akan diarahkan ke halaman aman Midtrans. Status pesanan hanya berubah setelah konfirmasi server Midtrans diterima BMarket.', confirm: 'Lanjut ke Midtrans', icon: 'card-outline' },
   CONFIRMED: { eyebrow: 'KONFIRMASI SELLER', title: 'Mulai proses pesanan?', description: 'Pastikan detail pesanan sudah dipahami dan kamu siap memenuhi pesanan buyer.', confirm: 'Konfirmasi & proses', icon: 'cube-outline' },
   COMPLETED: { eyebrow: 'KONFIRMASI BUYER', title: 'Pesanan sudah diterima?', description: 'Tindakan ini menyelesaikan transaksi dan melepaskan dana escrow kepada seller.', confirm: 'Ya, pesanan diterima', icon: 'checkmark-circle-outline' },
   CANCELLED: { eyebrow: 'PEMBATALAN', title: 'Batalkan transaksi?', description: 'Dana yang sudah masuk escrow dan stok barang akan dikembalikan secara otomatis.', confirm: 'Batalkan transaksi', icon: 'close-circle-outline' },
@@ -123,12 +124,10 @@ export default function TransactionDetailScreen() {
   }, [handoverCodeVisible, handoverExpiresAt]);
 
   const buyer = transaction ? (transaction.buyerId === user?.id || transaction.buyer.id === user?.id) : false;
-  const balance = useQuery({ queryKey: ['balance'], queryFn: endpoints.balance, enabled: Boolean(transaction && buyer && transaction.status === 'PENDING') });
+  const payment = useQuery({ queryKey: ['payment', id], queryFn: () => endpoints.payment(id), enabled: Boolean(transaction && buyer), refetchInterval: transaction?.status === 'PENDING' ? 5000 : false });
 
   const action = useMutation({
-    mutationFn: ({ kind, reason }: { kind: ActionKind; reason?: string }) => kind === 'PAY'
-      ? endpoints.pay(id)
-      : endpoints.setTransactionStatus(id, kind, reason),
+    mutationFn: ({ kind, reason }: { kind: Exclude<ActionKind, 'PAY'>; reason?: string }) => endpoints.setTransactionStatus(id, kind, reason),
     onSuccess: updated => {
       setActionError('');
       client.setQueryData(['transaction', id], updated);
@@ -136,9 +135,29 @@ export default function TransactionDetailScreen() {
       client.invalidateQueries({ queryKey: ['balance'] });
       client.invalidateQueries({ queryKey: ['listings'] });
       client.invalidateQueries({ queryKey: ['listing', updated.listing.id] });
-      setSuccess(dialog === 'PAY' ? 'Pembayaran berhasil masuk ke escrow.' : dialog === 'CONFIRMED' ? 'Pesanan sudah dikonfirmasi dan mulai diproses.' : dialog === 'COMPLETED' ? 'Transaksi selesai. Dana sudah dilepas ke seller.' : 'Transaksi berhasil dibatalkan.');
+      setSuccess(dialog === 'CONFIRMED' ? 'Pesanan sudah dikonfirmasi dan mulai diproses.' : dialog === 'COMPLETED' ? 'Transaksi selesai. Dana sudah dilepas ke seller.' : 'Transaksi berhasil dibatalkan.');
       setDialog(null);
       setCancelReason('');
+    },
+    onError: error => setActionError(errorMessage(error)),
+  });
+
+  const pay = useMutation({
+    mutationFn: async () => {
+      const created = await endpoints.createPayment(id);
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.location.assign(created.redirectUrl);
+      } else {
+        await WebBrowser.openBrowserAsync(created.redirectUrl, { dismissButtonStyle: 'done' });
+      }
+      return created;
+    },
+    onSuccess: async () => {
+      setDialog(null);
+      setActionError('');
+      setSuccess('Menunggu konfirmasi pembayaran dari Midtrans. Halaman ini akan memperbarui status secara otomatis.');
+      await Promise.all([query.refetch(), payment.refetch()]);
+      client.invalidateQueries({ queryKey: ['transactions'] });
     },
     onError: error => setActionError(errorMessage(error)),
   });
@@ -319,7 +338,6 @@ export default function TransactionDetailScreen() {
   const preorderReady = !preorder || ['READY', 'COMPLETED'].includes(transaction.listing.preorderStatus || '');
   const preorderStatusText = ({ OPEN: 'PO masih dibuka', CLOSED: 'PO sudah ditutup', PROCESSING: 'Sedang diproduksi/disiapkan', READY: 'Siap diambil/dikirim', COMPLETED: 'Batch PO selesai', CANCELLED: 'PO dibatalkan' } as Record<string, string>)[transaction.listing.preorderStatus || ''] || 'Status PO belum tersedia';
   const grandTotal = Number(transaction.grandTotal || transaction.totalPrice);
-  const insufficientBalance = buyer && transaction.status === 'PENDING' && balance.data && Number(balance.data.balance) < grandTotal;
   const dialogCopy = dialog ? actionCopy[dialog] : null;
   const codeSeconds = handoverExpiresAt ? Math.max(0, Math.ceil((new Date(handoverExpiresAt).getTime() - clock) / 1000)) : 0;
   const codeTime = `${String(Math.floor(codeSeconds / 60)).padStart(2, '0')}:${String(codeSeconds % 60).padStart(2, '0')}`;
@@ -330,6 +348,7 @@ export default function TransactionDetailScreen() {
       <Title eyebrow={buyer ? 'DETAIL PEMBELIAN' : 'DETAIL PENJUALAN'} subtitle={`Pesanan dibuat ${date(transaction.createdAt)}`}>{transaction.listing.title}</Title>
       {success ? <InlineAlert tone="success" message={success} /> : null}
       {actionError ? <InlineAlert message={actionError} /> : null}
+      {buyer && transaction.status === 'PENDING' && payment.data?.status === 'PENDING' ? <InlineAlert tone="warning" message="Menunggu konfirmasi pembayaran dari Midtrans. Jangan menutup atau membuat checkout baru; status akan diperbarui otomatis setelah webhook terverifikasi." /> : null}
       {transaction.status === 'PENDING' && transaction.reservationExpiresAt ? <InlineAlert tone="warning" message={`Stok direservasi sampai ${dateTime(transaction.reservationExpiresAt)}. Jika belum dibayar, pesanan otomatis dibatalkan dan stok dikembalikan.`} /> : null}
       {preorder && ['PAID', 'CONFIRMED'].includes(transaction.status) ? <InlineAlert tone={preorderReady ? 'success' : 'warning'} message={`${preorderStatusText}${transaction.listing.preorderReadyAt ? ` · Estimasi siap ${dateTime(transaction.listing.preorderReadyAt)}` : ''}${transaction.listing.preorderPickupLocation ? ` · Pickup ${transaction.listing.preorderPickupLocation}` : ''}. ${preorderReady ? 'Pesanan sudah dapat dilanjutkan ke proses penyerahan.' : 'Dana tetap aman di escrow sampai seller menandai batch siap.'}`} /> : null}
       {transaction.dispute ? <InlineAlert tone={disputeActive ? 'warning' : 'success'} message={disputeActive ? `Sengketa ${transaction.dispute.status === 'OPEN' ? 'menunggu admin' : 'sedang ditinjau'}. Dana escrow dan tindakan penyelesaian transaksi dikunci.` : `Sengketa sudah ditutup${transaction.dispute.resolutionNote ? `: ${transaction.dispute.resolutionNote}` : '.'}`} /> : null}
@@ -428,7 +447,7 @@ export default function TransactionDetailScreen() {
             <View style={styles.summaryDivider} />
             <SummaryRow label={buyer ? 'Total pembayaran' : 'Pendapatan seller'} value={money(buyer ? grandTotal : transaction.sellerReceives)} total />
             {buyer && transaction.status === 'PENDING' ? (
-              <View style={styles.balanceBox}><View><Text style={styles.balanceLabel}>Saldo BMarket</Text><Text style={[styles.balanceValue, insufficientBalance && styles.balanceDanger]}>{balance.isLoading ? 'Memuat…' : money(balance.data?.balance)}</Text></View><Ionicons name="wallet-outline" size={22} color={insufficientBalance ? colors.danger : colors.primary} /></View>
+              <View style={styles.balanceBox}><View><Text style={styles.balanceLabel}>Metode pembayaran</Text><Text style={styles.balanceValue}>Midtrans Snap Sandbox</Text></View><Ionicons name="card-outline" size={22} color={colors.primary} /></View>
             ) : transaction.isEscrowHeld ? <View style={styles.escrowBadge}><Ionicons name="shield-checkmark" size={17} color={colors.success} /><Text style={styles.escrowBadgeText}>Dana aman di escrow</Text></View> : null}
           </Card>
 
@@ -440,9 +459,8 @@ export default function TransactionDetailScreen() {
 
           <Card style={styles.actionCard}>
             <Text style={styles.cardEyebrow}>TINDAKAN</Text><Text style={styles.cardTitle}>Tindakan berikutnya</Text>
-            <Text style={styles.actionHelp}>{buyer && transaction.status === 'PENDING' ? 'Bayar pesanan agar dana masuk escrow. Setelah itu, gunakan chat untuk menyepakati meetup.' : serviceInProgress ? (buyer ? (deliverables.length ? 'Pratinjau dan periksa file hasil jasa. Jika sudah sesuai, tekan Terima hasil untuk menyelesaikan transaksi dan membuka unduhan file. Jika tidak sesuai, buka sengketa.' : 'Tunggu penjual mengunggah file hasil jasa. Gunakan chat untuk membahas detail pengerjaan.') : 'Kerjakan jasa sesuai kesepakatan, lalu unggah file hasilnya di kartu Hasil jasa. Dana dilepas setelah buyer menerima hasil.') : meetup && ['PAID', 'CONFIRMED'].includes(transaction.status) ? (buyer ? 'Chat dengan seller untuk menyepakati waktu dan lokasi. Setelah barang benar-benar kamu terima, buat kode dan berikan 6 angka tersebut kepada seller.' : 'Chat dengan buyer untuk menyepakati waktu dan lokasi. Setelah barang diserahkan, minta kode 6 angka dari buyer lalu masukkan di bawah.') : !buyer && transaction.status === 'PAID' ? 'Siapkan pengiriman setelah detail penerima sesuai.' : buyer && transaction.status === 'CONFIRMED' ? 'Selesaikan hanya setelah kiriman benar-benar diterima.' : active ? 'Menunggu tindakan dari pihak lain.' : 'Tidak ada tindakan lain untuk transaksi ini.'}</Text>
-            {buyer && transaction.status === 'PENDING' ? <Button title={insufficientBalance ? 'Saldo tidak cukup' : 'Bayar dari saldo'} icon="wallet-outline" disabled={Boolean(insufficientBalance)} onPress={() => openDialog('PAY')} /> : null}
-            {insufficientBalance ? <Button title="Tambah saldo di profil" variant="secondary" icon="add-circle-outline" onPress={() => router.push('/(student)/(tabs)/profile')} /> : null}
+            <Text style={styles.actionHelp}>{buyer && transaction.status === 'PENDING' ? 'Bayar melalui Midtrans Snap Sandbox. BMarket menunggu notifikasi server Midtrans sebelum menandai pesanan dibayar.' : serviceInProgress ? (buyer ? (deliverables.length ? 'Pratinjau dan periksa file hasil jasa. Jika sudah sesuai, tekan Terima hasil untuk menyelesaikan transaksi dan membuka unduhan file. Jika tidak sesuai, buka sengketa.' : 'Tunggu penjual mengunggah file hasil jasa. Gunakan chat untuk membahas detail pengerjaan.') : 'Kerjakan jasa sesuai kesepakatan, lalu unggah file hasilnya di kartu Hasil jasa. Dana dilepas setelah buyer menerima hasil.') : meetup && ['PAID', 'CONFIRMED'].includes(transaction.status) ? (buyer ? 'Chat dengan seller untuk menyepakati waktu dan lokasi. Setelah barang benar-benar kamu terima, buat kode dan berikan 6 angka tersebut kepada seller.' : 'Chat dengan buyer untuk menyepakati waktu dan lokasi. Setelah barang diserahkan, minta kode 6 angka dari buyer lalu masukkan di bawah.') : !buyer && transaction.status === 'PAID' ? 'Siapkan pengiriman setelah detail penerima sesuai.' : buyer && transaction.status === 'CONFIRMED' ? 'Selesaikan hanya setelah kiriman benar-benar diterima.' : active ? 'Menunggu tindakan dari pihak lain.' : 'Tidak ada tindakan lain untuk transaksi ini.'}</Text>
+            {buyer && transaction.status === 'PENDING' ? <Button title={payment.data?.status === 'PENDING' ? 'Lanjutkan pembayaran Midtrans' : 'Bayar dengan Midtrans'} icon="card-outline" onPress={() => openDialog('PAY')} /> : null}
             {!buyer && transaction.status === 'PAID' && !meetup && preorderReady ? <Button title="Siapkan pengiriman" icon="cube-outline" onPress={() => openDialog('CONFIRMED')} /> : null}
             {!buyer && transaction.status === 'PAID' && !meetup && preorder && !preorderReady ? <InlineAlert tone="warning" message="Pengiriman belum dapat diproses. Ubah status batch pre-order menjadi Siap diambil/dikirim dari Etalase Saya terlebih dahulu." /> : null}
             {canAcceptResult ? <Button title="Terima hasil" icon="checkmark-done-outline" onPress={() => { setActionError(''); setAcceptVisible(true); }} /> : null}
@@ -493,14 +511,14 @@ export default function TransactionDetailScreen() {
         </View></View>
       </Modal>
 
-      <Modal visible={Boolean(dialog)} transparent animationType="fade" onRequestClose={() => !action.isPending && setDialog(null)}>
+      <Modal visible={Boolean(dialog)} transparent animationType="fade" onRequestClose={() => !action.isPending && !pay.isPending && setDialog(null)}>
         <View style={[styles.modalBackdrop, mobile && styles.modalBackdropMobile]}>
           {dialogCopy ? <View style={[styles.dialog, mobile && styles.dialogMobile]}>
-            <View style={styles.dialogHeader}><View style={[styles.dialogIcon, dialog === 'CANCELLED' && styles.dialogIconDanger]}><Ionicons name={dialogCopy.icon} size={24} color={dialog === 'CANCELLED' ? colors.danger : colors.primary} /></View><Pressable accessibilityLabel="Tutup dialog" disabled={action.isPending} onPress={() => setDialog(null)} style={styles.dialogClose}><Ionicons name="close" size={20} color={colors.textSoft} /></Pressable></View>
+            <View style={styles.dialogHeader}><View style={[styles.dialogIcon, dialog === 'CANCELLED' && styles.dialogIconDanger]}><Ionicons name={dialogCopy.icon} size={24} color={dialog === 'CANCELLED' ? colors.danger : colors.primary} /></View><Pressable accessibilityLabel="Tutup dialog" disabled={action.isPending || pay.isPending} onPress={() => setDialog(null)} style={styles.dialogClose}><Ionicons name="close" size={20} color={colors.textSoft} /></Pressable></View>
             <Text style={styles.dialogEyebrow}>{dialogCopy.eyebrow}</Text><Text style={styles.dialogTitle}>{dialogCopy.title}</Text><Text style={styles.dialogDescription}>{dialogCopy.description}</Text>
             {dialog === 'PAY' ? <View style={styles.dialogAmount}><Text style={styles.dialogAmountLabel}>Total yang dibayar</Text><Text style={styles.dialogAmountValue}>{money(grandTotal)}</Text></View> : null}
             {dialog === 'CANCELLED' ? <View style={styles.reasonSection}><Text style={styles.reasonLabel}>Pilih alasan pembatalan</Text><View style={styles.reasonList}>{cancellationReasons.map(reason => <Pressable key={reason} onPress={() => setCancelReason(reason)} style={[styles.reason, cancelReason === reason && styles.reasonActive]}><View style={[styles.reasonRadio, cancelReason === reason && styles.reasonRadioActive]}>{cancelReason === reason ? <View style={styles.reasonRadioDot} /> : null}</View><Text style={[styles.reasonText, cancelReason === reason && styles.reasonTextActive]}>{reason}</Text></Pressable>)}</View></View> : null}
-            <View style={[styles.dialogActions, mobile && styles.dialogActionsMobile]}><Button title="Kembali" variant="ghost" disabled={action.isPending} onPress={() => setDialog(null)} style={styles.dialogBack} /><Button title={dialogCopy.confirm} variant={dialog === 'CANCELLED' ? 'danger' : 'primary'} icon={dialogCopy.icon} disabled={dialog === 'CANCELLED' && !cancelReason} loading={action.isPending} onPress={() => action.mutate({ kind: dialog!, reason: cancelReason || undefined })} style={styles.dialogConfirm} /></View>
+            <View style={[styles.dialogActions, mobile && styles.dialogActionsMobile]}><Button title="Kembali" variant="ghost" disabled={action.isPending || pay.isPending} onPress={() => setDialog(null)} style={styles.dialogBack} /><Button title={dialogCopy.confirm} variant={dialog === 'CANCELLED' ? 'danger' : 'primary'} icon={dialogCopy.icon} disabled={dialog === 'CANCELLED' && !cancelReason} loading={action.isPending || pay.isPending} onPress={() => dialog === 'PAY' ? pay.mutate() : action.mutate({ kind: dialog as Exclude<ActionKind, 'PAY'>, reason: cancelReason || undefined })} style={styles.dialogConfirm} /></View>
           </View> : null}
         </View>
       </Modal>

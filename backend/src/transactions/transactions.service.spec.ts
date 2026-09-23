@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { TransactionsService } from './transactions.service';
+import { TransactionsController } from './transactions.controller';
 
 const listing = {
   id: 'd0d13ac9-b998-4f36-a5f8-643c85003a88',
@@ -40,6 +41,11 @@ function serviceWithTransactionClient(tx: Record<string, unknown>) {
 }
 
 describe('TransactionsService checkout flow', () => {
+  it('returns a deprecation error from the legacy HTTP payment handler', async () => {
+    const controller = new TransactionsController({} as TransactionsService);
+    await expect(controller.pay()).rejects.toThrow(/Midtrans/i);
+  });
+
   it('rejects a duplicate active checkout from the same buyer', async () => {
     const tx = {
       listing: { findUnique: vi.fn().mockResolvedValue(listing) },
@@ -247,7 +253,7 @@ describe('TransactionsService checkout flow', () => {
     };
     const service = serviceWithTransactionClient(tx);
 
-    await expect(service.pay('transaction-1', 'buyer-1')).rejects.toThrow(/sudah dibayar/i);
+    await expect(service.pay('transaction-1', 'buyer-1')).rejects.toThrow(/dinonaktifkan/i);
     expect(tx.user.updateMany).not.toHaveBeenCalled();
   });
 

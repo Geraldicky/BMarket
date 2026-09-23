@@ -1,7 +1,7 @@
 // src/transactions/transactions.controller.ts
 
 import {
-  BadRequestException, Controller, Delete, Get, Post, Patch, Param, Body, Query, UploadedFiles, UseGuards, UseInterceptors,
+  BadRequestException, Controller, Delete, Get, GoneException, Post, Patch, Param, Body, Query, UploadedFiles, UseGuards, UseInterceptors,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
@@ -73,9 +73,8 @@ export class TransactionsController {
   }
 
   @Post(':id/pay')
-  async pay(@Param('id') id: string, @CurrentUser() user: any) {
-    const data = await this.transactionsService.pay(id, user.id);
-    return { success: true, message: 'Pembayaran berhasil! Dana masuk ke escrow.', data };
+  async pay() {
+    throw new GoneException('Pembayaran saldo BMarket sudah dinonaktifkan. Gunakan endpoint Midtrans /payments/transactions/:transactionId.');
   }
 
   @Post(':id/handover-code')

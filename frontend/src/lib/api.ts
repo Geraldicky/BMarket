@@ -1,7 +1,7 @@
 import { create, isAxiosError } from 'axios';
 import Constants from 'expo-constants';
 import { getStoredValue } from './token-storage';
-import type { ActivityListingEntry, AdminListingPage, ApiEnvelope, ChatRoom, CheckoutOptions, Complaint, CourierProvider, DeliverableArchive, DeliverableArchiveEntryPreview, Dispute, DisputeReason, FulfillmentMethod, Listing, ListingMode, ListingStatus, Message, Notification, Page, PreorderStatus, PublicProfile, Review, Transaction, TransactionDeliverable, TransactionStatus, User, WalletLedger } from '@/types';
+import type { ActivityListingEntry, AdminListingPage, ApiEnvelope, ChatRoom, CheckoutOptions, Complaint, CourierProvider, CreatePaymentResponse, DeliverableArchive, DeliverableArchiveEntryPreview, Dispute, DisputeReason, FulfillmentMethod, Listing, ListingMode, ListingStatus, Message, Notification, Page, Payment, PreorderStatus, PublicProfile, Review, Transaction, TransactionDeliverable, TransactionStatus, User, WalletLedger } from '@/types';
 
 export type AuthResult = { user: User; token: string };
 export type VerificationPending = {
@@ -47,7 +47,8 @@ export const endpoints = {
   transaction: (id: string) => api.get<ApiEnvelope<Transaction>>(`/transactions/${id}`).then(unwrap),
   checkoutOptions: (listingId: string) => api.get<ApiEnvelope<CheckoutOptions>>(`/transactions/checkout-options/${listingId}`).then(unwrap),
   buy: (body: { listingId: string; quantity: number; note?: string; fulfillmentMethod?: FulfillmentMethod; courierProvider?: CourierProvider; deliveryAddress?: string; recipientPhone?: string }) => api.post<ApiEnvelope<Transaction>>('/transactions', body).then(unwrap),
-  pay: (id: string) => api.post<ApiEnvelope<Transaction>>(`/transactions/${id}/pay`).then(unwrap),
+  createPayment: (transactionId: string) => api.post<ApiEnvelope<CreatePaymentResponse>>(`/payments/transactions/${transactionId}`).then(unwrap),
+  payment: (transactionId: string) => api.get<ApiEnvelope<Payment | null>>(`/payments/transactions/${transactionId}`).then(unwrap),
   issueHandoverCode: (id: string) => api.post<ApiEnvelope<{ code: string; expiresAt: string; expiresInSeconds: number }>>(`/transactions/${id}/handover-code`).then(unwrap),
   confirmHandover: (id: string, code: string) => api.post<ApiEnvelope<Transaction>>(`/transactions/${id}/confirm-handover`, { code }).then(unwrap),
   setTransactionStatus: (id: string, status: Exclude<TransactionStatus, 'PENDING' | 'PAID'>, cancellationReason?: string) => api.patch<ApiEnvelope<Transaction>>(`/transactions/${id}/status`, { status, cancellationReason }).then(unwrap),

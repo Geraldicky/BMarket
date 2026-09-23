@@ -1,13 +1,16 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { DisputeResolution, DisputeStatus, ListingType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateDisputeDto } from './dto/dispute.dto';
 import { deliverableSelect } from '../transactions/transactions.service';
+import { MidtransService } from '../payments/midtrans/midtrans.service';
 
 @Injectable()
 export class DisputesService {
-  constructor(private prisma: PrismaService, private notifications: NotificationsService) {}
+  constructor(private prisma: PrismaService, private notifications: NotificationsService, @Optional() private midtrans?: MidtransService) {}
+
+  private isMidtransFunded(transaction: { payments?: { id: string }[] }) { return Boolean(transaction.payments?.length); }
 
   private parseEvidence(raw: string): string[] { try { const v = JSON.parse(raw); return Array.isArray(v) ? v : []; } catch { return []; } }
   private include = {
@@ -67,7 +70,7 @@ export class DisputesService {
 
   async resolve(id: string, adminId: string, action: 'START_REVIEW' | 'REFUND_BUYER' | 'RELEASE_SELLER' | 'REJECT', note?: string) {
     const result = await this.prisma.$transaction(async tx => {
-      const dispute = await tx.dispute.findUnique({ where: { id }, include: { transaction: { include: { listing: { select: { type: true, mode: true, status: true } } } } } });
+      const dispute = await tx.dispute.findUnique({ where: { id }, include: { transaction: { include: { listing: { select: { type: true, mode: true, status: true } }, payments: { where: { provider: 'MIDTRANS', status: 'SETTLED' }, select: { id: true, orderId: true, amount: true, providerStatus: true }, take: 1 } } } } });
       if (!dispute) throw new NotFoundException('Sengketa tidak ditemukan.');
       if (['RESOLVED','REJECTED'].includes(dispute.status)) throw new BadRequestException('Sengketa ini sudah ditutup.');
       if (action === 'START_REVIEW') {
@@ -84,19 +87,32 @@ export class DisputesService {
       let refundAmount: Prisma.Decimal | null = null;
 
       if (action === 'REFUND_BUYER') {
-        const refunded = await tx.user.updateMany({ where: { id: order.buyerId, escrow: { gte: escrowTotal } }, data: { escrow: { decrement: escrowTotal }, balance: { increment: escrowTotal } } });
-        if (!refunded.count) throw new BadRequestException('Saldo escrow tidak konsisten.');
-        await this.ledger(tx, { userId: order.buyerId, transactionId: order.id, type: 'REFUND', balanceDelta: Number(escrowTotal), escrowDelta: Number(escrowTotal) * -1, description: 'Refund melalui resolusi sengketa.', idempotencyKey: `DISPUTE:REFUND:${order.id}` });
+        if (this.isMidtransFunded(order)) {
+          if (!this.midtrans) throw new BadRequestException('Layanan refund Midtrans tidak tersedia.');
+          const payment = order.payments[0];
+          const reason = note?.trim() || 'Refund melalui resolusi sengketa BMarket';
+          if (payment.providerStatus === 'capture') await this.midtrans.cancel(payment.orderId);
+          else await this.midtrans.refund(payment.orderId, Number(payment.amount), reason, `BMARKET-DISPUTE-${order.id.replace(/-/g, '').slice(0, 22)}`);
+        }
+        if (!this.isMidtransFunded(order)) {
+          const refunded = await tx.user.updateMany({ where: { id: order.buyerId, escrow: { gte: escrowTotal } }, data: { escrow: { decrement: escrowTotal }, balance: { increment: escrowTotal } } });
+          if (!refunded.count) throw new BadRequestException('Saldo escrow tidak konsisten.');
+          await this.ledger(tx, { userId: order.buyerId, transactionId: order.id, type: 'REFUND', balanceDelta: Number(escrowTotal), escrowDelta: Number(escrowTotal) * -1, description: 'Refund melalui resolusi sengketa.', idempotencyKey: `DISPUTE:REFUND:${order.id}` });
+        } else {
+          await tx.payment.updateMany({ where: { transactionId: order.id, provider: 'MIDTRANS', status: 'SETTLED' }, data: { status: 'CANCELLED', refundRequestedAt: new Date() } });
+        }
         const itemType = order.listingTypeSnapshot ?? order.listing.type as ListingType;
         const itemMode = order.listingModeSnapshot ?? order.listing.mode;
         if (itemType === 'PRODUCT') await tx.listing.update({ where: { id: order.listingId }, data: { stockLeft: { increment: order.quantity }, ...(itemMode === 'ONE_OFF' && order.listing.status === 'SOLD' ? { status: 'ACTIVE' as const } : {}) } });
         await tx.transaction.update({ where: { id: order.id }, data: { status: 'CANCELLED', isEscrowHeld: false, cancelledAt: now, cancelledBy: 'ADMIN', cancellationReason: 'Refund melalui resolusi sengketa.', handoverCodeHash: null, handoverCodeExpiresAt: null } });
         resolution = 'REFUND_BUYER'; refundAmount = escrowTotal;
       } else if (action === 'RELEASE_SELLER') {
-        const released = await tx.user.updateMany({ where: { id: order.buyerId, escrow: { gte: escrowTotal } }, data: { escrow: { decrement: escrowTotal } } });
-        if (!released.count) throw new BadRequestException('Saldo escrow tidak konsisten.');
+        if (!this.isMidtransFunded(order)) {
+          const released = await tx.user.updateMany({ where: { id: order.buyerId, escrow: { gte: escrowTotal } }, data: { escrow: { decrement: escrowTotal } } });
+          if (!released.count) throw new BadRequestException('Saldo escrow tidak konsisten.');
+          await this.ledger(tx, { userId: order.buyerId, transactionId: order.id, type: 'ESCROW_RELEASE', escrowDelta: Number(escrowTotal) * -1, description: 'Escrow dilepas oleh keputusan admin.', idempotencyKey: `DISPUTE:RELEASE:BUYER:${order.id}` });
+        }
         await tx.user.update({ where: { id: order.sellerId }, data: { balance: { increment: order.sellerReceives } } });
-        await this.ledger(tx, { userId: order.buyerId, transactionId: order.id, type: 'ESCROW_RELEASE', escrowDelta: Number(escrowTotal) * -1, description: 'Escrow dilepas oleh keputusan admin.', idempotencyKey: `DISPUTE:RELEASE:BUYER:${order.id}` });
         await this.ledger(tx, { userId: order.sellerId, transactionId: order.id, type: 'SELLER_PAYOUT', balanceDelta: Number(order.sellerReceives), description: 'Payout seller melalui resolusi sengketa.', idempotencyKey: `DISPUTE:RELEASE:SELLER:${order.id}` });
         await tx.transaction.update({ where: { id: order.id }, data: { status: 'COMPLETED', isEscrowHeld: false, completedAt: now, handoverCodeHash: null, handoverCodeExpiresAt: null } });
         resolution = 'RELEASE_SELLER';

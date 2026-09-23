@@ -33,6 +33,7 @@ import { ActivityModule } from './activity/activity.module';
 import { DisputesModule } from './disputes/disputes.module';
 import { SafetyModule } from './safety/safety.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { PaymentsModule } from './payments/payments.module';
 import { HealthController } from './health.controller';
 import { validateEnvironment } from './config/environment';
 
@@ -58,6 +59,7 @@ import { validateEnvironment } from './config/environment';
     DisputesModule,
     SafetyModule,
     NotificationsModule,
+    PaymentsModule,
   ],
   controllers: [HealthController],
 })

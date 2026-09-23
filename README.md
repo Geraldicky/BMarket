@@ -332,11 +332,38 @@ BMarket/
 
 ---
 
+## Midtrans Sandbox Setup
+
+BMarket buyer checkout uses Midtrans Snap Sandbox. A browser return is only navigation: a transaction becomes `PAID` exclusively after the backend verifies a signed Midtrans notification and confirms its status through Midtrans's server API.
+
+1. Create or sign in to a Midtrans account and switch the dashboard to **Sandbox**.
+2. Open **Settings → Access Keys** and copy the Sandbox Client Key and Sandbox Server Key.
+3. Configure the Railway/backend environment (never add real values to Git):
+
+   ```env
+   MIDTRANS_SERVER_KEY=SB-Mid-server-...
+   MIDTRANS_CLIENT_KEY=SB-Mid-client-...
+   MIDTRANS_IS_PRODUCTION=false
+   MIDTRANS_FINISH_URL=https://binus-market.vercel.app/transaction/{transactionId}
+   ```
+
+4. Set the Midtrans Sandbox Payment Notification URL to:
+
+   ```text
+   https://bmarket-api-production.up.railway.app/api/payments/midtrans/notification
+   ```
+
+5. Deploy the Prisma migration with `npm run db:deploy`, then create a checkout and use a [Midtrans Sandbox test payment](https://docs.midtrans.com/docs/testing-payment-on-sandbox) from the Snap page. Returning to BMarket may briefly show **Menunggu konfirmasi pembayaran** until the verified webhook arrives.
+
+The current integration intentionally rejects `MIDTRANS_IS_PRODUCTION=true`. Live keys, live payments, and production readiness are a separate deployment change. The Server Key belongs only in the backend environment; never expose it through `EXPO_PUBLIC_*` variables or frontend responses.
+
+---
+
 ## ⚠️ Project Scope
 
-BMarket is an **academic project**. These features are **simulated** and not connected to real payment or delivery providers:
+BMarket is an **academic project**. Buyer payments use the Midtrans Sandbox (no real funds). These features remain simulated:
 
-- Balance top-up, payments, escrow, and commission
+- Legacy balance top-up, escrow accounting, and commission
 - Instant courier, shipping fees, and tracking
 
-There is no integration with payment gateways (Midtrans, Xendit) or courier APIs (GoSend, GrabExpress).
+There is no production payment gateway or courier integration.

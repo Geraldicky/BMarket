@@ -9,6 +9,30 @@ export type DisputeStatus = 'OPEN' | 'IN_REVIEW' | 'RESOLVED' | 'REJECTED';
 export type DisputeReason = 'ITEM_NOT_AS_DESCRIBED' | 'ITEM_DAMAGED' | 'NOT_RECEIVED' | 'SELLER_NO_SHOW' | 'BUYER_NO_SHOW' | 'OTHER';
 export type DisputeResolution = 'REFUND_BUYER' | 'RELEASE_SELLER' | 'REJECT_DISPUTE';
 export type CourierProvider = 'GOSEND' | 'GRABEXPRESS';
+export type PaymentStatus = 'PENDING' | 'SETTLED' | 'FAILED' | 'EXPIRED' | 'CANCELLED';
+
+export interface Payment {
+  paymentId: string;
+  orderId: string;
+  amount: number;
+  status: PaymentStatus;
+  redirectUrl?: string | null;
+  paymentType?: string | null;
+  expiresAt?: string | null;
+  settledAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreatePaymentResponse {
+  paymentId: string;
+  orderId: string;
+  token: string;
+  redirectUrl: string;
+  status: PaymentStatus;
+  amount: number;
+  expiresAt?: string | null;
+}
 
 export interface User {
   id: string;

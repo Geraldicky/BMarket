@@ -28,7 +28,7 @@ describe('TransactionsService — payment, handover & wallet integrity', () => {
     process.env.OTP_HASH_SECRET = 'unit-test-secret';
   });
 
-  it('moves buyer balance into escrow on payment and creates an idempotent purchase-hold ledger entry', async () => {
+  it('disables the legacy wallet payment service without mutating balance or escrow', async () => {
     const future = new Date(Date.now() + 60_000);
     const current: any = {
       id: 'tx-1', buyerId: 'buyer-1', sellerId: 'seller-1', listingId: 'listing-1', status: 'PENDING', isEscrowHeld: false,
@@ -50,21 +50,15 @@ describe('TransactionsService — payment, handover & wallet integrity', () => {
     };
     const { service, notify } = serviceWithTx(tx);
 
-    await service.pay('tx-1', 'buyer-1');
+    await expect(service.pay('tx-1', 'buyer-1')).rejects.toThrow(/dinonaktifkan/i);
 
-    expect(tx.user.updateMany).toHaveBeenCalledWith({
-      where: { id: 'buyer-1', balance: { gte: 100000 } },
-      data: { balance: { decrement: 100000 }, escrow: { increment: 100000 } },
-    });
-    expect(tx.transaction.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: 'PAID', isEscrowHeld: true }) }));
-    expect(tx.walletLedger.upsert).toHaveBeenCalledWith(expect.objectContaining({
-      where: { idempotencyKey: 'PAY:tx-1' },
-      create: expect.objectContaining({ type: 'PURCHASE_HOLD', balanceDelta: -100000, escrowDelta: 100000, idempotencyKey: 'PAY:tx-1' }),
-    }));
-    expect(notify.create).toHaveBeenCalledWith('seller-1', 'TRANSACTION', 'Pembayaran diterima', expect.stringMatching(/escrow/i), 'TRANSACTION', 'tx-1');
+    expect(tx.user.updateMany).not.toHaveBeenCalled();
+    expect(tx.transaction.updateMany).not.toHaveBeenCalled();
+    expect(tx.walletLedger.upsert).not.toHaveBeenCalled();
+    expect(notify.create).not.toHaveBeenCalled();
   });
 
-  it('rejects payment when buyer balance is insufficient and does not advance transaction status', async () => {
+  it('does not inspect virtual balance through the deprecated payment service', async () => {
     const current = {
       id: 'tx-1', buyerId: 'buyer-1', status: 'PENDING', isEscrowHeld: false,
       reservationExpiresAt: new Date(Date.now() + 60_000), grandTotal: 100000,
@@ -76,7 +70,8 @@ describe('TransactionsService — payment, handover & wallet integrity', () => {
     };
     const { service } = serviceWithTx(tx);
 
-    await expect(service.pay('tx-1', 'buyer-1')).rejects.toThrow(/saldo tidak cukup/i);
+    await expect(service.pay('tx-1', 'buyer-1')).rejects.toThrow(/Midtrans/i);
+    expect(tx.user.updateMany).not.toHaveBeenCalled();
     expect(tx.transaction.updateMany).not.toHaveBeenCalled();
     expect(tx.walletLedger.upsert).not.toHaveBeenCalled();
   });

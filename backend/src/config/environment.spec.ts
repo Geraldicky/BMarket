@@ -15,7 +15,7 @@ describe('environment configuration', () => {
     NODE_ENV: 'production',
     DATABASE_URL: 'postgresql://localhost/test',
     JWT_SECRET: 'a-secure-secret-that-is-at-least-32-characters',
-  })).toThrow(/OTP_HASH_SECRET, CORS_ORIGIN, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_STORAGE_BUCKET, BREVO_API_KEY, BREVO_FROM_EMAIL/));
+  })).toThrow(/OTP_HASH_SECRET, CORS_ORIGIN, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_STORAGE_BUCKET, MIDTRANS_SERVER_KEY, MIDTRANS_CLIENT_KEY/));
 
   it('accepts a complete production configuration', () => expect(validateEnvironment({
     NODE_ENV: 'production',
@@ -26,6 +26,9 @@ describe('environment configuration', () => {
     SUPABASE_URL: 'https://project.supabase.co',
     SUPABASE_SERVICE_ROLE_KEY: 'service-role-secret',
     SUPABASE_STORAGE_BUCKET: 'bmarket-public',
+    MIDTRANS_SERVER_KEY: 'SB-Mid-server-example',
+    MIDTRANS_CLIENT_KEY: 'SB-Mid-client-example',
+    MIDTRANS_IS_PRODUCTION: 'false',
     BREVO_API_KEY: 'xkeysib-example-api-key',
     BREVO_FROM_EMAIL: 'noreply@example.test',
   })).toBeTruthy());

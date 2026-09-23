@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { createHmac, randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
 import { CourierProvider, FulfillmentMethod, Prisma, TransactionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -7,6 +7,7 @@ import { CreateTransactionDto, TopupDto } from './dto/transaction.dto';
 import { canTransition, TransactionActor } from './transaction-policy';
 import { UploadsService, type PrivateUploadFile } from '../uploads/uploads.service';
 import { listZipEntries, readZipEntry, ZipReadError } from './zip-reader';
+import { MidtransService } from '../payments/midtrans/midtrans.service';
 
 // Public fields of a service deliverable; the storage key never leaves the server.
 export const deliverableSelect ={ id: true, fileName: true, mimeType: true, size: true, createdAt: true, uploaderId: true } as const;
@@ -33,7 +34,11 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(TransactionsService.name);
   private reservationTimer?: NodeJS.Timeout;
 
-  constructor(private prisma: PrismaService, private notifications: NotificationsService, private uploads: UploadsService) {}
+  constructor(private prisma: PrismaService, private notifications: NotificationsService, private uploads: UploadsService, @Optional() private midtrans?: MidtransService) {}
+
+  private isMidtransFunded(transaction: { payments?: { id: string }[] }) {
+    return Boolean(transaction.payments?.length);
+  }
 
   private readonly couriers: Record<CourierProvider, { label: string; fee: number; eta: string }> = {
     GOSEND: { label: 'GoSend Instant (simulasi)', fee: 18_000, eta: '1–3 jam' },
@@ -131,6 +136,10 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
         },
       });
       if (!changed.count) return false;
+
+      if ((tx as any).payment) {
+        await tx.payment.updateMany({ where: { transactionId: id, status: 'PENDING' }, data: { status: 'EXPIRED' } });
+      }
 
       const itemType = current.listingTypeSnapshot ?? current.listing.type;
       if (itemType === 'PRODUCT') {
@@ -341,57 +350,15 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
   }
 
   async pay(id: string, buyerId: string) {
-    const expiredNow = await this.expirePendingReservation(id);
-    if (expiredNow) {
-      throw new BadRequestException('Reservasi pembayaran sudah kedaluwarsa. Stok telah dikembalikan; buat checkout baru.');
-    }
-    const result = await this.serializable(async tx => {
-      const transaction = await tx.transaction.findUnique({ where: { id } });
-      if (!transaction) throw new NotFoundException('Transaksi tidak ditemukan.');
-      if (transaction.buyerId !== buyerId) throw new ForbiddenException('Akses ditolak.');
-      if (transaction.status === 'CANCELLED' && transaction.cancelledBy === 'SYSTEM') {
-        throw new BadRequestException('Reservasi pembayaran sudah kedaluwarsa. Buat checkout baru.');
-      }
-      if (transaction.status === 'PENDING' && transaction.reservationExpiresAt && transaction.reservationExpiresAt.getTime() <= Date.now()) {
-        throw new BadRequestException('Reservasi pembayaran sudah kedaluwarsa. Muat ulang transaksi untuk mengembalikan stok.');
-      }
-      if (transaction.status !== 'PENDING' || transaction.isEscrowHeld) {
-        throw new BadRequestException('Transaksi sudah dibayar atau tidak valid.');
-      }
-
-      const total = transaction.grandTotal;
-      const debited = await tx.user.updateMany({
-        where: { id: buyerId, balance: { gte: total } },
-        data: { balance: { decrement: total }, escrow: { increment: total } },
-      });
-      if (!debited.count) throw new BadRequestException('Saldo tidak cukup. Tambah saldo dari menu Profil.');
-
-      const advanced = await tx.transaction.updateMany({
-        where: { id, buyerId, status: 'PENDING', isEscrowHeld: false },
-        data: { status: 'PAID', isEscrowHeld: true, paidAt: new Date() },
-      });
-      if (!advanced.count) throw new BadRequestException('Transaksi sudah diproses oleh permintaan lain.');
-      await this.ledger(tx, { userId: buyerId, transactionId: id, type: 'PURCHASE_HOLD', balanceDelta: Number(total) * -1, escrowDelta: Number(total), description: 'Pembayaran ditahan di escrow BMarket.', idempotencyKey: `PAY:${id}` });
-      return tx.transaction.findUniqueOrThrow({
-        where: { id },
-        include: {
-          listing: true,
-          buyer: { select: { id: true, name: true, email: true, avatarUrl: true, phone: true } },
-          seller: { select: { id: true, name: true, email: true, avatarUrl: true, phone: true } },
-          review: true,
-          dispute: true,
-        },
-      });
-    });
-    await this.notifications.create(result.sellerId, 'TRANSACTION', 'Pembayaran diterima', `${result.listingTitleSnapshot || result.listing.title} sudah dibayar. Dana aman di escrow.`, 'TRANSACTION', result.id).catch(() => undefined);
-    return this.withParsedListing(result);
+    void id; void buyerId;
+    throw new BadRequestException('Pembayaran saldo BMarket sudah dinonaktifkan. Gunakan Midtrans Snap.');
   }
 
   async updateStatus(id: string, userId: string, status: TransactionStatus, cancellationReason?: string) {
     const result = await this.serializable(async tx => {
       const current = await tx.transaction.findUnique({
         where: { id },
-        include: { listing: { select: { type: true, status: true, mode: true, preorderStatus: true, preorderDeadline: true, stockLeft: true } }, dispute: true },
+        include: { listing: { select: { type: true, status: true, mode: true, preorderStatus: true, preorderDeadline: true, stockLeft: true } }, dispute: true, payments: { where: { provider: 'MIDTRANS', status: 'SETTLED' }, select: { id: true, orderId: true, amount: true, providerStatus: true }, take: 1 } },
       });
       if (!current) throw new NotFoundException('Transaksi tidak ditemukan.');
       const escrowTotal = current.grandTotal || current.totalPrice;
@@ -428,6 +395,12 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
       if (status === 'CANCELLED' && (!reason || reason.length < 3)) {
         throw new BadRequestException('Pilih atau tulis alasan pembatalan.');
       }
+      if (status === 'CANCELLED' && current.isEscrowHeld && this.isMidtransFunded(current)) {
+        if (!this.midtrans) throw new BadRequestException('Layanan refund Midtrans tidak tersedia.');
+        const payment = current.payments[0];
+        if (payment.providerStatus === 'capture') await this.midtrans.cancel(payment.orderId);
+        else await this.midtrans.refund(payment.orderId, Number(payment.amount), reason!, `BMARKET-REFUND-${id.replace(/-/g, '').slice(0, 24)}`);
+      }
 
       const milestone = status === 'CONFIRMED'
         ? {
@@ -460,27 +433,35 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
           throw new BadRequestException('Meetup harus diselesaikan menggunakan kode serah-terima buyer.');
         }
         if (!current.isEscrowHeld) throw new BadRequestException('Dana escrow tidak ditemukan.');
-        const released = await tx.user.updateMany({
-          where: { id: current.buyerId, escrow: { gte: escrowTotal } },
-          data: { escrow: { decrement: escrowTotal } },
-        });
-        if (!released.count) throw new BadRequestException('Saldo escrow tidak konsisten.');
+        if (!this.isMidtransFunded(current)) {
+          const released = await tx.user.updateMany({
+            where: { id: current.buyerId, escrow: { gte: escrowTotal } },
+            data: { escrow: { decrement: escrowTotal } },
+          });
+          if (!released.count) throw new BadRequestException('Saldo escrow tidak konsisten.');
+          await this.ledger(tx, { userId: current.buyerId, transactionId: id, type: 'ESCROW_RELEASE', escrowDelta: Number(escrowTotal) * -1, description: 'Escrow dilepas setelah transaksi selesai.', idempotencyKey: `COMPLETE:BUYER:${id}` });
+        }
         await tx.user.update({
           where: { id: current.sellerId },
           data: { balance: { increment: current.sellerReceives } },
         });
-        await this.ledger(tx, { userId: current.buyerId, transactionId: id, type: 'ESCROW_RELEASE', escrowDelta: Number(escrowTotal) * -1, description: 'Escrow dilepas setelah transaksi selesai.', idempotencyKey: `COMPLETE:BUYER:${id}` });
         await this.ledger(tx, { userId: current.sellerId, transactionId: id, type: 'SELLER_PAYOUT', balanceDelta: Number(current.sellerReceives), description: 'Pendapatan seller setelah biaya layanan.', idempotencyKey: `COMPLETE:SELLER:${id}` });
       }
 
       if (status === 'CANCELLED') {
-        if (current.isEscrowHeld) {
+        if ((tx as any).payment) {
+          await tx.payment.updateMany({ where: { transactionId: id, status: 'PENDING' }, data: { status: 'CANCELLED' } });
+        }
+        if (current.isEscrowHeld && !this.isMidtransFunded(current)) {
           const refunded = await tx.user.updateMany({
             where: { id: current.buyerId, escrow: { gte: escrowTotal } },
             data: { balance: { increment: escrowTotal }, escrow: { decrement: escrowTotal } },
           });
           if (!refunded.count) throw new BadRequestException('Saldo escrow tidak konsisten.');
           await this.ledger(tx, { userId: current.buyerId, transactionId: id, type: 'REFUND', balanceDelta: Number(escrowTotal), escrowDelta: Number(escrowTotal) * -1, description: 'Refund pembatalan transaksi.', idempotencyKey: `CANCEL:REFUND:${id}` });
+        }
+        if (current.isEscrowHeld && this.isMidtransFunded(current)) {
+          await tx.payment.updateMany({ where: { transactionId: id, provider: 'MIDTRANS', status: 'SETTLED' }, data: { status: 'CANCELLED', refundRequestedAt: new Date() } });
         }
         const itemType = current.listingTypeSnapshot ?? current.listing.type;
         if (itemType === 'PRODUCT') {
@@ -536,7 +517,7 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
 
   async confirmHandover(id: string, sellerId: string, code: string) {
     const result = await this.serializable(async tx => {
-      const current = await tx.transaction.findUnique({ where: { id }, include: { dispute: true, listing: { select: { mode: true, preorderStatus: true } } } });
+      const current = await tx.transaction.findUnique({ where: { id }, include: { dispute: true, listing: { select: { mode: true, preorderStatus: true } }, payments: { where: { provider: 'MIDTRANS', status: 'SETTLED' }, select: { id: true }, take: 1 } } });
       if (!current) throw new NotFoundException('Transaksi tidak ditemukan.');
       if (current.sellerId !== sellerId) throw new ForbiddenException('Hanya seller yang dapat mengonfirmasi kode serah-terima.');
       if (current.dispute && ['OPEN','IN_REVIEW'].includes(current.dispute.status)) throw new BadRequestException('Transaksi sedang dalam sengketa. Penyelesaian meetup dikunci.');
@@ -569,13 +550,15 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
         },
       });
       if (!changed.count) throw new BadRequestException('Transaksi sudah diproses oleh permintaan lain.');
-      const released = await tx.user.updateMany({
-        where: { id: current.buyerId, escrow: { gte: current.grandTotal } },
-        data: { escrow: { decrement: current.grandTotal } },
-      });
-      if (!released.count) throw new BadRequestException('Saldo escrow tidak konsisten.');
+      if (!this.isMidtransFunded(current)) {
+        const released = await tx.user.updateMany({
+          where: { id: current.buyerId, escrow: { gte: current.grandTotal } },
+          data: { escrow: { decrement: current.grandTotal } },
+        });
+        if (!released.count) throw new BadRequestException('Saldo escrow tidak konsisten.');
+        await this.ledger(tx, { userId: current.buyerId, transactionId: id, type: 'ESCROW_RELEASE', escrowDelta: Number(current.grandTotal) * -1, description: 'Escrow dilepas setelah kode serah-terima valid.', idempotencyKey: `HANDOVER:BUYER:${id}` });
+      }
       await tx.user.update({ where: { id: current.sellerId }, data: { balance: { increment: current.sellerReceives } } });
-      await this.ledger(tx, { userId: current.buyerId, transactionId: id, type: 'ESCROW_RELEASE', escrowDelta: Number(current.grandTotal) * -1, description: 'Escrow dilepas setelah kode serah-terima valid.', idempotencyKey: `HANDOVER:BUYER:${id}` });
       await this.ledger(tx, { userId: current.sellerId, transactionId: id, type: 'SELLER_PAYOUT', balanceDelta: Number(current.sellerReceives), description: 'Pendapatan seller setelah meetup selesai.', idempotencyKey: `HANDOVER:SELLER:${id}` });
       return tx.transaction.findUniqueOrThrow({
         where: { id },
@@ -786,7 +769,7 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
 
   async acceptDeliverables(id: string, buyerId: string) {
     const result = await this.serializable(async tx => {
-      const current = await tx.transaction.findUnique({ where: { id }, include: { listing: { select: { mode: true } }, dispute: true } });
+      const current = await tx.transaction.findUnique({ where: { id }, include: { listing: { select: { mode: true } }, dispute: true, payments: { where: { provider: 'MIDTRANS', status: 'SETTLED' }, select: { id: true }, take: 1 } } });
       if (!current) throw new NotFoundException('Transaksi tidak ditemukan.');
       if (current.buyerId !== buyerId) throw new ForbiddenException('Hanya pembeli yang dapat menerima hasil jasa.');
       if ((current.listingModeSnapshot ?? current.listing.mode) !== 'SERVICE') throw new BadRequestException('Hasil jasa hanya tersedia untuk transaksi jasa.');
@@ -804,13 +787,15 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
         data: { status: 'COMPLETED', completedAt: new Date(), isEscrowHeld: false },
       });
       if (!changed.count) throw new BadRequestException('Transaksi sudah diproses oleh permintaan lain.');
-      const released = await tx.user.updateMany({
-        where: { id: current.buyerId, escrow: { gte: current.grandTotal } },
-        data: { escrow: { decrement: current.grandTotal } },
-      });
-      if (!released.count) throw new BadRequestException('Saldo escrow tidak konsisten.');
+      if (!this.isMidtransFunded(current)) {
+        const released = await tx.user.updateMany({
+          where: { id: current.buyerId, escrow: { gte: current.grandTotal } },
+          data: { escrow: { decrement: current.grandTotal } },
+        });
+        if (!released.count) throw new BadRequestException('Saldo escrow tidak konsisten.');
+        await this.ledger(tx, { userId: current.buyerId, transactionId: id, type: 'ESCROW_RELEASE', escrowDelta: Number(current.grandTotal) * -1, description: 'Escrow dilepas setelah buyer menerima hasil jasa.', idempotencyKey: `DELIVERABLE:BUYER:${id}` });
+      }
       await tx.user.update({ where: { id: current.sellerId }, data: { balance: { increment: current.sellerReceives } } });
-      await this.ledger(tx, { userId: current.buyerId, transactionId: id, type: 'ESCROW_RELEASE', escrowDelta: Number(current.grandTotal) * -1, description: 'Escrow dilepas setelah buyer menerima hasil jasa.', idempotencyKey: `DELIVERABLE:BUYER:${id}` });
       await this.ledger(tx, { userId: current.sellerId, transactionId: id, type: 'SELLER_PAYOUT', balanceDelta: Number(current.sellerReceives), description: 'Pendapatan seller setelah hasil jasa diterima.', idempotencyKey: `DELIVERABLE:SELLER:${id}` });
       return tx.transaction.findUniqueOrThrow({
         where: { id },

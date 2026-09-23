@@ -5,9 +5,10 @@ import { TransactionsController } from './transactions.controller';
 import { TransactionsService } from './transactions.service';
 import { DeliverableFilesController } from './deliverable-files.controller';
 import { UploadsModule } from '../uploads/uploads.module';
+import { PaymentsModule } from '../payments/payments.module';
 
 @Module({
-  imports: [UploadsModule], // private storage for service deliverables
+  imports: [UploadsModule, PaymentsModule], // private storage + Midtrans refund support
   controllers: [TransactionsController, DeliverableFilesController],
   providers: [TransactionsService],
   exports: [TransactionsService],

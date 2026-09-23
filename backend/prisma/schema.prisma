@@ -272,6 +272,7 @@ model Transaction {
   dispute      Dispute?
   walletLedger WalletLedger[]
   deliverables TransactionDeliverable[]
+  payments     Payment[]
 
   @@index([buyerId, createdAt])
   @@index([sellerId, createdAt])
@@ -280,6 +281,43 @@ model Transaction {
   @@index([fulfillmentMethod, status])
   @@index([listingId])
   @@map("transactions")
+}
+
+model Payment {
+  id                    String          @id @default(uuid())
+  transactionId         String
+  transaction           Transaction     @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  provider               PaymentProvider @default(MIDTRANS)
+  orderId                String          @unique
+  amount                 Decimal         @db.Decimal(12, 2)
+  status                 PaymentStatus   @default(PENDING)
+  snapToken              String?
+  redirectUrl            String?
+  paymentType            String?
+  providerStatus         String?
+  providerTransactionId  String?
+  fraudStatus            String?
+  expiresAt              DateTime?
+  settledAt              DateTime?
+  refundRequestedAt      DateTime?
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+
+  @@index([transactionId, createdAt])
+  @@index([transactionId, status])
+  @@map("payments")
+}
+
+enum PaymentProvider {
+  MIDTRANS
+}
+
+enum PaymentStatus {
+  PENDING
+  SETTLED
+  FAILED
+  EXPIRED
+  CANCELLED
 }
 
 // Hasil jasa: file yang diunggah penjual untuk transaksi jasa. storageKey bersifat privat
