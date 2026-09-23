@@ -70,6 +70,7 @@ export default function LoginScreen() {
             autoComplete="current-password"
             icon="lock-closed-outline"
             rightIcon={showPassword ? 'eye-off-outline' : 'eye-outline'}
+            rightAccessibilityLabel={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
             onRightPress={() => setShowPassword(value => !value)}
             placeholder="Masukkan password"
             error={errors.password}

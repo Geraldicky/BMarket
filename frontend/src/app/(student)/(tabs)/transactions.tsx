@@ -9,22 +9,14 @@ import { BackButton } from '@/components/back-button';
 import { colors, radius, makeStyles } from '@/constants/theme';
 import { endpoints, errorMessage } from '@/lib/api';
 import { useAuth } from '@/store/auth';
-import type { Transaction, TransactionStatus } from '@/types';
+import type { Transaction } from '@/types';
 import { ListingImageFallback } from '@/components/listing-image-fallback';
+import { transactionPresentation } from '@/lib/transaction-presentation';
 
 type RoleFilter = 'ALL' | 'BUYER' | 'SELLER';
 type StatusFilter = 'ALL' | 'ACTION' | 'PROCESS' | 'COMPLETED' | 'CANCELLED';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
-
-// A function (not a constant) so the colors follow the active theme at render time.
-const statusMeta = (): Record<TransactionStatus, { label: string; color: string; tint: string; icon: IconName }> => ({
-  PENDING: { label: 'Menunggu pembayaran', color: colors.warning, tint: colors.warningSoft, icon: 'time-outline' },
-  PAID: { label: 'Dana di escrow', color: colors.primary, tint: colors.primarySoft, icon: 'shield-checkmark-outline' },
-  CONFIRMED: { label: 'Sedang diproses', color: colors.purple, tint: colors.purpleSoft, icon: 'cube-outline' },
-  COMPLETED: { label: 'Selesai', color: colors.success, tint: colors.successSoft, icon: 'checkmark-circle-outline' },
-  CANCELLED: { label: 'Dibatalkan', color: colors.danger, tint: colors.dangerSoft, icon: 'close-circle-outline' },
-});
 
 function isBuyer(transaction: Transaction, userId?: string) {
   return transaction.buyerId === userId || transaction.buyer?.id === userId;
@@ -108,7 +100,7 @@ export default function TransactionsScreen() {
     { label: 'Dibatalkan', value: roleItems.filter(item => item.status === 'CANCELLED').length, icon: 'close-circle-outline' as IconName, tint: colors.dangerSoft, color: colors.danger, filter: 'CANCELLED' as const },
   ];
 
-  const browse = <Button title="Cari barang" icon="search-outline" onPress={() => router.replace('/(student)/(tabs)')} />;
+  const browse = <Button title="Jelajahi BMarket" icon="search-outline" onPress={() => router.replace({ pathname: '/(student)/(tabs)/search' } as never)} />;
 
   return (
     <Screen style={styles.page}>
@@ -148,7 +140,7 @@ export default function TransactionsScreen() {
         <View style={styles.list}>
           {visibleItems.map(transaction => {
             const buyer = isBuyer(transaction, user?.id);
-            const meta = statusMeta()[transaction.status];
+            const meta = transactionPresentation(transaction, user?.id);
             const action = needsAction(transaction, user?.id);
             const counterpart = buyer ? transaction.seller?.name : transaction.buyer?.name;
             const meetup = transaction.fulfillmentMethod === 'CAMPUS_MEETUP';

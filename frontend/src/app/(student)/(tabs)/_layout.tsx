@@ -34,7 +34,7 @@ function MobileTabBar({ state, navigation }: TabBarProps) {
         const item = items[route.name];
         const active = state.index === index;
         return (
-          <Pressable key={route.key} onPress={() => open(route, index)} style={({ pressed }) => [styles.mobileItem, pressed && styles.mobileItemPressed]}>
+          <Pressable key={route.key} accessibilityRole="tab" accessibilityLabel={item.label} accessibilityState={{ selected: active }} onPress={() => open(route, index)} style={({ pressed }) => [styles.mobileItem, pressed && styles.mobileItemPressed]}>
             <View style={[styles.iconShell, active && styles.iconShellActive]}>
               <Ionicons name={active ? item.filled : item.outline} size={narrow ? 20 : 22} color={active ? colors.primary : colors.muted} />
             </View>

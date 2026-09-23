@@ -91,6 +91,15 @@ export default function ProfileScreen() {
     }
   };
   const balance = useQuery({ queryKey: ['balance'], queryFn: endpoints.balance, enabled: Boolean(user) });
+  const transactions = useQuery({ queryKey: ['transactions'], queryFn: () => endpoints.transactions(), enabled: Boolean(user) });
+  const purchasesWaiting = (transactions.data || []).filter(item => item.buyerId === user?.id && item.status === 'PENDING').length;
+  const salesInProgress = (transactions.data || []).filter(item => item.sellerId === user?.id && ['PAID', 'CONFIRMED'].includes(item.status)).length;
+  const dashboardLinks = [
+    { label: 'Pembelian', detail: purchasesWaiting ? `${purchasesWaiting} menunggu pembayaran` : 'Lihat status pesanan', icon: 'bag-handle-outline' as IconName, path: '/(student)/(tabs)/transactions' as const },
+    { label: 'Penjualan', detail: salesInProgress ? `${salesInProgress} perlu diproses` : 'Kelola transaksi seller', icon: 'storefront-outline' as IconName, path: '/(student)/(tabs)/sell' as const },
+    { label: 'Listing saya', detail: `${user?._count?.listings || 0} listing`, icon: 'pricetags-outline' as IconName, path: '/(student)/(tabs)/sell' as const },
+    { label: 'Tersimpan', detail: 'Wishlist & terakhir dilihat', icon: 'heart-outline' as IconName, path: '/(student)/saved' as const },
+  ];
 
   const topup = async () => {
     const value = Number(amount);
@@ -127,6 +136,11 @@ export default function ProfileScreen() {
       </View>
       <ThemeSwitcher mobile={mobile} />
     </View>
+
+    <Card style={styles.dashboard}>
+      <View><Text style={styles.dashboardTitle}>BMarket saya</Text><Text style={styles.dashboardCopy}>Akses cepat ke aktivitas belanja dan penjualanmu.</Text></View>
+      <View style={[styles.dashboardGrid, mobile && styles.dashboardGridMobile]}>{dashboardLinks.map(item => <Pressable key={item.label} accessibilityRole="button" onPress={() => router.push(item.path)} style={({ pressed }) => [styles.dashboardLink, mobile && styles.dashboardLinkMobile, pressed && styles.pressed]}><View style={styles.dashboardIcon}><Ionicons name={item.icon} size={20} color={colors.primary} /></View><View style={styles.dashboardBody}><Text style={styles.dashboardLabel}>{item.label}</Text><Text numberOfLines={1} style={styles.dashboardDetail}>{item.detail}</Text></View><Ionicons name="chevron-forward" size={17} color={colors.muted} /></Pressable>)}</View>
+    </Card>
 
     <View style={[styles.columns, !desktop && styles.columnsMobile]}>
       <Card style={[styles.info, !desktop && styles.fullWidth]}>
@@ -176,6 +190,17 @@ export default function ProfileScreen() {
 
 const useStyles = makeStyles(() => ({
   pressed: { opacity: .7 },
+  dashboard: { gap: 14 },
+  dashboardTitle: { fontFamily: 'PoppinsBold', fontSize: 19, color: colors.text },
+  dashboardCopy: { marginTop: 2, fontFamily: 'PoppinsRegular', fontSize: 12, color: colors.muted },
+  dashboardGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  dashboardGridMobile: { flexDirection: 'column' },
+  dashboardLink: { flex: 1, minWidth: 220, minHeight: 72, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  dashboardLinkMobile: { minWidth: 0, width: '100%' },
+  dashboardIcon: { width: 42, height: 42, borderRadius: 11, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  dashboardBody: { flex: 1, minWidth: 0 },
+  dashboardLabel: { fontFamily: 'PoppinsSemiBold', fontSize: 13, color: colors.text },
+  dashboardDetail: { marginTop: 1, fontFamily: 'PoppinsRegular', fontSize: 10.5, color: colors.muted },
   hero: { minHeight: 168, borderRadius: 16, backgroundColor: colors.primaryDeep, padding: 26, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 24, overflow: 'hidden' },
   heroMobile: { padding: 18, gap: 14, alignItems: 'flex-start' },
   heroGlow: { position: 'absolute', right: -90, top: -130, width: 390, height: 390, borderRadius: 195, backgroundColor: '#173F64' },

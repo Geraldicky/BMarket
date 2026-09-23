@@ -1,12 +1,13 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useDeferredValue, useState } from 'react';
-import { Pressable, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Modal, Pressable, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
 import { endpoints, errorMessage } from '@/lib/api';
-import { Empty, ErrorState, Loader, Screen, Title } from '@/components/ui';
+import { Button, Empty, ErrorState, Screen, Title } from '@/components/ui';
 import { BackButton } from '@/components/back-button';
 import { ListingCard } from '@/components/listing-card';
+import { ListingGridSkeleton } from '@/components/listing-grid-skeleton';
 import { FilterSelect, type FilterOption } from '@/components/filter-select';
 import { colors, layout, webTransition, makeStyles } from '@/constants/theme';
 import { CATEGORY_METADATA, PRODUCT_CATEGORIES } from '@/lib/domain-metadata';
@@ -47,6 +48,7 @@ function SearchContent({ initial }: { initial: Filters }) {
   const styles = useStyles();
   const { width } = useWindowDimensions();
   const desktop = width >= 960;
+  const mobile = width < 720;
   const client = useQueryClient();
   const [keyword, setKeyword] = useState(initial.q);
   const deferredKeyword = useDeferredValue(keyword);
@@ -54,6 +56,7 @@ function SearchContent({ initial }: { initial: Filters }) {
   const [mode, setMode] = useState(initial.mode);
   const [category, setCategory] = useState(initial.category);
   const [sort, setSort] = useState(initial.sort);
+  const [filterOpen, setFilterOpen] = useState(false);
   const goods = listingType === 'PRODUCT';
 
   const query = useInfiniteQuery({
@@ -83,7 +86,7 @@ function SearchContent({ initial }: { initial: Filters }) {
   const columns = contentWidth >= 1120 ? 5 : contentWidth >= 900 ? 4 : contentWidth >= 680 ? 3 : contentWidth >= 320 ? 2 : 1;
   const gap = desktop ? 14 : 10;
   const cardWidth = (contentWidth - gap * (columns - 1)) / columns;
-  const filtered = Boolean(keyword.trim()) || listingType !== 'ALL' || sort !== 'newest';
+  const filtered = Boolean(keyword.trim()) || listingType !== 'ALL' || mode !== 'ALL' || category !== 'ALL' || sort !== 'newest';
   const selectStyle = [styles.filterSelect, !desktop && styles.filterSelectMobile];
 
   // Model and category filters only apply to goods; clear them when leaving the Barang type.
@@ -91,7 +94,13 @@ function SearchContent({ initial }: { initial: Filters }) {
     setListingType(value);
     if (value !== 'PRODUCT') { setMode('ALL'); setCategory('ALL'); }
   };
-  const reset = () => { setKeyword(''); chooseType('ALL'); setSort('newest'); };
+  const reset = () => { setKeyword(''); chooseType('ALL'); setMode('ALL'); setCategory('ALL'); setSort('newest'); };
+  const activeFilters = [
+    listingType !== 'ALL' ? { key: 'type', label: typeOptions.find(item => item.key === listingType)?.label, clear: () => chooseType('ALL') } : null,
+    goods && mode !== 'ALL' ? { key: 'mode', label: modeOptions.find(item => item.key === mode)?.label, clear: () => setMode('ALL') } : null,
+    goods && category !== 'ALL' ? { key: 'category', label: categoryOptions.find(item => item.key === category)?.label, clear: () => setCategory('ALL') } : null,
+    sort !== 'newest' ? { key: 'sort', label: sortOptions.find(item => item.key === sort)?.label, clear: () => setSort('newest') } : null,
+  ].filter((item): item is NonNullable<typeof item> => Boolean(item));
 
   return (
     <Screen style={styles.page} backgroundColor={colors.surface}>
@@ -104,28 +113,48 @@ function SearchContent({ initial }: { initial: Filters }) {
         {keyword ? <Pressable accessibilityLabel="Hapus pencarian" onPress={() => setKeyword('')}><Ionicons name="close-circle" size={18} color={colors.muted} /></Pressable> : null}
       </View>
 
-      <View style={styles.filterRow}>
+      {!mobile ? <View style={styles.filterRow}>
         <FilterSelect label="Tipe" icon="albums-outline" value={listingType} options={typeOptions} onChange={chooseType} style={selectStyle} />
         {goods ? <>
           <FilterSelect label="Model" icon="cube-outline" value={mode} options={modeOptions} onChange={setMode} style={selectStyle} />
           <FilterSelect label="Kategori" icon="pricetags-outline" value={category} options={categoryOptions} onChange={setCategory} style={selectStyle} />
         </> : null}
         <FilterSelect label="Urutkan" icon="funnel-outline" value={sort} options={sortOptions} onChange={setSort} style={selectStyle} />
-      </View>
+      </View> : <View style={styles.mobileFilterRow}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Buka filter${activeFilters.length ? `, ${activeFilters.length} aktif` : ''}`} onPress={() => setFilterOpen(true)} style={styles.mobileFilterButton}>
+          <Ionicons name="options-outline" size={18} color={colors.primary} /><Text style={styles.mobileFilterText}>Filter</Text>
+          {activeFilters.filter(item => item.key !== 'sort').length ? <View style={styles.filterCount}><Text style={styles.filterCountText}>{activeFilters.filter(item => item.key !== 'sort').length}</Text></View> : null}
+        </Pressable>
+        <FilterSelect label="Urutkan" icon="swap-vertical-outline" value={sort} options={sortOptions} onChange={setSort} style={styles.mobileSort} />
+      </View>}
+
+      {activeFilters.length ? <View style={styles.activeFilters} accessibilityLabel="Filter aktif">{activeFilters.map(item => <Pressable key={item.key} accessibilityRole="button" accessibilityLabel={`Hapus filter ${item.label}`} onPress={item.clear} style={({ pressed }) => [styles.activeChip, pressed && { opacity: .7 }]}><Text style={styles.activeChipText}>{item.label}</Text><Ionicons name="close" size={14} color={colors.primary} /></Pressable>)}</View> : null}
 
       <View style={styles.resultHead}>
         <Text style={styles.resultCount}>{query.isLoading ? 'Memuat listing…' : `${total} listing ditemukan`}</Text>
         {filtered ? <Pressable onPress={reset} style={({ pressed }) => [styles.reset, pressed && { opacity: .7 }]}><Ionicons name="refresh-outline" size={14} color={colors.primary} /><Text style={styles.resetText}>Reset filter</Text></Pressable> : null}
       </View>
 
-      {query.isLoading ? <Loader /> : query.isError ? <ErrorState message={errorMessage(query.error)} retry={() => query.refetch()} /> : !listings.length ? (
-        <Empty title="Belum ada listing yang cocok" message="Coba ganti kata kunci atau filter." icon="search-outline" />
+      {query.isLoading ? <ListingGridSkeleton /> : query.isError ? <ErrorState message={errorMessage(query.error)} retry={() => query.refetch()} /> : !listings.length ? (
+        <Empty title="Belum ada listing yang cocok" message="Coba ubah kata kunci atau hapus beberapa filter." icon="search-outline" action={<Button title="Reset filter" variant="secondary" icon="refresh-outline" onPress={reset} />} />
       ) : <>
         <View style={[styles.grid, { gap }]}>
           {listings.map(item => <ListingCard storefront compact key={item.id} item={item} saved={savedIds.has(item.id)} onToggleSaved={() => toggleSaved.mutate({ id: item.id, saved: savedIds.has(item.id) })} style={{ width: cardWidth }} onPress={() => router.push({ pathname: '/(student)/listing/[id]', params: { id: item.id } })} />)}
         </View>
         {query.hasNextPage ? <Pressable disabled={query.isFetchingNextPage} onPress={() => query.fetchNextPage()} style={styles.loadMore}><Text style={styles.loadMoreText}>{query.isFetchingNextPage ? 'Memuat…' : 'Muat lebih banyak'}</Text><Ionicons name="chevron-down" size={14} color={colors.primary} /></Pressable> : null}
       </>}
+
+      <Modal visible={filterOpen} transparent animationType="slide" onRequestClose={() => setFilterOpen(false)}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Tutup filter" onPress={() => setFilterOpen(false)} style={styles.filterBackdrop}>
+          <Pressable onPress={() => undefined} style={styles.filterSheet}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}><View><Text style={styles.sheetTitle}>Filter listing</Text><Text style={styles.sheetCopy}>Tampilkan hasil yang paling relevan.</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Tutup" onPress={() => setFilterOpen(false)} style={styles.sheetClose}><Ionicons name="close" size={20} color={colors.textSoft} /></Pressable></View>
+            <FilterSelect label="Tipe listing" icon="albums-outline" value={listingType} options={typeOptions} onChange={chooseType} />
+            {goods ? <><FilterSelect label="Model penjualan" icon="cube-outline" value={mode} options={modeOptions} onChange={setMode} /><FilterSelect label="Kategori" icon="pricetags-outline" value={category} options={categoryOptions} onChange={setCategory} /></> : null}
+            <View style={styles.sheetActions}><Button title="Reset" variant="ghost" onPress={() => { chooseType('ALL'); setMode('ALL'); setCategory('ALL'); }} style={styles.sheetAction} /><Button title="Terapkan filter" icon="checkmark-outline" onPress={() => setFilterOpen(false)} style={styles.sheetAction} /></View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </Screen>
   );
 }
@@ -152,6 +181,15 @@ const useStyles = makeStyles(() => ({
   filterRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10 },
   filterSelect: { width: 210 },
   filterSelectMobile: { width: '48%' },
+  mobileFilterRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  mobileFilterButton: { flex: 1, minHeight: 48, paddingHorizontal: 14, borderRadius: 11, borderWidth: 1, borderColor: colors.primaryBorder, backgroundColor: colors.primarySoft, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  mobileFilterText: { flex: 1, fontFamily: 'PoppinsSemiBold', fontSize: 12.5, color: colors.primary },
+  filterCount: { minWidth: 23, height: 23, paddingHorizontal: 6, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  filterCountText: { fontFamily: 'PoppinsBold', fontSize: 10, color: colors.white },
+  mobileSort: { flex: 1 },
+  activeFilters: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
+  activeChip: { minHeight: 34, paddingHorizontal: 10, borderRadius: 17, borderWidth: 1, borderColor: colors.primaryBorder, backgroundColor: colors.primaryMist, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  activeChipText: { fontFamily: 'PoppinsMedium', fontSize: 11.5, color: colors.primary },
   resultHead: { minHeight: 34, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   resultCount: { fontFamily: 'PoppinsSemiBold', fontSize: 13, color: colors.textSoft },
   reset: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 6, paddingHorizontal: 4, ...webTransition },
@@ -159,4 +197,13 @@ const useStyles = makeStyles(() => ({
   grid: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start' },
   loadMore: { alignSelf: 'center', minHeight: 42, marginTop: 4, paddingHorizontal: 16, borderRadius: 9, borderWidth: 1, borderColor: colors.primaryBorder, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 6 },
   loadMoreText: { fontFamily: 'PoppinsSemiBold', fontSize: 11.5, color: colors.primary },
+  filterBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: colors.overlay },
+  filterSheet: { width: '100%', maxHeight: '88%', padding: 18, paddingBottom: 26, borderTopLeftRadius: 22, borderTopRightRadius: 22, backgroundColor: colors.surface, gap: 16 },
+  sheetHandle: { width: 44, height: 4, borderRadius: 2, alignSelf: 'center', backgroundColor: colors.borderStrong },
+  sheetHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 },
+  sheetTitle: { fontFamily: 'PoppinsBold', fontSize: 20, color: colors.text },
+  sheetCopy: { marginTop: 2, fontFamily: 'PoppinsRegular', fontSize: 12, color: colors.muted },
+  sheetClose: { width: 44, height: 44, borderRadius: 12, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  sheetActions: { flexDirection: 'row', gap: 10, paddingTop: 4 },
+  sheetAction: { flex: 1 },
 }));

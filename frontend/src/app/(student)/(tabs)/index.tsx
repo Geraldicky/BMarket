@@ -1,10 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useState } from 'react';
-import { router, useFocusEffect } from 'expo-router';
-import { TypewriterLoop, TypewriterOnce } from '@/components/typewriter';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import { router } from 'expo-router';
 import { endpoints, errorMessage } from '@/lib/api';
 import { Empty, ErrorState, Screen, Skeleton } from '@/components/ui';
 import { ListingCard } from '@/components/listing-card';
@@ -24,25 +21,6 @@ const categories = [
   ...Object.entries(CATEGORY_METADATA).map(([value, meta]) => ({ value, ...meta, icon: meta.icon as IconName })),
 ];
 
-// Rotating marketplace-style taglines under the greeting.
-const welcomePhrases = [
-  'Mau cari apa hari ini?',
-  'Laptop bekas mulus harga mahasiswa? Ada!',
-  'Buku kuliah semester depan, cek di sini.',
-  'Butuh jasa desain buat tugas? Tinggal cari.',
-  'Pre-order makanan kampus lagi dibuka!',
-  'Barang nganggur? Jual jadi cuan.',
-  'Belanja aman pakai escrow BMarket.',
-];
-
-// Quick filters on the "Cari listing" card at the bottom of Beranda.
-const searchShortcuts: { label: string; icon: IconName; params: Record<string, string> }[] = [
-  { label: 'Barang', icon: 'cube-outline', params: { type: 'PRODUCT' } },
-  { label: 'Jasa', icon: 'construct-outline', params: { type: 'SERVICE' } },
-  { label: 'Pre-order', icon: 'calendar-outline', params: { type: 'PRODUCT', mode: 'PREORDER' } },
-  { label: 'Termurah', icon: 'arrow-down', params: { sort: 'price_asc' } },
-];
-
 // Jasa maps to the Jasa listing type; every other category is a goods category.
 const openCategory = (value: string) => {
   if (value === 'SERVICES') openSearch({ type: 'SERVICE' });
@@ -58,7 +36,7 @@ function SectionHeader({ title, subtitle, action = 'Lihat semua', onPress }: { t
 function ListingShelf({ title, subtitle, items, cardWidth, onSeeAll, savedIds, onToggleSaved }: { title: string; subtitle: string; items: Listing[]; cardWidth: number; onSeeAll?: () => void; savedIds: Set<string>; onToggleSaved: (id: string, saved: boolean) => void }) {
   const styles = useStyles();
   if (!items.length) return null;
-  return <View style={styles.marketSection}><SectionHeader title={title} subtitle={subtitle} onPress={onSeeAll} /><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.shelf}>{items.map((item, index) => <Animated.View key={item.id} entering={FadeInDown.delay(Math.min(index * 28, 180)).duration(190)}><ListingCard storefront compact item={item} saved={savedIds.has(item.id)} onToggleSaved={() => onToggleSaved(item.id, savedIds.has(item.id))} style={{ width: cardWidth }} onPress={() => router.push({ pathname: '/(student)/listing/[id]', params: { id: item.id } })} /></Animated.View>)}</ScrollView></View>;
+  return <View style={styles.marketSection}><SectionHeader title={title} subtitle={subtitle} onPress={onSeeAll} /><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.shelf}>{items.map(item => <ListingCard key={item.id} storefront compact item={item} saved={savedIds.has(item.id)} onToggleSaved={() => onToggleSaved(item.id, savedIds.has(item.id))} style={{ width: cardWidth }} onPress={() => router.push({ pathname: '/(student)/listing/[id]', params: { id: item.id } })} />)}</ScrollView></View>;
 }
 
 function HomeSkeleton({ cardWidth }: { cardWidth: number }) {
@@ -87,18 +65,21 @@ export default function HomeScreen() {
   const services = listings.filter(item => item.type === 'SERVICE');
   const preorders = listings.filter(item => item.mode === 'PREORDER' && item.preorderAccepting);
   const firstName = user?.name?.trim().split(' ')[0] || 'Binusian';
-  // Re-play the one-time greeting animation every time the user comes back to Beranda.
-  const [greetingRun, setGreetingRun] = useState(0);
-  useFocusEffect(useCallback(() => { setGreetingRun(run => run + 1); }, []));
   const shelfWidth = desktop ? 188 : Math.min(168, width * .44);
   const toggleListingSaved = (id: string, saved: boolean) => toggleSaved.mutate({ id, saved });
 
   return (
     <Screen style={styles.page} backgroundColor={colors.surface}>
-      <Animated.View entering={FadeInDown.duration(180)} style={styles.welcomeRow}>
-        <TypewriterOnce key={`${greetingRun}-${firstName}`} text={`Halo, ${firstName}!`} style={styles.welcomeTitle} />
-        <TypewriterLoop phrases={welcomePhrases} style={styles.welcomeSubtitle} numberOfLines={1} />
-      </Animated.View>
+      <View style={styles.welcomeRow}>
+        <Text style={styles.welcomeTitle}>Halo, {firstName}!</Text>
+        <Text style={styles.welcomeSubtitle}>Temukan barang, jasa, dan pre-order dari komunitas BINUS.</Text>
+      </View>
+
+      <Pressable accessibilityRole="button" accessibilityLabel="Cari barang, jasa, atau kebutuhan kampus" onPress={() => openSearch()} style={({ pressed }) => [styles.searchEntry, pressed && styles.searchEntryPressed]}>
+        <View style={styles.searchEntryIcon}><Ionicons name="search" size={20} color={colors.primary} /></View>
+        <Text style={styles.searchEntryText}>Cari barang, jasa, atau kebutuhan kampus</Text>
+        <Ionicons name="arrow-forward" size={18} color={colors.muted} />
+      </Pressable>
 
       <View style={styles.categoryPanel}><SectionHeader title="Kategori" /><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRail}>{categories.map(item => <Pressable key={item.value} onPress={() => openCategory(item.value)} style={({ pressed }) => [styles.categoryItem, pressed && styles.categoryItemPressed]}><View style={[styles.categoryIcon, { backgroundColor: `${item.color}22` }]}><Ionicons name={item.icon} size={25} color={item.color} /></View><Text style={styles.categoryText}>{item.label}</Text></Pressable>)}</ScrollView></View>
 
@@ -111,32 +92,6 @@ export default function HomeScreen() {
         <ListingShelf title="Jasa mahasiswa" subtitle="Desain, tutoring, bantuan tugas, dan lainnya" items={services.slice(0, 10)} cardWidth={shelfWidth} onSeeAll={() => openSearch({ type: 'SERVICE' })} savedIds={savedIds} onToggleSaved={toggleListingSaved} />
       </>}
 
-      <View style={[styles.searchCta, !desktop && styles.searchCtaMobile]}>
-        <View pointerEvents="none" style={[styles.ctaBubble, styles.ctaBubbleLarge]} />
-        <View pointerEvents="none" style={[styles.ctaBubble, styles.ctaBubbleSmall]} />
-        <View style={[styles.searchCtaMain, !desktop && styles.searchCtaMainMobile]}>
-          <View style={styles.searchCtaCopy}>
-            <View style={styles.searchCtaEyebrow}><Ionicons name="sparkles" size={13} color={colors.warning} /><Text style={styles.searchCtaEyebrowText}>BELUM KETEMU YANG DICARI?</Text></View>
-            <Text style={[styles.searchCtaTitle, !desktop && styles.searchCtaTitleMobile]}>Cari listing sesuai kebutuhanmu</Text>
-            <Text style={styles.searchCtaText}>Saring barang dan jasa berdasarkan tipe, model, kategori, sampai harga termurah.</Text>
-            <View style={styles.ctaChips}>
-              {searchShortcuts.map(item => (
-                <Pressable key={item.label} accessibilityRole="button" onPress={() => openSearch(item.params)} style={({ pressed }) => [styles.ctaChip, pressed && styles.ctaChipPressed]}>
-                  <Ionicons name={item.icon} size={14} color={colors.primary} />
-                  <Text style={styles.ctaChipText}>{item.label}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-          <View style={[styles.searchCtaSide, !desktop && styles.searchCtaSideMobile]}>
-            {desktop ? <View style={styles.searchCtaIllustration}><Ionicons name="search" size={40} color={colors.primary} /></View> : null}
-            <Pressable accessibilityRole="button" onPress={() => openSearch()} style={({ pressed }) => [styles.searchCtaButton, !desktop && styles.searchCtaButtonMobile, pressed && styles.ctaChipPressed]}>
-              <Text style={styles.searchCtaButtonText}>Mulai cari</Text>
-              <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
-            </Pressable>
-          </View>
-        </View>
-      </View>
     </Screen>
   );
 }
@@ -146,6 +101,10 @@ const useStyles = makeStyles(() => ({
   welcomeRow: { minHeight: 44, justifyContent: 'center', gap: 0 },
   welcomeTitle: { fontFamily: 'PoppinsBold', fontSize: 23, lineHeight: 30, color: colors.text, letterSpacing: -.2 },
   welcomeSubtitle: { fontFamily: 'PoppinsRegular', fontSize: 12.5, lineHeight: 18, color: colors.muted },
+  searchEntry: { minHeight: 58, paddingHorizontal: 14, borderRadius: 14, borderWidth: 1, borderColor: colors.primaryBorder, backgroundColor: colors.primaryMist, flexDirection: 'row', alignItems: 'center', gap: 11, ...webTransition },
+  searchEntryPressed: { backgroundColor: colors.primarySoft, transform: [{ scale: .995 }] },
+  searchEntryIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  searchEntryText: { flex: 1, fontFamily: 'PoppinsMedium', fontSize: 13, color: colors.textSoft },
 
   categoryPanel: { gap: 10, paddingTop: 2, paddingBottom: 2 },
   categoryRail: { gap: 9, paddingRight: 8 },
@@ -158,7 +117,7 @@ const useStyles = makeStyles(() => ({
   sectionHeader: { minHeight: 40, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 },
   sectionTitle: { fontFamily: 'PoppinsBold', fontSize: 18.5, color: colors.text, letterSpacing: -.18 },
   sectionSubtitle: { fontFamily: 'PoppinsRegular', fontSize: 11.75, color: colors.muted, marginTop: 1 },
-  seeAll: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 6, paddingHorizontal: 2 },
+  seeAll: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6 },
   seeAllText: { fontFamily: 'PoppinsSemiBold', fontSize: 11.5, color: colors.primary },
   shelf: { gap: 12, paddingRight: 12, paddingBottom: 8, paddingTop: 2 },
 
@@ -167,28 +126,4 @@ const useStyles = makeStyles(() => ({
   skeletonCard: { overflow: 'hidden', borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: colors.surface },
   skeletonCardBody: { padding: 12, gap: 8 },
 
-  // Soft tinted card: light blue ground with dark text so it stays readable without shouting.
-  searchCta: { position: 'relative', overflow: 'hidden', paddingHorizontal: 28, paddingVertical: 26, borderRadius: 18, borderWidth: 1, borderColor: colors.primaryBorder, backgroundColor: colors.primaryMist },
-  searchCtaMobile: { paddingHorizontal: 18, paddingVertical: 20, borderRadius: 16 },
-  ctaBubble: { position: 'absolute', borderRadius: 999, backgroundColor: 'rgba(11,87,183,.06)' },
-  ctaBubbleLarge: { width: 260, height: 260, right: -70, top: -110 },
-  ctaBubbleSmall: { width: 140, height: 140, right: 150, bottom: -90, backgroundColor: 'rgba(125,187,255,.16)' },
-  searchCtaMain: { flexDirection: 'row', alignItems: 'center', gap: 24 },
-  searchCtaMainMobile: { flexDirection: 'column', alignItems: 'stretch', gap: 16 },
-  searchCtaCopy: { flex: 1, minWidth: 0, gap: 6 },
-  searchCtaEyebrow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  searchCtaEyebrowText: { fontFamily: 'PoppinsSemiBold', fontSize: 10.5, letterSpacing: .6, color: colors.primary },
-  searchCtaTitle: { fontFamily: 'PoppinsBold', fontSize: 22, lineHeight: 30, color: colors.text, letterSpacing: -.2 },
-  searchCtaTitleMobile: { fontSize: 18, lineHeight: 25 },
-  searchCtaText: { fontFamily: 'PoppinsRegular', fontSize: 12.5, lineHeight: 19, color: colors.textSoft },
-  ctaChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
-  ctaChip: { minHeight: 34, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: colors.primaryBorder, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 6, ...webTransition },
-  ctaChipPressed: { opacity: .8, transform: [{ scale: .97 }] },
-  ctaChipText: { fontFamily: 'PoppinsSemiBold', fontSize: 12, color: colors.primary },
-  searchCtaSide: { alignItems: 'center', gap: 16 },
-  searchCtaSideMobile: { alignItems: 'stretch' },
-  searchCtaIllustration: { width: 84, height: 84, borderRadius: 24, borderWidth: 1, borderColor: colors.primaryBorder, backgroundColor: 'rgba(11,87,183,.08)', alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '-8deg' }] },
-  searchCtaButton: { minHeight: 46, paddingHorizontal: 22, borderRadius: 12, backgroundColor: colors.brand, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, ...webTransition },
-  searchCtaButtonMobile: { width: '100%' },
-  searchCtaButtonText: { fontFamily: 'PoppinsBold', fontSize: 13.5, color: '#FFFFFF' },
 }));

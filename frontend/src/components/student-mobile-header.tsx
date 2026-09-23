@@ -31,18 +31,16 @@ export function StudentMobileHeader({ back = false }: { back?: boolean }) {
       <View style={styles.inner}>
         <View style={styles.brandRow}>
           {back ? <Pressable accessibilityRole="button" accessibilityLabel="Kembali" hitSlop={8} onPress={goBack} style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}><Ionicons name="chevron-back" size={22} color="#FFFFFF" /></Pressable> : null}
-          <Pressable accessibilityRole="button" accessibilityLabel="Beranda" onPress={() => router.replace('/(student)/(tabs)')}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Beranda" onPress={() => router.replace('/(student)/(tabs)')} style={styles.brandButton}>
             <BrandLogo style={styles.brandLogo} />
           </Pressable>
         </View>
         <View style={styles.actions}>
-          <Pressable accessibilityLabel="Buat listing" onPress={() => router.push('/(student)/listing/form')} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}><Ionicons name="add" size={20} color="#FFFFFF" /></Pressable>
-          <Pressable accessibilityLabel="Tersimpan" onPress={() => router.push('/(student)/saved')} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}><Ionicons name="heart-outline" size={19} color="#FFFFFF" /></Pressable>
-          <Pressable accessibilityLabel="Notifikasi" onPress={() => router.push('/(student)/notifications')} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
+          <Pressable accessibilityRole="button" accessibilityLabel={unread ? `Notifikasi, ${unread} belum dibaca` : 'Notifikasi'} onPress={() => router.push('/(student)/notifications')} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
             <Ionicons name={unread ? 'notifications' : 'notifications-outline'} size={19} color="#FFFFFF" />
             {unread ? <View style={styles.badge}><Text style={styles.badgeText}>{unread > 9 ? '9+' : unread}</Text></View> : null}
           </Pressable>
-          <Pressable accessibilityLabel="Profil" onPress={() => router.push('/(student)/(tabs)/profile')} style={({ pressed }) => [pressed && styles.pressed]}><UserAvatar name={user?.name} avatarUrl={user?.avatarUrl} style={styles.avatar} textStyle={styles.avatarText} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="Buka profil" onPress={() => router.push('/(student)/(tabs)/profile')} style={({ pressed }) => [styles.avatarButton, pressed && styles.pressed]}><UserAvatar name={user?.name} avatarUrl={user?.avatarUrl} style={styles.avatar} textStyle={styles.avatarText} /></Pressable>
         </View>
       </View>
     </View>
@@ -53,13 +51,15 @@ const useStyles = makeStyles(() => ({
   header: { backgroundColor: colors.brand, zIndex: 1000 },
   inner: { height: 60, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
-  backButton: { width: 36, height: 36, marginLeft: -6, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  backButton: { width: 44, height: 44, marginLeft: -6, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  brandButton: { minHeight: 44, justifyContent: 'center' },
   brandLogo: { width: 118, height: 38 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  iconButton: { position: 'relative', width: 38, height: 38, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,.18)', backgroundColor: 'rgba(0,0,0,.08)', alignItems: 'center', justifyContent: 'center', ...webTransition },
+  iconButton: { position: 'relative', width: 44, height: 44, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,.18)', backgroundColor: 'rgba(0,0,0,.08)', alignItems: 'center', justifyContent: 'center', ...webTransition },
   badge: { position: 'absolute', right: -4, top: -4, minWidth: 16, height: 16, paddingHorizontal: 3, borderRadius: 8, backgroundColor: colors.badge, alignItems: 'center', justifyContent: 'center' },
   badgeText: { color: '#FFFFFF', fontFamily: 'PoppinsBold', fontSize: 8 },
-  avatar: { width: 38, height: 38, borderRadius: 10, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  avatarButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  avatar: { width: 40, height: 40, borderRadius: 11, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontFamily: 'PoppinsBold', fontSize: 13, color: '#0B57B7' },
   pressed: { opacity: .75 },
 }));

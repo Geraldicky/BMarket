@@ -11,6 +11,7 @@ import { colors, radius, shadowSoft, spacing, makeStyles } from '@/constants/the
 import { useAuth } from '@/store/auth';
 import type { ChatRoom, Message } from '@/types';
 import { UserAvatar } from '@/components/user-avatar';
+import { transactionStatusLabel } from '@/lib/transaction-presentation';
 
 function messageTime(value: string) {
   return new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit' }).format(new Date(value));
@@ -23,14 +24,6 @@ function roomTime(value?: string) {
   const sameDay = date.toDateString() === today.toDateString();
   return new Intl.DateTimeFormat('id-ID', sameDay ? { hour: '2-digit', minute: '2-digit' } : { day: '2-digit', month: 'short' }).format(date);
 }
-
-const statusLabel: Record<string, string> = {
-  PENDING: 'Menunggu pembayaran',
-  PAID: 'Koordinasi / penyerahan',
-  CONFIRMED: 'Sedang diproses',
-  COMPLETED: 'Transaksi selesai',
-  CANCELLED: 'Transaksi dibatalkan',
-};
 
 function RoomItem({ room, currentUserId, active }: { room: ChatRoom; currentUserId?: string; active: boolean }) {
   const styles = useStyles();
@@ -127,7 +120,7 @@ function ChatRoomContent({ id, transactionId, name, desktop }: ChatRoomContentPr
 
       {transaction.data ? <Pressable onPress={() => router.push({ pathname: '/(student)/transaction/[id]', params: { id: transaction.data!.id } })} style={[styles.contextCard, desktop && styles.contextCardDesktop]}>
         <View style={styles.contextIcon}><Ionicons name="receipt-outline" size={20} color={colors.primary} /></View>
-        <View style={styles.contextBody}><Text numberOfLines={1} style={styles.contextTitle}>{transaction.data.listing.title}</Text><Text style={styles.contextMeta}>{statusLabel[transaction.data.status] || transaction.data.status} · Meetup dibahas di chat ini</Text></View>
+        <View style={styles.contextBody}><Text numberOfLines={1} style={styles.contextTitle}>{transaction.data.listing.title}</Text><Text style={styles.contextMeta}>{transactionStatusLabel(transaction.data.status)} · Meetup dibahas di chat ini</Text></View>
         {!desktop ? <><Text style={styles.contextLink}>Lihat pesanan</Text><Ionicons name="chevron-forward" size={17} color={colors.primary} /></> : null}
       </Pressable> : null}
 

@@ -27,7 +27,7 @@ export function BackButton({ desktopOnly = false, fallback = '/(student)/(tabs)'
 }
 
 const useStyles = makeStyles(() => ({
-  button: { alignSelf: 'flex-start', minHeight: 38, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 6, ...webTransition },
+  button: { alignSelf: 'flex-start', minHeight: 44, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 6, ...webTransition },
   pressed: { opacity: .7 },
   text: { fontFamily: 'PoppinsSemiBold', fontSize: 13, color: colors.primary },
 }));

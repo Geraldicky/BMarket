@@ -4,7 +4,7 @@ import { Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } fro
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
 import { io, Socket } from 'socket.io-client';
-import { Card, Empty, ErrorState, Field, InlineAlert, Loader, Screen, Title } from '@/components/ui';
+import { Button, Card, Empty, ErrorState, Field, InlineAlert, Loader, Screen, Title } from '@/components/ui';
 import { BackButton } from '@/components/back-button';
 import { endpoints, errorMessage, SOCKET_URL, TOKEN_KEY } from '@/lib/api';
 import { getStoredValue } from '@/lib/token-storage';
@@ -12,6 +12,7 @@ import { colors, radius, shadowSoft, makeStyles } from '@/constants/theme';
 import { useAuth } from '@/store/auth';
 import type { ChatRoom, Message } from '@/types';
 import { UserAvatar } from '@/components/user-avatar';
+import { transactionStatusLabel } from '@/lib/transaction-presentation';
 
 function messageTime(value?: string) {
   if (!value) return '';
@@ -24,14 +25,6 @@ function messageTime(value?: string) {
 function exactMessageTime(value: string) {
   return new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit' }).format(new Date(value));
 }
-
-const statusLabel: Record<string, string> = {
-  PENDING: 'Menunggu pembayaran',
-  PAID: 'Koordinasi / penyerahan',
-  CONFIRMED: 'Sedang diproses',
-  COMPLETED: 'Transaksi selesai',
-  CANCELLED: 'Transaksi dibatalkan',
-};
 
 function RoomRow({ room, currentUserId, active = false, onPress }: { room: ChatRoom; currentUserId?: string; active?: boolean; onPress?: () => void }) {
   const styles = useStyles();
@@ -119,7 +112,7 @@ function DesktopConversation({ roomId, transactionId, rooms, currentUserId }: { 
 
       {transaction.data ? <Pressable onPress={() => router.push({ pathname: '/(student)/transaction/[id]', params: { id: transaction.data!.id } })} style={styles.contextCard}>
         <View style={styles.contextIcon}><Ionicons name="receipt-outline" size={19} color={colors.primary} /></View>
-        <View style={styles.contextBody}><Text numberOfLines={1} style={styles.contextTitle}>{transaction.data.listing.title}</Text><Text style={styles.contextMeta}>{statusLabel[transaction.data.status] || transaction.data.status} · Meetup dibahas di chat ini</Text></View>
+        <View style={styles.contextBody}><Text numberOfLines={1} style={styles.contextTitle}>{transaction.data.listing.title}</Text><Text style={styles.contextMeta}>{transactionStatusLabel(transaction.data.status)} · Meetup dibahas di chat ini</Text></View>
         <Ionicons name="chevron-forward" size={16} color={colors.primary} />
       </Pressable> : null}
 
@@ -182,7 +175,7 @@ export default function ChatsScreen() {
             </View>
             <View style={styles.sidebarSearch}><Field value={search} onChangeText={setSearch} icon="search-outline" placeholder="Cari percakapan..." /></View>
             <ScrollView style={styles.roomScroll} contentContainerStyle={styles.roomList} showsVerticalScrollIndicator={false}>
-              {query.isLoading ? <Loader /> : query.isError ? <ErrorState message={errorMessage(query.error)} retry={() => query.refetch()} /> : !rooms.length ? <Empty title={search ? 'Tidak ditemukan' : 'Belum ada percakapan'} message={search ? 'Coba nama lain.' : 'Mulai chat dari detail listing.'} icon="chatbubble-ellipses-outline" /> : rooms.map(room => <RoomRow key={room.id} room={room} currentUserId={user?.id} active={room.id === selectedRoomId} onPress={() => selectRoom(room)} />)}
+              {query.isLoading ? <Loader /> : query.isError ? <ErrorState message={errorMessage(query.error)} retry={() => query.refetch()} /> : !rooms.length ? <Empty title={search ? 'Tidak ditemukan' : 'Belum ada percakapan'} message={search ? 'Coba nama lain.' : 'Mulai chat dari detail listing.'} icon="chatbubble-ellipses-outline" action={!search ? <Button title="Cari listing" icon="search-outline" onPress={() => router.push({ pathname: '/(student)/(tabs)/search' } as never)} /> : undefined} /> : rooms.map(room => <RoomRow key={room.id} room={room} currentUserId={user?.id} active={room.id === selectedRoomId} onPress={() => selectRoom(room)} />)}
             </ScrollView>
           </View>
 
@@ -201,7 +194,7 @@ export default function ChatsScreen() {
     <BackButton />
     <Title eyebrow="PESAN BMARKET" subtitle="Tanyakan kondisi dan sepakati detail transaksi. Pesan otomatis terhapus setelah 7 hari.">Pesan</Title>
     <View style={[styles.toolbar, narrow && styles.toolbarNarrow]}><View style={[styles.search, narrow && styles.searchNarrow]}><Field value={search} onChangeText={setSearch} icon="search-outline" placeholder="Cari nama pengguna..." /></View><View style={[styles.unread, narrow && styles.unreadNarrow]}><View style={[styles.unreadDot, !unread && styles.unreadDotIdle]} /><Text style={styles.unreadText}>{unread ? `${unread} belum dibaca` : 'Semua sudah dibaca'}</Text></View></View>
-    {query.isLoading ? <Loader /> : query.isError ? <ErrorState message={errorMessage(query.error)} retry={() => query.refetch()} /> : !rooms.length ? <Empty title={search ? 'Percakapan tidak ditemukan' : 'Belum ada percakapan'} message={search ? 'Coba nama pengguna yang lain.' : 'Mulai percakapan dari halaman detail barang atau jasa.'} icon="chatbubble-ellipses-outline" /> : <Card style={styles.list}>{rooms.map(room => <RoomRow key={room.id} room={room} currentUserId={user?.id} />)}</Card>}
+    {query.isLoading ? <Loader /> : query.isError ? <ErrorState message={errorMessage(query.error)} retry={() => query.refetch()} /> : !rooms.length ? <Empty title={search ? 'Percakapan tidak ditemukan' : 'Belum ada percakapan'} message={search ? 'Coba nama pengguna yang lain.' : 'Mulai percakapan dari halaman detail barang atau jasa.'} icon="chatbubble-ellipses-outline" action={!search ? <Button title="Cari listing" icon="search-outline" onPress={() => router.push({ pathname: '/(student)/(tabs)/search' } as never)} /> : undefined} /> : <Card style={styles.list}>{rooms.map(room => <RoomRow key={room.id} room={room} currentUserId={user?.id} />)}</Card>}
   </Screen>;
 }
 

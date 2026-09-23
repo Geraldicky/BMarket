@@ -23,10 +23,10 @@ export function Screen({ children, scroll = true, style, backgroundColor }: View
   );
 }
 
-export function Title({ children, subtitle, action, center = false }: { children: React.ReactNode; subtitle?: string; eyebrow?: string; action?: React.ReactNode; center?: boolean }) {
+export function Title({ children, subtitle, eyebrow, action, center = false }: { children: React.ReactNode; subtitle?: string; eyebrow?: string; action?: React.ReactNode; center?: boolean }) {
   const styles = useStyles();
   const mobile = useWindowDimensions().width < 600;
-  return <View style={[styles.titleRow, mobile && styles.titleRowMobile]}><View style={styles.titleWrap}><Text style={[styles.title, mobile && styles.titleMobile, center && styles.textCenter]}>{children}</Text>{subtitle ? <Text style={[styles.subtitle, mobile && styles.subtitleMobile, center && styles.textCenter]}>{subtitle}</Text> : null}</View>{action ? <View style={[styles.titleAction, mobile && styles.titleActionMobile]}>{action}</View> : null}</View>;
+  return <View style={[styles.titleRow, mobile && styles.titleRowMobile]}><View style={styles.titleWrap}>{eyebrow ? <Text style={[styles.eyebrow, center && styles.textCenter]}>{eyebrow}</Text> : null}<Text accessibilityRole="header" style={[styles.title, mobile && styles.titleMobile, center && styles.textCenter]}>{children}</Text>{subtitle ? <Text style={[styles.subtitle, mobile && styles.subtitleMobile, center && styles.textCenter]}>{subtitle}</Text> : null}</View>{action ? <View style={[styles.titleAction, mobile && styles.titleActionMobile]}>{action}</View> : null}</View>;
 }
 
 export function Card(props: ViewProps) {
@@ -55,11 +55,11 @@ export function SectionHeader({ title, subtitle, actionLabel, onAction }: { titl
 
 export function Skeleton({ width = '100%', height = 16, radius: skeletonRadius = 8, style }: { width?: number | `${number}%`; height?: number; radius?: number; style?: StyleProp<ViewStyle> }) {
   const styles = useStyles();
-  return <View style={[styles.skeleton, { width, height, borderRadius: skeletonRadius }, style]} />;
+  return <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[styles.skeleton, { width, height, borderRadius: skeletonRadius }, style]} />;
 }
 
-export function Field({ label, hint, error, icon, rightIcon, onRightPress, dense = false, ...props }: TextInputProps & {
-  label?: string; hint?: string; error?: string; icon?: IconName; rightIcon?: IconName; onRightPress?: () => void;
+export function Field({ label, hint, error, icon, rightIcon, rightAccessibilityLabel, onRightPress, dense = false, ...props }: TextInputProps & {
+  label?: string; hint?: string; error?: string; icon?: IconName; rightIcon?: IconName; rightAccessibilityLabel?: string; onRightPress?: () => void;
   /** Tighter label and input sizing for height-constrained screens (e.g. auth forms on phones). */
   dense?: boolean;
 }) {
@@ -71,13 +71,16 @@ export function Field({ label, hint, error, icon, rightIcon, onRightPress, dense
       <View style={[styles.inputShell, dense && styles.inputShellDense, focused && styles.inputFocused, error && styles.inputError]}>
         {icon ? <Ionicons name={icon} size={dense ? 17 : 19} color={focused ? colors.primary : colors.muted} /> : null}
         <TextInput
+          accessibilityLabel={props.accessibilityLabel || label}
+          accessibilityHint={props.accessibilityHint || error || hint}
+          accessibilityState={{ disabled: Boolean(props.editable === false) }}
           placeholderTextColor={colors.muted}
           {...props}
           onFocus={event => { setFocused(true); props.onFocus?.(event); }}
           onBlur={event => { setFocused(false); props.onBlur?.(event); }}
           style={[styles.input, dense && styles.inputDense, props.multiline && styles.multiline, props.style]}
         />
-        {rightIcon ? <Pressable accessibilityRole="button" hitSlop={8} onPress={onRightPress} style={({ pressed }) => [styles.inputAction, pressed && { opacity: 0.55 }]}><Ionicons name={rightIcon} size={20} color={colors.muted} /></Pressable> : null}
+        {rightIcon ? <Pressable accessibilityRole="button" accessibilityLabel={rightAccessibilityLabel || 'Aksi kolom'} hitSlop={8} onPress={onRightPress} style={({ pressed }) => [styles.inputAction, pressed && { opacity: 0.55 }]}><Ionicons name={rightIcon} size={20} color={colors.muted} /></Pressable> : null}
       </View>
       {error ? <Text style={styles.fieldError}>{error}</Text> : hint ? <Text style={styles.hint}>{hint}</Text> : null}
     </View>
@@ -93,6 +96,7 @@ export function Button({ title, onPress, variant = 'primary', loading, disabled,
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={{ disabled: Boolean(disabled || loading), busy: Boolean(loading) }}
       disabled={disabled || loading}
       onPress={onPress}
       onHoverIn={() => setHovered(true)}
@@ -116,7 +120,7 @@ export function InlineAlert({ message, tone = 'danger' }: { message: string; ton
   const color = tone === 'success' ? colors.success : tone === 'warning' ? colors.warning : colors.danger;
   const icon = tone === 'success' ? 'checkmark-circle-outline' : tone === 'warning' ? 'time-outline' : 'alert-circle-outline';
   const boxStyle = tone === 'success' ? styles.alertSuccess : tone === 'warning' ? styles.alertWarning : styles.alertDanger;
-  return <View style={[styles.alert, boxStyle]}><Ionicons name={icon} size={19} color={color} /><Text style={[styles.alertText, { color }]}>{message}</Text></View>;
+  return <View accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.alert, boxStyle]}><Ionicons name={icon} size={19} color={color} /><Text style={[styles.alertText, { color }]}>{message}</Text></View>;
 }
 
 
@@ -189,7 +193,7 @@ export function Empty({ title, message, icon = 'storefront-outline', action }: {
 
 export function Loader() {
   const styles = useStyles();
-  return <View style={styles.center}><ActivityIndicator size="large" color={colors.primary} /><Text style={styles.loadingText}>Menyiapkan untukmu...</Text></View>;
+  return <View accessibilityRole="progressbar" accessibilityLiveRegion="polite" style={styles.center}><ActivityIndicator size="large" color={colors.primary} /><Text style={styles.loadingText}>Menyiapkan untukmu...</Text></View>;
 }
 
 export function ErrorState({ message, retry }: { message: string; retry?: () => void }) {
@@ -227,6 +231,7 @@ const useStyles = makeStyles(() => ({
   titleRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: spacing.lg, marginBottom: spacing.xs },
   titleRowMobile: { alignItems: 'stretch', flexDirection: 'column', gap: 10 },
   titleWrap: { flex: 1, gap: 4 },
+  eyebrow: { fontFamily: 'PoppinsBold', fontSize: 10.5, letterSpacing: .8, color: colors.primary },
   titleAction: { alignSelf: 'center' },
   titleActionMobile: { alignSelf: 'stretch' },
   title: { fontFamily: 'PoppinsBold', fontSize: 30, lineHeight: 38, color: colors.text },

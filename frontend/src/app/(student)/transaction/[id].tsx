@@ -12,25 +12,17 @@ import { colors, radius, makeStyles } from '@/constants/theme';
 import { endpoints, errorMessage } from '@/lib/api';
 import { canPreviewDeliverable, deliverableIcon, fileSizeLabel, openSignedFile, reservePreviewTab } from '@/lib/deliverables';
 import { useAuth } from '@/store/auth';
-import type { DisputeReason, Transaction, TransactionDeliverable, TransactionStatus } from '@/types';
+import type { DisputeReason, Transaction, TransactionDeliverable } from '@/types';
 import { DISPUTE_REASON_OPTIONS } from '@/lib/domain-metadata';
 import { PAYMENT_POLL_INTERVAL_MS } from '@/lib/runtime-config';
 import { ListingImageFallback } from '@/components/listing-image-fallback';
 import { UserAvatar } from '@/components/user-avatar';
+import { transactionPresentation } from '@/lib/transaction-presentation';
 
 const DELIVERABLE_MAX_BYTES = 20 * 1024 * 1024;
 const DELIVERABLE_MAX_FILES = 5;
 
 type ActionKind = 'PAY' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
-
-// A function (not a constant) so the colors follow the active theme at render time.
-const statusMeta = (): Record<TransactionStatus, { title: string; description: string; color: string; tint: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> => ({
-  PENDING: { title: 'Menunggu pembayaran', description: 'Stok sudah direservasi. Buyer perlu menyelesaikan pembayaran Midtrans.', color: colors.warning, tint: colors.warningSoft, icon: 'time-outline' },
-  PAID: { title: 'Pembayaran aman di escrow', description: 'Dana tersimpan aman sampai penyerahan pesanan selesai.', color: colors.primary, tint: colors.primarySoft, icon: 'shield-checkmark-outline' },
-  CONFIRMED: { title: 'Penyerahan sedang berlangsung', description: 'Ikuti detail transaksi, lalu selesaikan setelah pesanan diterima.', color: colors.purple, tint: colors.purpleSoft, icon: 'cube-outline' },
-  COMPLETED: { title: 'Transaksi selesai', description: 'Dana escrow sudah dilepas ke seller setelah dikurangi biaya layanan.', color: colors.success, tint: colors.successSoft, icon: 'checkmark-circle-outline' },
-  CANCELLED: { title: 'Transaksi dibatalkan', description: 'Dana dan stok telah dikembalikan sesuai kondisi terakhir transaksi.', color: colors.danger, tint: colors.dangerSoft, icon: 'close-circle-outline' },
-});
 
 const actionCopy: Record<ActionKind, { eyebrow: string; title: string; description: string; confirm: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> = {
   PAY: { eyebrow: 'MIDTRANS SNAP SANDBOX', title: 'Buka halaman pembayaran?', description: 'Kamu akan diarahkan ke halaman aman Midtrans. Status pesanan hanya berubah setelah konfirmasi server Midtrans diterima BMarket.', confirm: 'Lanjut ke Midtrans', icon: 'card-outline' },
@@ -315,11 +307,7 @@ export default function TransactionDetailScreen() {
 
   const meetup = transaction.fulfillmentMethod === 'CAMPUS_MEETUP';
   const service = transaction.listing.mode === 'SERVICE';
-  const meta = meetup && transaction.status === 'PAID'
-    ? service
-      ? { ...statusMeta().PAID, title: 'Jasa sedang dikerjakan', description: 'Dana aman di escrow. Penjual mengunggah file hasil jasa di halaman ini; setelah diperiksa, buyer menekan Terima hasil.' }
-      : { ...statusMeta().PAID, title: 'Siap koordinasi meetup', description: 'Dana aman di escrow. Atur waktu dan lokasi lewat chat; setelah barang diterima, gunakan kode serah-terima.' }
-    : statusMeta()[transaction.status];
+  const meta = transactionPresentation(transaction, user?.id);
   const counterpart = buyer ? transaction.seller : transaction.buyer;
   const active = ['PENDING', 'PAID', 'CONFIRMED'].includes(transaction.status);
   const disputeActive = Boolean(transaction.dispute && ['OPEN', 'IN_REVIEW'].includes(transaction.dispute.status));
@@ -356,6 +344,7 @@ export default function TransactionDetailScreen() {
           <View style={styles.statusBody}>
             <View style={styles.statusTitleRow}><Text style={[styles.statusTitle, { color: meta.color }]}>{meta.title}</Text>{active ? <View style={styles.liveBadge}><View style={[styles.liveDot, { backgroundColor: meta.color }]} /><Text style={styles.liveText}>AKTIF</Text></View> : null}</View>
             <Text style={styles.statusDescription}>{meta.description}</Text>
+            <View style={styles.nextStep}><Text style={styles.nextStepLabel}>LANGKAH BERIKUTNYA</Text><Text style={styles.nextStepText}>{meta.nextAction}</Text></View>
           </View>
         </View>
         <View style={[styles.statusAside, mobile && styles.statusAsideMobile]}>
@@ -608,6 +597,9 @@ const useStyles = makeStyles(() => ({
   statusTitleRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 9 },
   statusTitle: { fontFamily: 'PoppinsBold', fontSize: 16.5 },
   statusDescription: { maxWidth: 650, fontFamily: 'PoppinsRegular', fontSize: 12.5, lineHeight: 19, color: colors.textSoft },
+  nextStep: { maxWidth: 650, marginTop: 7, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.border },
+  nextStepLabel: { fontFamily: 'PoppinsBold', fontSize: 9.5, letterSpacing: .7, color: colors.muted },
+  nextStepText: { marginTop: 2, fontFamily: 'PoppinsMedium', fontSize: 12, lineHeight: 18, color: colors.text },
   liveBadge: { minHeight: 26, paddingHorizontal: 9, borderRadius: radius.pill, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 5 },
   liveDot: { width: 7, height: 7, borderRadius: 4 },
   liveText: { fontFamily: 'PoppinsBold', fontSize: 10.5, letterSpacing: .5, color: colors.textSoft },

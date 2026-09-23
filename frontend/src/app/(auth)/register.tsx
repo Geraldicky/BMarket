@@ -67,7 +67,7 @@ export default function RegisterScreen() {
         </View>
 
         <Field dense={mobile} label="Email BINUS" value={form.email} onChangeText={update('email')} autoCapitalize="none" autoComplete="email" keyboardType="email-address" icon="mail-outline" placeholder="nama@binus.ac.id" error={errors.email} />
-        <Field dense={mobile} label="Password" value={form.password} onChangeText={update('password')} secureTextEntry={!showPassword} autoComplete="new-password" icon="lock-closed-outline" rightIcon={showPassword ? 'eye-off-outline' : 'eye-outline'} onRightPress={() => setShowPassword(value => !value)} placeholder="Minimal 8 karakter" hint={mobile ? undefined : 'Gunakan minimal 8 karakter dan kombinasikan huruf dengan angka.'} error={errors.password} onSubmitEditing={submit} />
+        <Field dense={mobile} label="Password" value={form.password} onChangeText={update('password')} secureTextEntry={!showPassword} autoComplete="new-password" icon="lock-closed-outline" rightIcon={showPassword ? 'eye-off-outline' : 'eye-outline'} rightAccessibilityLabel={showPassword ? 'Sembunyikan password' : 'Tampilkan password'} onRightPress={() => setShowPassword(value => !value)} placeholder="Minimal 8 karakter" hint={mobile ? undefined : 'Gunakan minimal 8 karakter dan kombinasikan huruf dengan angka.'} error={errors.password} onSubmitEditing={submit} />
 
         <Button title="Buat akun" icon="person-add-outline" loading={loading} onPress={submit} style={styles.primaryButton} />
 

@@ -60,6 +60,7 @@ export default function ListingFormScreen() {
   // Remembers the last goods model so switching Jasa -> Barang restores it.
   const lastProductMode = useRef<ListingMode>('ONE_OFF');
   const [form, setForm] = useState(initialForm);
+  const [step, setStep] = useState(0);
   const [photos, setPhotos] = useState<ListingPhoto[]>([]);
   const [errors, setErrors] = useState<FormErrors>({});
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
@@ -227,6 +228,12 @@ export default function ListingFormScreen() {
       if (maxPerBuyer !== null && (!Number.isInteger(maxPerBuyer) || maxPerBuyer < 1 || maxPerBuyer > quota)) next.preorderMaxPerBuyer = 'Batas buyer harus 1 sampai jumlah kuota.';
     }
     setErrors(next);
+    if (Object.keys(next).length) {
+      const keys = Object.keys(next);
+      if (keys.some(key => ['title', 'description', 'category'].includes(key))) setStep(0);
+      else if (keys.some(key => ['photos', 'price', 'condition', 'stock'].includes(key))) setStep(1);
+      else setStep(2);
+    }
     return Object.keys(next).length === 0;
   };
 
@@ -279,19 +286,26 @@ export default function ListingFormScreen() {
 
   if (id && existing.isLoading) return <Screen><Loader /></Screen>;
 
+  const steps = [
+    { label: 'Detail', icon: 'document-text-outline' as const },
+    { label: 'Foto & harga', icon: 'images-outline' as const },
+    { label: isPreorder ? 'Pre-order' : isProduct ? 'Meetup' : 'Pengerjaan', icon: isPreorder ? 'calendar-outline' as const : isProduct ? 'people-outline' as const : 'construct-outline' as const },
+    { label: 'Preview', icon: 'eye-outline' as const },
+  ];
+
   return (
     <Screen>
       <Title center eyebrow="MULAI BERJUALAN" subtitle="Foto yang jelas dan informasi yang lengkap membantu pembeli mengambil keputusan.">
         {id ? 'Edit listing' : 'Pasang listing baru'}
       </Title>
 
+      <View accessibilityRole="tablist" style={styles.stepper}>{steps.map((item, index) => <Pressable key={item.label} accessibilityRole="tab" accessibilityState={{ selected: step === index }} onPress={() => setStep(index)} style={styles.stepItem}><View style={[styles.stepIcon, index <= step && styles.stepIconActive]}><Ionicons name={index < step ? 'checkmark' : item.icon} size={17} color={index <= step ? colors.white : colors.muted} /></View><Text numberOfLines={1} style={[styles.stepLabel, step === index && styles.stepLabelActive]}>{item.label}</Text>{index < steps.length - 1 ? <View style={[styles.stepLine, index < step && styles.stepLineActive]} /> : null}</Pressable>)}</View>
+
       <View style={styles.column}>
         <Card style={styles.formCard}>
-          <View>
-            <Text style={styles.cardTitle}>Informasi listing</Text>
-            <Text style={styles.cardCopy}>Tulis seperti kamu menjelaskan barang atau jasa ini kepada teman kampus.</Text>
-          </View>
+          <View><Text style={styles.cardTitle}>{step === 0 ? 'Jenis & informasi dasar' : step === 1 ? 'Foto, harga & kondisi' : step === 2 ? (isPreorder ? 'Pengaturan pre-order' : isProduct ? 'Meetup & serah terima' : 'Alur pengerjaan jasa') : 'Preview listing'}</Text><Text style={styles.cardCopy}>{step === 0 ? 'Jelaskan penawaranmu dengan singkat dan mudah dipahami.' : step === 1 ? 'Gunakan foto yang jelas dan harga yang sesuai.' : step === 2 ? 'Pastikan buyer memahami cara pesanan dipenuhi.' : 'Periksa kembali sebelum listing dipublikasikan.'}</Text></View>
 
+          <View style={step === 0 ? styles.stepContent : styles.stepHidden}>
           <View>
             <Text style={styles.label}>Tipe listing</Text>
             <View style={styles.modeGrid}>
@@ -349,7 +363,9 @@ export default function ListingFormScreen() {
           </View>
 
           <Field label="Deskripsi" multiline value={form.description} onChangeText={setField('description')} maxLength={5000} error={errors.description} placeholder="Ceritakan kondisi, spesifikasi, kelengkapan, dan cara penyerahan" hint={`${form.description.length}/5000 karakter`} />
+          </View>
 
+          <View style={step === 1 ? styles.stepContent : styles.stepHidden}>
           <View style={[styles.fieldRow, !desktop && styles.fieldRowMobile]}>
             <View style={styles.flex}><Field label={isPreorder ? 'Harga per unit' : 'Harga'} icon="cash-outline" value={form.price} onChangeText={setNumericField('price')} keyboardType="number-pad" error={errors.price} placeholder="Contoh: 75000" /></View>
             {form.mode === 'STOCKED' ? <View style={styles.stock}><Field label="Stok awal" value={form.stock} onChangeText={setNumericField('stock')} keyboardType="number-pad" error={errors.stock} /></View> : null}
@@ -368,8 +384,9 @@ export default function ListingFormScreen() {
               {errors.condition ? <Text style={styles.errorText}>{errors.condition}</Text> : null}
             </View>
           ) : null}
+          </View>
 
-          {isPreorder ? (
+          {step === 2 && isPreorder ? (
             <View style={styles.preorderBox}>
               <View style={styles.preorderHeader}><View style={styles.preorderIcon}><Ionicons name="calendar-outline" size={20} color={colors.primary} /></View><View style={styles.flex}><Text style={styles.preorderTitle}>Pengaturan pre-order</Text><Text style={styles.preorderCopy}>Buyer membayar melalui escrow saat ikut PO. Kamu mendapat jumlah pesanan yang lebih pasti.</Text></View></View>
               <View style={[styles.fieldRow, !desktop && styles.fieldRowMobile]}>
@@ -405,12 +422,14 @@ export default function ListingFormScreen() {
               <Field label="Lokasi pickup (opsional)" value={form.preorderPickupLocation} onChangeText={setField('preorderPickupLocation')} placeholder="Contoh: BINUS Anggrek, depan Admisi" />
               <Field label="Catatan pickup / produksi (opsional)" multiline value={form.preorderPickupNote} onChangeText={setField('preorderPickupNote')} placeholder="Contoh: pickup pukul 12:00–15:00. Bawa bukti transaksi BMarket." />
             </View>
-          ) : null}
+          ) : step === 2 ? <View style={styles.fulfillmentPreview}><View style={styles.fulfillmentIcon}><Ionicons name={isProduct ? 'people-outline' : 'chatbubbles-outline'} size={23} color={colors.primary} /></View><View style={styles.flex}><Text style={styles.fulfillmentTitle}>{isProduct ? 'Meetup langsung' : 'Detail jasa lewat chat'}</Text><Text style={styles.fulfillmentCopy}>{isProduct ? 'Buyer dan seller mengatur lokasi serta jadwal melalui chat setelah pembayaran. Transaksi selesai hanya setelah kode serah-terima diverifikasi.' : 'Buyer dan seller menyepakati ruang lingkup serta jadwal melalui chat. Hasil jasa dikirim lewat halaman transaksi dan dana tetap aman di escrow.'}</Text></View></View> : null}
+
+          {step === 3 ? <View style={styles.previewCard}><View style={styles.previewMedia}>{photos[0] ? <Image source={photos[0].uri} style={styles.previewImage} contentFit="cover" /> : <Ionicons name="images-outline" size={30} color={colors.muted} />}</View><View style={styles.previewBody}><Text style={styles.previewMode}>{listingType === 'SERVICE' ? 'JASA' : isPreorder ? 'PRE-ORDER' : 'BARANG'}</Text><Text numberOfLines={2} style={styles.previewTitle}>{form.title || 'Judul listing belum diisi'}</Text><Text style={styles.previewPrice}>{form.price ? `Rp ${Number(form.price).toLocaleString('id-ID')}` : 'Harga belum diisi'}</Text><Text numberOfLines={3} style={styles.previewDescription}>{form.description || 'Deskripsi belum diisi.'}</Text></View></View> : null}
 
         </Card>
 
         <View style={styles.side}>
-          <Card style={styles.photoCard}>
+          {step === 1 ? <Card style={styles.photoCard}>
             <View style={styles.photoHeader}>
               <View style={styles.flex}><Text style={styles.cardTitle}>Foto listing</Text><Text style={styles.cardCopy}>Foto pertama menjadi sampul etalase.</Text></View>
               <View style={styles.photoCount}><Text style={styles.photoCountText}>{photos.length}/4</Text></View>
@@ -445,7 +464,7 @@ export default function ListingFormScreen() {
               ) : null}
             </View>
             {errors.photos ? <Text style={styles.errorText}>{errors.photos}</Text> : null}
-          </Card>
+          </Card> : null}
 
           {uploadProgress !== null ? (
             <View style={styles.progressWrap}>
@@ -454,8 +473,8 @@ export default function ListingFormScreen() {
             </View>
           ) : null}
           {mutation.isError && Object.keys(errors).length > 0 ? <InlineAlert message="Lengkapi bagian yang masih ditandai." /> : null}
-          <Button title={id ? 'Simpan perubahan' : 'Publikasikan listing'} icon={id ? 'save-outline' : 'send-outline'} loading={mutation.isPending} onPress={() => mutation.mutate()} />
-          <Text style={styles.reviewNote}>{isPreorder ? 'Pre-order langsung tayang dan menerima pesanan sampai deadline atau kuota habis.' : 'Listing langsung tayang. Pengguna lain tetap dapat melaporkan konten yang melanggar aturan komunitas.'}</Text>
+          <View style={styles.stepActions}>{step > 0 ? <Button title="Kembali" variant="ghost" icon="arrow-back" disabled={mutation.isPending} onPress={() => setStep(current => current - 1)} style={styles.stepAction} /> : null}{step < steps.length - 1 ? <Button title="Lanjut" icon="arrow-forward" onPress={() => setStep(current => current + 1)} style={styles.stepAction} /> : <Button title={id ? 'Simpan perubahan' : 'Publikasikan listing'} icon={id ? 'save-outline' : 'send-outline'} loading={mutation.isPending} onPress={() => mutation.mutate()} style={styles.stepAction} />}</View>
+          {step === 3 ? <Text style={styles.reviewNote}>{isPreorder ? 'Pre-order langsung tayang dan menerima pesanan sampai deadline atau kuota habis.' : 'Listing langsung tayang. Pengguna lain tetap dapat melaporkan konten yang melanggar aturan komunitas.'}</Text> : null}
         </View>
       </View>
       <FeedbackDialog visible={Boolean(feedback)} tone={feedback?.tone || 'success'} title={feedback?.title || ''} message={feedback?.message || ''} primaryLabel={feedback?.listingId ? 'Lihat listing' : 'OK'} onClose={() => setFeedback(null)} onPrimary={() => { const listingId = feedback?.listingId; setFeedback(null); if (listingId) router.replace({ pathname: '/(student)/listing/[id]', params: { id: listingId } }); }} />
@@ -464,8 +483,18 @@ export default function ListingFormScreen() {
 }
 
 const useStyles = makeStyles(() => ({
+  stepper: { width: '100%', maxWidth: 860, alignSelf: 'center', flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 8 },
+  stepItem: { position: 'relative', flex: 1, alignItems: 'center', gap: 6 },
+  stepIcon: { zIndex: 2, width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: colors.borderStrong, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  stepIconActive: { borderColor: colors.primary, backgroundColor: colors.primary },
+  stepLabel: { fontFamily: 'PoppinsMedium', fontSize: 10.5, color: colors.muted, textAlign: 'center' },
+  stepLabelActive: { fontFamily: 'PoppinsSemiBold', color: colors.primary },
+  stepLine: { position: 'absolute', zIndex: 1, top: 17, left: '50%', right: '-50%', height: 2, backgroundColor: colors.border },
+  stepLineActive: { backgroundColor: colors.primary },
   column: { width: '100%', maxWidth: 860, alignSelf: 'center', gap: 18 },
   formCard: { width: '100%', gap: 22 },
+  stepContent: { gap: 22 },
+  stepHidden: { display: 'none' },
   side: { width: '100%', gap: 14 },
   cardTitle: { fontFamily: 'PoppinsBold', fontSize: 21, color: colors.text },
   cardCopy: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 19, color: colors.muted, marginTop: 3 },
@@ -486,6 +515,18 @@ const useStyles = makeStyles(() => ({
   preorderIcon: { width: 42, height: 42, borderRadius: 11, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' },
   preorderTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 14, color: colors.text },
   preorderCopy: { fontFamily: 'PoppinsRegular', fontSize: 11.5, lineHeight: 17, color: colors.muted, marginTop: 2 },
+  fulfillmentPreview: { minHeight: 120, padding: 18, borderRadius: 14, borderWidth: 1, borderColor: colors.primaryBorder, backgroundColor: colors.primaryMist, flexDirection: 'row', alignItems: 'flex-start', gap: 13 },
+  fulfillmentIcon: { width: 46, height: 46, borderRadius: 13, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  fulfillmentTitle: { fontFamily: 'PoppinsBold', fontSize: 16, color: colors.text },
+  fulfillmentCopy: { marginTop: 4, fontFamily: 'PoppinsRegular', fontSize: 12.5, lineHeight: 20, color: colors.textSoft },
+  previewCard: { overflow: 'hidden', borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  previewMedia: { width: '100%', aspectRatio: 16 / 9, backgroundColor: colors.surfaceMuted, alignItems: 'center', justifyContent: 'center' },
+  previewImage: { width: '100%', height: '100%' },
+  previewBody: { padding: 16, gap: 5 },
+  previewMode: { fontFamily: 'PoppinsBold', fontSize: 10, letterSpacing: .7, color: colors.primary },
+  previewTitle: { fontFamily: 'PoppinsBold', fontSize: 19, lineHeight: 26, color: colors.text },
+  previewPrice: { fontFamily: 'PoppinsBold', fontSize: 21, color: colors.primaryDark },
+  previewDescription: { fontFamily: 'PoppinsRegular', fontSize: 12.5, lineHeight: 20, color: colors.textSoft },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   serviceCategory: { alignItems: 'center', columnGap: 10 },
   serviceCategoryNote: { flexShrink: 1, fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 18, color: colors.muted },
@@ -536,4 +577,6 @@ const useStyles = makeStyles(() => ({
   progressTrack: { height: 7, overflow: 'hidden', borderRadius: radius.pill, backgroundColor: colors.primarySoft },
   progressBar: { height: '100%', borderRadius: radius.pill, backgroundColor: colors.primary },
   reviewNote: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 18, textAlign: 'center', color: colors.muted },
+  stepActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
+  stepAction: { flex: 1 },
 }));

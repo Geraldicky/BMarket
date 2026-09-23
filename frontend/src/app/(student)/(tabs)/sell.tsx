@@ -240,7 +240,7 @@ export default function SellScreen() {
       </View>
     </View>
 
-    {query.isLoading ? <Loader /> : query.isError ? <ErrorState message={errorMessage(query.error)} retry={() => query.refetch()} /> : !items.length ? <Empty title="Etalase kamu masih kosong" message="Pasang barang pertama dan mulai berjualan ke sesama Binusian." icon="storefront-outline" /> : !filteredItems.length ? <Empty title="Tidak ada listing yang cocok" message="Coba ganti kata kunci atau pilih filter lain." icon="search-outline" /> : <View style={styles.list}>{filteredItems.map(item => {
+    {query.isLoading ? <Loader /> : query.isError ? <ErrorState message={errorMessage(query.error)} retry={() => query.refetch()} /> : !items.length ? <Empty title="Etalase kamu masih kosong" message="Pasang barang pertama dan mulai berjualan ke sesama Binusian." icon="storefront-outline" action={<Button title="Pasang listing" icon="add" onPress={() => router.push('/(student)/listing/form')} />} /> : !filteredItems.length ? <Empty title="Tidak ada listing yang cocok" message="Coba ganti kata kunci atau pilih filter lain." icon="search-outline" /> : <View style={styles.list}>{filteredItems.map(item => {
       const moderated = moderatedStatuses.has(item.status);
       const canEdit = item.status !== 'SOLD' && item.status !== 'REMOVED' && item.preorderStatus !== 'COMPLETED';
       const canDeactivate = item.status === 'ACTIVE' || item.status === 'PENDING';

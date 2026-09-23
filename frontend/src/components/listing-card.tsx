@@ -76,8 +76,8 @@ export function ListingCard({ item, onPress, style, compact = false, saved = fal
         </View>
 
         <View style={[styles.body, compact && styles.bodyCompact, storefront && styles.bodyStorefront]}>
-          <Text numberOfLines={2} style={[styles.title, compact && styles.titleCompact]}>{item.title}</Text>
           <Text numberOfLines={1} style={[styles.price, compact && styles.priceCompact]}>{money(item.price)}</Text>
+          <Text numberOfLines={2} style={[styles.title, compact && styles.titleCompact]}>{item.title}</Text>
           <View style={styles.metaRow}>
             {item.condition ? <Text numberOfLines={1} style={styles.meta}>{CONDITION_LABELS[item.condition] || item.condition}</Text> : null}
             {item.condition && stockCaption ? <View style={styles.dot} /> : null}
@@ -86,7 +86,7 @@ export function ListingCard({ item, onPress, style, compact = false, saved = fal
           <View style={styles.sellerRow}>
             <UserAvatar name={item.seller?.name} avatarUrl={item.seller?.avatarUrl} style={styles.avatar} textStyle={styles.avatarText} />
             <Text numberOfLines={1} style={styles.seller}>{item.seller?.name || 'Binusian'}</Text>
-            <Ionicons name="checkmark-circle" size={13} color={colors.primary} />
+            {item.seller?.isVerified ? <Ionicons accessibilityLabel="Seller terverifikasi" name="checkmark-circle" size={13} color={colors.primary} /> : null}
           </View>
         </View>
       </Pressable>
@@ -132,10 +132,10 @@ const useStyles = makeStyles(() => ({
   stateText_preorder: { color: colors.purple },
   stateText_service: { color: colors.success },
   stateText: { fontFamily: 'PoppinsSemiBold', fontSize: 9.5 },
-  save: { position: 'absolute', zIndex: 20, elevation: 8, right: 9, top: 9, width: 35, height: 35, borderRadius: 11, backgroundColor: colors.glass, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, ...webTransition, ...(Platform.OS === 'web' ? { cursor: 'pointer' } as any : {}) },
+  save: { position: 'absolute', zIndex: 20, elevation: 8, right: 9, top: 9, width: 44, height: 44, borderRadius: 13, backgroundColor: colors.glass, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, ...webTransition, ...(Platform.OS === 'web' ? { cursor: 'pointer' } as any : {}) },
   saveActive: { backgroundColor: colors.dangerSoft, borderColor: colors.dangerBorder },
   savePressed: { transform: [{ scale: .88 }] },
-  body: { padding: 13, gap: 5 },
+  body: { minHeight: 146, padding: 13, gap: 5 },
   bodyCompact: { padding: 11, gap: 4 },
   bodyStorefront: { padding: 11 },
   title: { color: colors.text, fontFamily: 'PoppinsSemiBold', fontSize: 12.5, lineHeight: 18, minHeight: 36 },
