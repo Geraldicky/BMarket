@@ -9,10 +9,10 @@ import { BackButton } from '@/components/back-button';
 import { ListingCard } from '@/components/listing-card';
 import { FilterSelect, type FilterOption } from '@/components/filter-select';
 import { colors, layout, webTransition, makeStyles } from '@/constants/theme';
+import { CATEGORY_METADATA, PRODUCT_CATEGORIES } from '@/lib/domain-metadata';
 
 type TypeFilter = 'ALL' | 'PRODUCT' | 'SERVICE';
 type ModeFilter = 'ALL' | 'ONE_OFF' | 'STOCKED' | 'PREORDER';
-type FulfillmentFilter = 'ALL' | 'CAMPUS_MEETUP' | 'INSTANT_COURIER';
 type SortOption = 'newest' | 'oldest' | 'price_desc' | 'price_asc';
 
 const typeOptions: FilterOption<TypeFilter>[] = [
@@ -29,17 +29,7 @@ const modeOptions: FilterOption<ModeFilter>[] = [
 // Jasa is its own listing type, so it is not offered as a goods category.
 const categoryOptions: FilterOption<string>[] = [
   { key: 'ALL', label: 'Semua kategori' },
-  { key: 'ELECTRONICS', label: 'Elektronik', icon: 'game-controller-outline' },
-  { key: 'BOOKS', label: 'Buku', icon: 'book-outline' },
-  { key: 'FASHION', label: 'Fashion', icon: 'shirt-outline' },
-  { key: 'FOOD', label: 'Makanan', icon: 'fast-food-outline' },
-  { key: 'SPORTS', label: 'Olahraga', icon: 'basketball-outline' },
-  { key: 'OTHER', label: 'Lainnya', icon: 'apps-outline' },
-];
-const fulfillmentOptions: FilterOption<FulfillmentFilter>[] = [
-  { key: 'ALL', label: 'Semua metode' },
-  { key: 'CAMPUS_MEETUP', label: 'Meetup langsung', icon: 'people-outline' },
-  { key: 'INSTANT_COURIER', label: 'Kurir instan', icon: 'bicycle-outline' },
+  ...PRODUCT_CATEGORIES.map(key => ({ key, label: CATEGORY_METADATA[key].label, icon: CATEGORY_METADATA[key].icon })),
 ];
 const sortOptions: FilterOption<SortOption>[] = [
   { key: 'newest', label: 'Terbaru', icon: 'time-outline' },
@@ -51,7 +41,7 @@ const sortOptions: FilterOption<SortOption>[] = [
 const pick = <T extends string>(value: unknown, options: FilterOption<T>[]): T =>
   options.find(option => option.key === value)?.key ?? options[0].key;
 
-type Filters = { q: string; type: TypeFilter; mode: ModeFilter; category: string; fulfillment: FulfillmentFilter; sort: SortOption };
+type Filters = { q: string; type: TypeFilter; mode: ModeFilter; category: string; sort: SortOption };
 
 function SearchContent({ initial }: { initial: Filters }) {
   const styles = useStyles();
@@ -63,19 +53,17 @@ function SearchContent({ initial }: { initial: Filters }) {
   const [listingType, setListingType] = useState(initial.type);
   const [mode, setMode] = useState(initial.mode);
   const [category, setCategory] = useState(initial.category);
-  const [fulfillment, setFulfillment] = useState(initial.fulfillment);
   const [sort, setSort] = useState(initial.sort);
   const goods = listingType === 'PRODUCT';
 
   const query = useInfiniteQuery({
-    queryKey: ['listings', 'search', deferredKeyword.trim(), listingType, mode, category, fulfillment, sort],
+    queryKey: ['listings', 'search', deferredKeyword.trim(), listingType, mode, category, sort],
     initialPageParam: 1,
     queryFn: ({ pageParam }) => endpoints.listings({
       keyword: deferredKeyword.trim() || undefined,
       type: listingType === 'ALL' ? undefined : listingType,
       mode: goods && mode !== 'ALL' ? mode : undefined,
       category: goods && category !== 'ALL' ? category : undefined,
-      fulfillmentMethod: goods && fulfillment !== 'ALL' ? fulfillment : undefined,
       sort,
       page: pageParam,
       limit: 24,
@@ -98,10 +86,10 @@ function SearchContent({ initial }: { initial: Filters }) {
   const filtered = Boolean(keyword.trim()) || listingType !== 'ALL' || sort !== 'newest';
   const selectStyle = [styles.filterSelect, !desktop && styles.filterSelectMobile];
 
-  // Model, category, and delivery filters only apply to goods; clear them when leaving the Barang type.
+  // Model and category filters only apply to goods; clear them when leaving the Barang type.
   const chooseType = (value: TypeFilter) => {
     setListingType(value);
-    if (value !== 'PRODUCT') { setMode('ALL'); setCategory('ALL'); setFulfillment('ALL'); }
+    if (value !== 'PRODUCT') { setMode('ALL'); setCategory('ALL'); }
   };
   const reset = () => { setKeyword(''); chooseType('ALL'); setSort('newest'); };
 
@@ -121,7 +109,6 @@ function SearchContent({ initial }: { initial: Filters }) {
         {goods ? <>
           <FilterSelect label="Model" icon="cube-outline" value={mode} options={modeOptions} onChange={setMode} style={selectStyle} />
           <FilterSelect label="Kategori" icon="pricetags-outline" value={category} options={categoryOptions} onChange={setCategory} style={selectStyle} />
-          <FilterSelect label="Penyerahan" icon="swap-horizontal-outline" value={fulfillment} options={fulfillmentOptions} onChange={setFulfillment} style={selectStyle} />
         </> : null}
         <FilterSelect label="Urutkan" icon="funnel-outline" value={sort} options={sortOptions} onChange={setSort} style={selectStyle} />
       </View>
@@ -144,7 +131,7 @@ function SearchContent({ initial }: { initial: Filters }) {
 }
 
 export default function SearchScreen() {
-  const params = useLocalSearchParams<{ q?: string; type?: string; mode?: string; category?: string; fulfillment?: string; sort?: string }>();
+  const params = useLocalSearchParams<{ q?: string; type?: string; mode?: string; category?: string; sort?: string }>();
   const type = pick(params.type, typeOptions);
   const goods = type === 'PRODUCT';
   const initial: Filters = {
@@ -152,7 +139,6 @@ export default function SearchScreen() {
     type,
     mode: goods ? pick(params.mode, modeOptions) : 'ALL',
     category: goods ? pick(params.category, categoryOptions) : 'ALL',
-    fulfillment: goods ? pick(params.fulfillment, fulfillmentOptions) : 'ALL',
     sort: pick(params.sort, sortOptions),
   };
   // Remount when the route params change (e.g. opened again from Beranda with other filters).

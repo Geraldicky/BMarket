@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { createHmac, randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
-import { CourierProvider, FulfillmentMethod, Prisma, TransactionStatus } from '@prisma/client';
+import { Prisma, TransactionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateTransactionDto, TopupDto } from './dto/transaction.dto';
@@ -16,6 +16,8 @@ const DELIVERABLE_MAX_PER_TRANSACTION = 20;
 const DELIVERABLE_TEXT_PREVIEW = /\.(txt|md|csv|js|jsx|ts|tsx|py|ipynb|java|kt|swift|c|cpp|h|cs|go|rb|php|html|css|json|sql|xml|ya?ml)$/i;
 const DELIVERABLE_IMAGE_PREVIEW: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' };
 const ARCHIVE_ENTRY_PREVIEW_MAX_BYTES = 2 * 1024 * 1024;
+const RESERVATION_CLEANUP_INTERVAL_MS = 60_000;
+const HANDOVER_CODE_TTL_MS = 15 * 60_000;
 
 export type DeliverableLinkMode = 'preview' | 'download';
 
@@ -41,11 +43,6 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
     return Boolean(transaction.payments?.length);
   }
 
-  private readonly couriers: Record<CourierProvider, { label: string; fee: number; eta: string }> = {
-    GOSEND: { label: 'GoSend Instant (simulasi)', fee: 18_000, eta: '1–3 jam' },
-    GRABEXPRESS: { label: 'GrabExpress Instant (simulasi)', fee: 17_000, eta: '1–3 jam' },
-  };
-
   private get reservationMinutes(): number {
     const configured = Number(process.env.CHECKOUT_RESERVATION_MINUTES);
     return Number.isInteger(configured) && configured > 0 ? configured : 15;
@@ -59,7 +56,7 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
       void this.expirePendingReservations().catch(error =>
         this.logger.warn(`Reservation cleanup gagal: ${error instanceof Error ? error.message : String(error)}`),
       );
-    }, 60_000);
+    }, RESERVATION_CLEANUP_INTERVAL_MS);
     this.reservationTimer.unref?.();
   }
 
@@ -195,25 +192,6 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
     return createHmac('sha256', secret).update(`${transactionId}:${code}`).digest('hex');
   }
 
-  async getCheckoutOptions(listingId: string) {
-    const listing = await this.prisma.listing.findUnique({
-      where: { id: listingId },
-      select: { id: true, status: true, mode: true, stockLeft: true, preorderStatus: true, preorderDeadline: true, fulfillmentMethods: true },
-    });
-    if (!listing || listing.status !== 'ACTIVE') throw new NotFoundException('Listing tidak tersedia.');
-    if (listing.mode === 'STOCKED' && listing.stockLeft === 0) throw new BadRequestException('Stok produk sedang habis.');
-    if (listing.mode === 'PREORDER') {
-      if (listing.preorderStatus !== 'OPEN' || !listing.preorderDeadline || listing.preorderDeadline.getTime() <= Date.now()) {
-        throw new BadRequestException('Pre-order sudah ditutup.');
-      }
-      if ((listing.stockLeft ?? 0) < 1) throw new BadRequestException('Kuota pre-order sudah penuh.');
-    }
-    return {
-      fulfillmentMethods: listing.fulfillmentMethods,
-      couriers: Object.entries(this.couriers).map(([provider, detail]) => ({ provider, ...detail })),
-    };
-  }
-
   async findByUserId(userId: string, role?: 'buyer' | 'seller') {
     const where: Prisma.TransactionWhereInput = role === 'buyer'
       ? { buyerId: userId }
@@ -274,19 +252,11 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
       }
       // Jasa tidak memiliki metode penyerahan. Transaksinya tetap dicatat sebagai CAMPUS_MEETUP karena
       // kolom tersebut wajib dan penyelesaiannya memakai kode serah-terima yang diatur lewat chat.
-      const isService = listing.mode === 'SERVICE';
-      if (!isService && (!dto.fulfillmentMethod || !listing.fulfillmentMethods.includes(dto.fulfillmentMethod))) {
-        throw new BadRequestException('Metode penyerahan tidak tersedia untuk listing ini.');
+      if (dto.fulfillmentMethod && dto.fulfillmentMethod !== 'CAMPUS_MEETUP') {
+        throw new BadRequestException('BMarket hanya mendukung Meetup untuk transaksi baru.');
       }
-
-      const fulfillmentMethod = isService ? 'CAMPUS_MEETUP' as const : dto.fulfillmentMethod!;
-      // Meetup V21.2 tidak mengunci lokasi/jadwal di checkout. Buyer dan seller
-      // menyepakati waktu serta tempat melalui chat setelah checkout.
-      if (fulfillmentMethod === 'INSTANT_COURIER') {
-        if (!dto.courierProvider || !dto.deliveryAddress?.trim() || !dto.recipientPhone?.trim()) {
-          throw new BadRequestException('Lengkapi kurir, alamat penerima, dan nomor telepon.');
-        }
-      }
+      // Semua transaksi baru memakai Meetup. Waktu dan lokasi dikoordinasikan lewat chat.
+      const fulfillmentMethod = 'CAMPUS_MEETUP' as const;
 
       const duplicate = await tx.transaction.findFirst({
         where: {
@@ -321,9 +291,7 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
       const setting = await tx.commissionSetting.findFirst({ orderBy: { createdAt: 'desc' } });
       const price = Number(listing.price);
       const totalPrice = price * quantity;
-      const shippingFee = fulfillmentMethod === 'INSTANT_COURIER' && dto.courierProvider
-        ? this.couriers[dto.courierProvider].fee
-        : 0;
+      const shippingFee = 0;
       const grandTotal = totalPrice + shippingFee;
       const commissionRate = Number(setting?.rate ?? 5);
       const commissionAmt = totalPrice * commissionRate / 100;
@@ -345,9 +313,9 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
           meetupCampus: null,
           meetupLocation: null,
           meetupSchedule: null,
-          courierProvider: fulfillmentMethod === 'INSTANT_COURIER' ? dto.courierProvider : null,
-          deliveryAddress: fulfillmentMethod === 'INSTANT_COURIER' ? dto.deliveryAddress?.trim() : null,
-          recipientPhone: fulfillmentMethod === 'INSTANT_COURIER' ? dto.recipientPhone?.trim() : null,
+          courierProvider: null,
+          deliveryAddress: null,
+          recipientPhone: null,
           shippingFee,
           grandTotal,
           commissionRate,
@@ -419,12 +387,7 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
       }
 
       const milestone = status === 'CONFIRMED'
-        ? {
-            confirmedAt: new Date(),
-            ...(current.fulfillmentMethod === 'INSTANT_COURIER'
-              ? { trackingNumber: `SIM-${current.id.slice(0, 8).toUpperCase()}` }
-              : {}),
-          }
+        ? { confirmedAt: new Date() }
         : status === 'COMPLETED'
           ? { completedAt: new Date(), isEscrowHeld: false }
           : status === 'CANCELLED'
@@ -523,7 +486,7 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
     }
     if (!transaction.isEscrowHeld) throw new BadRequestException('Dana escrow tidak ditemukan.');
     const code = randomInt(100000, 1_000_000).toString();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + HANDOVER_CODE_TTL_MS);
     await this.prisma.transaction.update({
       where: { id },
       data: { handoverCodeHash: this.handoverHash(id, code), handoverCodeExpiresAt: expiresAt },

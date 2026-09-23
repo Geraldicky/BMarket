@@ -42,7 +42,7 @@ describe('post-moderation listing flow', () => {
       condition: 'GOOD',
       stock: 1,
       images: ['http://localhost:3000/uploads/kalkulator.jpg'],
-      fulfillmentMethods: ['CAMPUS_MEETUP', 'INSTANT_COURIER'],
+      fulfillmentMethods: ['CAMPUS_MEETUP'],
     });
 
     expect(create).toHaveBeenCalledWith(expect.objectContaining({

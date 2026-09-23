@@ -11,7 +11,6 @@ const productDto = {
   condition: 'GOOD' as const,
   stock: 5,
   images: ['http://localhost:3000/uploads/kalkulator.jpg'],
-  fulfillmentMethods: ['CAMPUS_MEETUP', 'INSTANT_COURIER'] as const,
 };
 
 describe('ListingsService', () => {
@@ -83,7 +82,7 @@ describe('ListingsService', () => {
       description: productDto.description, price: productDto.price,
       category: productDto.category, type: productDto.type, mode: productDto.mode, condition: productDto.condition,
       stock: 5, stockLeft: 3, images: JSON.stringify(productDto.images), status: 'ACTIVE',
-      fulfillmentMethods: [...productDto.fulfillmentMethods],
+      fulfillmentMethods: ['CAMPUS_MEETUP'],
     };
     const update = vi.fn().mockImplementation(({ data }) => Promise.resolve({ ...listing, ...data }));
     const service = new ListingsService({ listing: { findUnique: vi.fn().mockResolvedValue(listing), update } } as never);
@@ -102,7 +101,7 @@ describe('ListingsService', () => {
       description: productDto.description, price: productDto.price,
       category: productDto.category, type: productDto.type, mode: productDto.mode, condition: productDto.condition,
       stock: 5, stockLeft: 5, images: JSON.stringify(productDto.images), status: 'ACTIVE',
-      fulfillmentMethods: [...productDto.fulfillmentMethods],
+      fulfillmentMethods: ['CAMPUS_MEETUP'],
     };
     const update = vi.fn().mockImplementation(({ data }) => Promise.resolve({ ...listing, ...data }));
     const service = new ListingsService({ listing: { findUnique: vi.fn().mockResolvedValue(listing), update } } as never);
@@ -262,27 +261,21 @@ describe('ListingsService', () => {
     const create = vi.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'service-1', ...data }));
     const service = new ListingsService({ listing: { create } } as never);
 
-    await service.create('seller-1', { ...serviceDto, fulfillmentMethods: undefined });
+    await service.create('seller-1', serviceDto);
 
     expect(create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ mode: 'SERVICE', fulfillmentMethods: [] }),
     }));
   });
 
-  it('rejects fulfillment methods on a service', async () => {
-    const create = vi.fn();
+  it('always stores products as campus meetup listings', async () => {
+    const create = vi.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'product-meetup', ...data }));
     const service = new ListingsService({ listing: { create } } as never);
 
-    await expect(service.create('seller-1', serviceDto)).rejects.toThrow(/jasa tidak memiliki metode penyerahan/i);
-    expect(create).not.toHaveBeenCalled();
-  });
-
-  it('still requires a fulfillment method for products', async () => {
-    const create = vi.fn();
-    const service = new ListingsService({ listing: { create } } as never);
-
-    await expect(service.create('seller-1', { ...productDto, fulfillmentMethods: [] })).rejects.toThrow(/minimal satu metode penyerahan/i);
-    expect(create).not.toHaveBeenCalled();
+    await service.create('seller-1', productDto);
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ fulfillmentMethods: ['CAMPUS_MEETUP'] }),
+    }));
   });
 
 });

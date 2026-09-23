@@ -48,8 +48,8 @@ function actionLabel(transaction: Transaction, userId?: string) {
   if (buyer && transaction.status === 'PENDING') return 'Bayar sekarang';
   if (buyer && meetup && transaction.status === 'PAID') return transaction.listing.mode === 'SERVICE' ? 'Koordinasi jasa' : 'Koordinasi meetup';
   if (!buyer && meetup && transaction.status === 'PAID') return 'Koordinasi & kode';
-  if (!buyer && transaction.status === 'PAID') return 'Proses pengiriman';
-  return 'Konfirmasi diterima';
+  if (!buyer && transaction.status === 'PAID') return 'Lanjutkan transaksi';
+  return 'Konfirmasi selesai';
 }
 
 function Metric({ label, value, icon, color, tint, active, compact, onPress }: { label: string; value: number; icon: IconName; color: string; tint: string; active?: boolean; compact?: boolean; onPress: () => void }) {
@@ -163,7 +163,7 @@ export default function TransactionsScreen() {
                       <Text style={styles.dot}>•</Text><Text style={styles.orderId}>#{transaction.id.slice(0, 8).toUpperCase()}</Text>
                     </View>
                     <Text numberOfLines={2} style={styles.itemTitle}>{transaction.listing.title}</Text>
-                    <View style={styles.metaRow}><Ionicons name="person-outline" size={13} color={colors.muted} /><Text numberOfLines={1} style={styles.metaText}>{buyer ? 'Penjual' : 'Pembeli'}: {counterpart || 'Binusian'}</Text><Text style={styles.metaDot}>·</Text><Text style={styles.metaText}>{transaction.quantity} item</Text><Text style={styles.metaDot}>·</Text><Ionicons name={transaction.listing.mode === 'SERVICE' ? 'construct-outline' : meetup ? 'people-outline' : 'bicycle-outline'} size={13} color={colors.muted} /><Text style={styles.metaText}>{transaction.listing.mode === 'SERVICE' ? 'Jasa' : meetup ? 'Meetup' : 'Kurir'}</Text></View>
+                    <View style={styles.metaRow}><Ionicons name="person-outline" size={13} color={colors.muted} /><Text numberOfLines={1} style={styles.metaText}>{buyer ? 'Penjual' : 'Pembeli'}: {counterpart || 'Binusian'}</Text><Text style={styles.metaDot}>·</Text><Text style={styles.metaText}>{transaction.quantity} item</Text><Text style={styles.metaDot}>·</Text><Ionicons name={transaction.listing.mode === 'SERVICE' ? 'construct-outline' : meetup ? 'people-outline' : 'archive-outline'} size={13} color={colors.muted} /><Text style={styles.metaText}>{transaction.listing.mode === 'SERVICE' ? 'Jasa' : meetup ? 'Meetup' : 'Riwayat lama'}</Text></View>
                     <View style={styles.badgeRow}><View style={[styles.statusBadge, { backgroundColor: meta.tint }]}><Ionicons name={meta.icon} size={14} color={meta.color} /><Text style={[styles.statusText, { color: meta.color }]}>{meta.label}</Text></View><Text style={styles.orderDate}>{date(transaction.createdAt)}</Text></View>
                   </View>
                   <View style={[styles.itemEnd, mobile && styles.itemEndMobile]}>

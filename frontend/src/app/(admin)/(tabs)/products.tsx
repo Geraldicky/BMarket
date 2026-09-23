@@ -279,7 +279,7 @@ export default function AdminProductsScreen() {
                     ['Model', modeLabel[detail.mode]],
                     ['Kondisi', detail.condition || 'Tidak berlaku'],
                     [detail.mode === 'PREORDER' ? 'Kuota tersisa' : 'Stok', detail.mode === 'SERVICE' ? 'Tanpa stok' : `${detail.stockLeft ?? 0} / ${detail.stock ?? 0}`],
-                    ['Penyerahan', detail.mode === 'SERVICE' ? 'Tidak ada (jasa)' : detail.fulfillmentMethods?.join(' · ') || '-'],
+                    ['Penyerahan', detail.mode === 'SERVICE' ? 'Tidak ada (jasa)' : 'Meetup langsung'],
                     ...(detail.mode === 'PREORDER' ? [
                       ['Status PO', preorderLabel(detail.preorderStatus)],
                       ['Deadline PO', detail.preorderDeadline ? date(detail.preorderDeadline) : '-'],

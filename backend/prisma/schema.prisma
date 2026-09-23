@@ -133,9 +133,8 @@ model Listing {
   preorderMaxPerBuyer    Int?
   preorderPickupLocation String?
   preorderPickupNote     String? @db.Text
-  // Seller menentukan metode penyerahan yang tersedia untuk listing ini.
-  // Buyer memilih salah satunya saat checkout.
-  fulfillmentMethods FulfillmentMethod[] @default([CAMPUS_MEETUP, INSTANT_COURIER])
+  // Runtime baru Meetup-only; array dipertahankan untuk kompatibilitas data lama.
+  fulfillmentMethods FulfillmentMethod[] @default([CAMPUS_MEETUP])
   sellerId    String
   seller      User          @relation(fields: [sellerId], references: [id])
   createdAt   DateTime      @default(now())
@@ -218,7 +217,7 @@ enum Condition {
 // ─────────────────────────────────────────────
 // PENDING   = Menunggu pembayaran dari buyer
 // PAID      = Buyer sudah bayar, masuk escrow, menunggu konfirmasi seller
-// CONFIRMED = Seller konfirmasi proses (dipakai untuk kurir; meetup langsung melewati tahap ini)
+// CONFIRMED = Status historis/alur jasa; Meetup barang selesai lewat kode serah-terima
 // COMPLETED = Selesai, dana dilepas ke seller
 // CANCELLED = Dibatalkan, dana dikembalikan ke buyer
 model Transaction {

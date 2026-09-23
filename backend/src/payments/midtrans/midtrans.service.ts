@@ -4,9 +4,26 @@ import type { MidtransNotification, MidtransSnapRequest, MidtransSnapResponse, M
 
 @Injectable()
 export class MidtransService {
+  private get isProduction() {
+    return String(process.env.MIDTRANS_IS_PRODUCTION || 'false').toLowerCase() === 'true';
+  }
+
+  private get snapBaseUrl() {
+    return this.isProduction ? 'https://app.midtrans.com' : 'https://app.sandbox.midtrans.com';
+  }
+
+  private get apiBaseUrl() {
+    return this.isProduction ? 'https://api.midtrans.com' : 'https://api.sandbox.midtrans.com';
+  }
+
+  private get requestTimeoutMs() {
+    const configured = Number(process.env.MIDTRANS_TIMEOUT_MS);
+    return Number.isInteger(configured) && configured >= 1_000 && configured <= 60_000 ? configured : 15_000;
+  }
+
   private get serverKey() {
     const value = process.env.MIDTRANS_SERVER_KEY?.trim();
-    if (!value) throw new ServiceUnavailableException('Midtrans Sandbox belum dikonfigurasi.');
+    if (!value) throw new ServiceUnavailableException('Midtrans belum dikonfigurasi.');
     return value;
   }
 
@@ -28,30 +45,30 @@ export class MidtransService {
   }
 
   async createSnap(payload: MidtransSnapRequest): Promise<MidtransSnapResponse> {
-    const response = await fetch('https://app.sandbox.midtrans.com/snap/v1/transactions', {
-      method: 'POST', headers: this.headers(), body: JSON.stringify(payload), signal: AbortSignal.timeout(15_000),
+    const response = await fetch(`${this.snapBaseUrl}/snap/v1/transactions`, {
+      method: 'POST', headers: this.headers(), body: JSON.stringify(payload), signal: AbortSignal.timeout(this.requestTimeoutMs),
     });
     return this.response<MidtransSnapResponse>(response);
   }
 
   async getStatus(orderId: string): Promise<MidtransStatus> {
-    const response = await fetch(`https://api.sandbox.midtrans.com/v2/${encodeURIComponent(orderId)}/status`, {
-      method: 'GET', headers: this.headers(), signal: AbortSignal.timeout(15_000),
+    const response = await fetch(`${this.apiBaseUrl}/v2/${encodeURIComponent(orderId)}/status`, {
+      method: 'GET', headers: this.headers(), signal: AbortSignal.timeout(this.requestTimeoutMs),
     });
     return this.response<MidtransStatus>(response);
   }
 
   async refund(orderId: string, amount: number, reason: string, refundKey: string): Promise<MidtransStatus> {
-    const response = await fetch(`https://api.sandbox.midtrans.com/v2/${encodeURIComponent(orderId)}/refund`, {
-      method: 'POST', headers: this.headers(), signal: AbortSignal.timeout(15_000),
+    const response = await fetch(`${this.apiBaseUrl}/v2/${encodeURIComponent(orderId)}/refund`, {
+      method: 'POST', headers: this.headers(), signal: AbortSignal.timeout(this.requestTimeoutMs),
       body: JSON.stringify({ refund_key: refundKey, amount, reason: reason.slice(0, 255) }),
     });
     return this.response<MidtransStatus>(response);
   }
 
   async cancel(orderId: string): Promise<MidtransStatus> {
-    const response = await fetch(`https://api.sandbox.midtrans.com/v2/${encodeURIComponent(orderId)}/cancel`, {
-      method: 'POST', headers: this.headers(), signal: AbortSignal.timeout(15_000),
+    const response = await fetch(`${this.apiBaseUrl}/v2/${encodeURIComponent(orderId)}/cancel`, {
+      method: 'POST', headers: this.headers(), signal: AbortSignal.timeout(this.requestTimeoutMs),
     });
     return this.response<MidtransStatus>(response);
   }

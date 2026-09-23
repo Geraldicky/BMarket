@@ -50,12 +50,6 @@ export class TransactionsController {
     return { success: true, data };
   }
 
-  @Get('checkout-options/:listingId')
-  async checkoutOptions(@Param('listingId') listingId: string) {
-    const data = await this.transactionsService.getCheckoutOptions(listingId);
-    return { success: true, data };
-  }
-
   @Get(':id')
   async findById(@Param('id') id: string, @CurrentUser() user: any) {
     const data = await this.transactionsService.findById(id, user.id);

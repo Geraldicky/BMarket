@@ -9,17 +9,13 @@ import { DateTimePickerField, formatLocalDateTimeValue, parseLocalDateTimeValue 
 import { Button, Card, FeedbackDialog, Field, InlineAlert, Loader, Screen, Title } from '@/components/ui';
 import { colors, radius, makeStyles } from '@/constants/theme';
 import { endpoints, errorMessage } from '@/lib/api';
-import type { FulfillmentMethod, ListingMode } from '@/types';
+import type { ListingMode } from '@/types';
+import { CATEGORY_LABELS, CONDITION_LABELS, PRODUCT_CATEGORIES } from '@/lib/domain-metadata';
 
 // SERVICES is not selectable: it is assigned automatically when the "Jasa" model is chosen.
-const categories = ['ELECTRONICS', 'BOOKS', 'FASHION', 'FOOD', 'SPORTS', 'OTHER'];
-const categoryLabels: Record<string, string> = {
-  ELECTRONICS: 'Elektronik', BOOKS: 'Buku', FASHION: 'Fashion', FOOD: 'Makanan',
-  SERVICES: 'Jasa', SPORTS: 'Olahraga', OTHER: 'Lainnya',
-};
-const conditionLabels: Record<string, string> = {
-  NEW: 'Baru', LIKE_NEW: 'Seperti baru', GOOD: 'Kondisi baik', FAIR: 'Cukup baik',
-};
+const categories = PRODUCT_CATEGORIES;
+const categoryLabels = CATEGORY_LABELS;
+const conditionLabels = CONDITION_LABELS;
 
 type ListingForm = {
   title: string;
@@ -44,7 +40,7 @@ type ListingPhoto = {
   asset?: ImagePicker.ImagePickerAsset;
 };
 
-type FormErrors = Partial<Record<keyof ListingForm | 'photos' | 'fulfillmentMethods', string>>;
+type FormErrors = Partial<Record<keyof ListingForm | 'photos', string>>;
 
 const initialForm: ListingForm = {
   title: '', description: '', price: '', category: 'OTHER',
@@ -65,7 +61,6 @@ export default function ListingFormScreen() {
   const lastProductMode = useRef<ListingMode>('ONE_OFF');
   const [form, setForm] = useState(initialForm);
   const [photos, setPhotos] = useState<ListingPhoto[]>([]);
-  const [fulfillmentMethods, setFulfillmentMethods] = useState<FulfillmentMethod[]>(['CAMPUS_MEETUP', 'INSTANT_COURIER']);
   const [errors, setErrors] = useState<FormErrors>({});
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'danger'; title: string; message: string; listingId?: string } | null>(null);
@@ -98,7 +93,6 @@ export default function ListingFormScreen() {
       preorderPickupNote: listing.preorderPickupNote || '',
     });
     setPhotos((listing.images || []).map((uri, index) => ({ key: `remote-${index}-${uri}`, uri })));
-    setFulfillmentMethods(listing.fulfillmentMethods?.length ? listing.fulfillmentMethods : ['CAMPUS_MEETUP']);
     hydratedId.current = id;
   }, [existing.data, id]);
 
@@ -128,14 +122,7 @@ export default function ListingFormScreen() {
       mode,
       category: mode === 'SERVICE' ? 'SERVICES' : current.category === 'SERVICES' ? 'OTHER' : current.category,
     }));
-    setErrors(current => ({ ...current, category: undefined, condition: undefined, stock: undefined, preorderDeadline: undefined, preorderReadyAt: undefined, fulfillmentMethods: undefined }));
-  };
-
-  const toggleFulfillment = (method: FulfillmentMethod) => {
-    setFulfillmentMethods(current => current.includes(method)
-      ? current.filter(value => value !== method)
-      : [...current, method]);
-    setErrors(current => ({ ...current, fulfillmentMethods: undefined }));
+    setErrors(current => ({ ...current, category: undefined, condition: undefined, stock: undefined, preorderDeadline: undefined, preorderReadyAt: undefined }));
   };
 
   const pickPhotos = async () => {
@@ -225,7 +212,6 @@ export default function ListingFormScreen() {
     if (!Number.isFinite(Number(form.price)) || Number(form.price) < 1) next.price = 'Masukkan harga yang valid.';
     if (!form.category) next.category = 'Pilih kategori listing.';
     if (!photos.length) next.photos = 'Tambahkan minimal satu foto.';
-    if (isProduct && !fulfillmentMethods.length) next.fulfillmentMethods = 'Pilih minimal satu metode penyerahan.';
     if (conditionApplies && !form.condition) next.condition = 'Pilih kondisi barang.';
     if (form.mode === 'STOCKED' && (!Number.isInteger(Number(form.stock)) || Number(form.stock) < 1)) next.stock = 'Stok minimal 1.';
     if (isPreorder) {
@@ -267,8 +253,6 @@ export default function ListingFormScreen() {
         condition: conditionApplies ? form.condition : undefined,
         stock: form.mode === 'ONE_OFF' ? 1 : form.mode === 'STOCKED' ? Number(form.stock) : undefined,
         images,
-        // Jasa tidak memiliki metode penyerahan.
-        fulfillmentMethods: isProduct ? fulfillmentMethods : [],
         preorderDeadline: isPreorder ? parseDate(form.preorderDeadline)?.toISOString() : undefined,
         preorderReadyAt: isPreorder ? (form.preorderReadyAt.trim() ? parseDate(form.preorderReadyAt)?.toISOString() : null) : undefined,
         preorderQuota: isPreorder ? Number(form.preorderQuota) : undefined,
@@ -423,23 +407,6 @@ export default function ListingFormScreen() {
             </View>
           ) : null}
 
-          {isProduct ? <View>
-            <Text style={styles.label}>Metode penyerahan</Text>
-            <Text style={styles.deliveryHelp}>Pilih metode yang dapat kamu layani. Buyer akan memilih salah satunya saat checkout.</Text>
-            <View style={styles.deliveryGrid}>
-              <Pressable onPress={() => toggleFulfillment('CAMPUS_MEETUP')} style={[styles.deliveryOption, fulfillmentMethods.includes('CAMPUS_MEETUP') && styles.deliveryOptionActive]}>
-                <View style={styles.deliveryIcon}><Ionicons name="people-outline" size={22} color={colors.primary} /></View>
-                <View style={styles.flex}><Text style={styles.deliveryTitle}>Meetup langsung</Text><Text style={styles.deliveryCaption}>Waktu dan lokasi disepakati lewat chat</Text></View>
-                <Ionicons name={fulfillmentMethods.includes('CAMPUS_MEETUP') ? 'checkmark-circle' : 'ellipse-outline'} size={21} color={fulfillmentMethods.includes('CAMPUS_MEETUP') ? colors.primary : colors.borderStrong} />
-              </Pressable>
-              <Pressable onPress={() => toggleFulfillment('INSTANT_COURIER')} style={[styles.deliveryOption, fulfillmentMethods.includes('INSTANT_COURIER') && styles.deliveryOptionActive]}>
-                <View style={styles.deliveryIcon}><Ionicons name="bicycle-outline" size={22} color={colors.primary} /></View>
-                <View style={styles.flex}><Text style={styles.deliveryTitle}>Kurir Instan</Text><Text style={styles.deliveryCaption}>GoSend atau GrabExpress simulasi</Text></View>
-                <Ionicons name={fulfillmentMethods.includes('INSTANT_COURIER') ? 'checkmark-circle' : 'ellipse-outline'} size={21} color={fulfillmentMethods.includes('INSTANT_COURIER') ? colors.primary : colors.borderStrong} />
-              </Pressable>
-            </View>
-            {errors.fulfillmentMethods ? <Text style={styles.errorText}>{errors.fulfillmentMethods}</Text> : null}
-          </View> : null}
         </Card>
 
         <View style={styles.side}>
@@ -526,13 +493,6 @@ const useStyles = makeStyles(() => ({
   chipActive: { borderColor: colors.primaryBorder, backgroundColor: colors.primarySoft },
   chipText: { fontFamily: 'PoppinsMedium', fontSize: 12, color: colors.textSoft },
   chipTextActive: { fontFamily: 'PoppinsSemiBold', color: colors.primary },
-  deliveryHelp: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 18, color: colors.muted, marginTop: -4, marginBottom: 10 },
-  deliveryGrid: { gap: 9 },
-  deliveryOption: { minHeight: 70, padding: 13, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 11 },
-  deliveryOptionActive: { borderColor: colors.primaryBorder, backgroundColor: colors.primarySoft },
-  deliveryIcon: { width: 42, height: 42, borderRadius: 11, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
-  deliveryTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 13, color: colors.text },
-  deliveryCaption: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 16, color: colors.muted, marginTop: 1 },
   errorText: { fontFamily: 'PoppinsRegular', fontSize: 12, lineHeight: 18, color: colors.danger, marginTop: 6 },
   fieldRow: { flexDirection: 'row', gap: 14 },
   fieldRowMobile: { flexDirection: 'column' },

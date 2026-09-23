@@ -1,8 +1,8 @@
 // src/transactions/dto/transaction.dto.ts
 
-import { IsString, IsOptional, IsInt, Min, MaxLength, IsNumber, IsUUID, Max, IsEnum, Matches } from 'class-validator';
+import { IsString, IsOptional, IsInt, Min, MaxLength, IsNumber, IsUUID, Max, IsEnum, IsIn, Matches } from 'class-validator';
 import { Type } from 'class-transformer';
-import { CourierProvider, FulfillmentMethod, TransactionStatus } from '@prisma/client';
+import { FulfillmentMethod, TransactionStatus } from '@prisma/client';
 
 export class CreateTransactionDto {
   @IsString()
@@ -21,13 +21,9 @@ export class CreateTransactionDto {
   @MaxLength(500)
   note?: string;
 
-  // Tidak diperlukan untuk listing jasa.
-  @IsOptional() @IsEnum(FulfillmentMethod)
+  // Kompatibel dengan klien Meetup lama; nilai courier ditolak.
+  @IsOptional() @IsIn(['CAMPUS_MEETUP'])
   fulfillmentMethod?: FulfillmentMethod;
-
-  @IsOptional() @IsEnum(CourierProvider) courierProvider?: CourierProvider;
-  @IsOptional() @IsString() @MaxLength(500) deliveryAddress?: string;
-  @IsOptional() @IsString() @MaxLength(30) recipientPhone?: string;
 }
 
 export class ConfirmHandoverDto {

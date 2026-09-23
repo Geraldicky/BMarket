@@ -49,7 +49,7 @@ async function main() {
     {
       id: 'demo-v27-laptop', title: 'MacBook Air M2 13-inch', description: 'Unit preloved untuk demo. Kondisi sangat baik, charger lengkap.', price: 10900000,
       category: 'ELECTRONICS' as const, type: 'PRODUCT' as const, mode: 'ONE_OFF' as const, condition: 'LIKE_NEW' as const,
-      sellerId: seller.id, stock: 1, stockLeft: 1, images: image('MacBook Air M2'), fulfillmentMethods: ['CAMPUS_MEETUP', 'INSTANT_COURIER'] as const,
+      sellerId: seller.id, stock: 1, stockLeft: 1, images: image('MacBook Air M2'), fulfillmentMethods: ['CAMPUS_MEETUP'] as const,
     },
     {
       id: 'demo-v27-book', title: 'Buku Data Structures & Algorithms', description: 'Ready stock untuk kebutuhan kuliah semester awal.', price: 125000,
@@ -59,7 +59,7 @@ async function main() {
     {
       id: 'demo-v27-food', title: 'Rice Bowl Ayam Mentai', description: 'Ready stock harian. Cocok untuk makan siang di kampus.', price: 28000,
       category: 'FOOD' as const, type: 'PRODUCT' as const, mode: 'STOCKED' as const, condition: null,
-      sellerId: seller2.id, stock: 30, stockLeft: 21, images: image('Rice Bowl Mentai'), fulfillmentMethods: ['CAMPUS_MEETUP', 'INSTANT_COURIER'] as const,
+      sellerId: seller2.id, stock: 30, stockLeft: 21, images: image('Rice Bowl Mentai'), fulfillmentMethods: ['CAMPUS_MEETUP'] as const,
     },
     {
       id: 'demo-v27-service', title: 'Jasa Desain Poster Organisasi', description: 'Desain poster event, seminar, dan kebutuhan organisasi kampus.', price: 90000,

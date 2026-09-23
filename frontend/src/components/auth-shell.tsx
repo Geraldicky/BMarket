@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthBackdrop } from '@/components/auth-backdrop';
 import { TypewriterLoop } from '@/components/typewriter';
 import { colors, makeStyles, useThemeStore, type ThemeMode } from '@/constants/theme';
+import { BrandLogo } from '@/components/brand-logo';
 
 const themeOptions: { mode: ThemeMode; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
   { mode: 'light', label: 'Terang', icon: 'sunny-outline' },
@@ -64,7 +65,7 @@ export function AuthShell({ eyebrow, title, subtitle, children }: { eyebrow: str
       {/* Mobile: brand and theme switcher live in a fixed header bar; only the card area scrolls. */}
       {!desktop ? (
         <View style={[s.mobileHeader, compactMobile && s.mobileHeaderCompact]}>
-          <View style={s.mobileBrand}><View style={s.mobileBrandRow}><View style={s.mobileMark}><Text style={s.mobileMarkText}>B</Text></View><Text style={s.mobileName}>BMarket</Text></View><Text style={s.mobileCaption}>Marketplace komunitas BINUS</Text></View>
+          <View style={s.mobileBrand}><View style={s.mobileBrandRow}><BrandLogo style={s.mobileLogo} /></View><Text style={s.mobileCaption}>Marketplace komunitas BINUS</Text></View>
           <AuthThemeSwitcher compact onDark />
         </View>
       ) : null}
@@ -74,10 +75,7 @@ export function AuthShell({ eyebrow, title, subtitle, children }: { eyebrow: str
             <View style={s.visual}>
               <View style={s.gridGlow} />
               <AuthBackdrop />
-              <View style={s.brandWrap}>
-                <View style={s.brandMark}><Text style={s.brandMarkText}>B</Text></View>
-                <View><Text style={s.brandName}>BMarket</Text><Text style={s.brandCaption}>Marketplace komunitas BINUS</Text></View>
-              </View>
+              <View style={s.brandWrap}><BrandLogo style={s.authLogo} /><Text style={s.brandCaption}>Marketplace komunitas BINUS</Text></View>
 
               <Animated.View entering={FadeInLeft.duration(260)} style={s.visualContent}>
                 <Text style={s.kicker}>DARI BINUSIAN, UNTUK BINUSIAN</Text>
@@ -137,10 +135,8 @@ const useStyles = makeStyles(() => ({
 
   visual: { width: '42%', minHeight: 700, position: 'relative', overflow: 'hidden', backgroundColor: '#0E2942', paddingHorizontal: 66, paddingVertical: 46, justifyContent: 'space-between' },
   gridGlow: { position: 'absolute', width: 520, height: 520, right: -220, bottom: -240, borderRadius: 260, backgroundColor: '#113E6C', opacity: .72 },
-  brandWrap: { zIndex: 1, flexDirection: 'row', alignItems: 'center', gap: 11 },
-  brandMark: { width: 39, height: 39, borderRadius: 12, backgroundColor: '#1769C2', alignItems: 'center', justifyContent: 'center' },
-  brandMarkText: { fontFamily: 'PoppinsBold', fontSize: 22, color: '#FFFFFF' },
-  brandName: { fontFamily: 'PoppinsBold', fontSize: 24, lineHeight: 28, color: '#FFFFFF' },
+  brandWrap: { zIndex: 1, alignItems: 'flex-start', gap: 2 },
+  authLogo: { width: 174, height: 56 },
   brandCaption: { fontFamily: 'PoppinsRegular', fontSize: 10.5, color: '#9EB6CB' },
 
   visualContent: { zIndex: 1, maxWidth: 500, gap: 10 },
@@ -194,8 +190,6 @@ const useStyles = makeStyles(() => ({
   mobileHeaderCompact: { paddingHorizontal: 12 },
   mobileBrand: { alignItems: 'flex-start', gap: 1, paddingHorizontal: 2, flexShrink: 1 },
   mobileBrandRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  mobileMark: { width: 27, height: 27, borderRadius: 8, backgroundColor: '#1769C2', alignItems: 'center', justifyContent: 'center' },
-  mobileMarkText: { fontFamily: 'PoppinsBold', fontSize: 15, color: '#FFFFFF' },
-  mobileName: { fontFamily: 'PoppinsBold', fontSize: 19, color: '#FFFFFF' },
+  mobileLogo: { width: 132, height: 42 },
   mobileCaption: { fontFamily: 'PoppinsRegular', fontSize: 10.5, color: '#9EB6CB', marginLeft: 35 },
 }));

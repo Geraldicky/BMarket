@@ -15,7 +15,7 @@ jobs:
       run:
         working-directory: frontend
     env:
-      PLAYWRIGHT_BASE_URL: https://b-market-hazel.vercel.app
+      PLAYWRIGHT_BASE_URL: https://binus-market.vercel.app
       E2E_API_URL: https://bmarket-api-production.up.railway.app/api
     steps:
       - uses: actions/checkout@v6

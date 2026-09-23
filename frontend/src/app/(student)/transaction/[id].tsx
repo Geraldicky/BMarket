@@ -13,6 +13,8 @@ import { endpoints, errorMessage } from '@/lib/api';
 import { canPreviewDeliverable, deliverableIcon, fileSizeLabel, openSignedFile, reservePreviewTab } from '@/lib/deliverables';
 import { useAuth } from '@/store/auth';
 import type { DisputeReason, Transaction, TransactionDeliverable, TransactionStatus } from '@/types';
+import { DISPUTE_REASON_OPTIONS } from '@/lib/domain-metadata';
+import { PAYMENT_POLL_INTERVAL_MS } from '@/lib/runtime-config';
 
 const DELIVERABLE_MAX_BYTES = 20 * 1024 * 1024;
 const DELIVERABLE_MAX_FILES = 5;
@@ -23,7 +25,7 @@ type ActionKind = 'PAY' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
 const statusMeta = (): Record<TransactionStatus, { title: string; description: string; color: string; tint: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> => ({
   PENDING: { title: 'Menunggu pembayaran', description: 'Stok sudah direservasi. Buyer perlu menyelesaikan pembayaran Midtrans.', color: colors.warning, tint: colors.warningSoft, icon: 'time-outline' },
   PAID: { title: 'Pembayaran aman di escrow', description: 'Dana tersimpan aman sampai penyerahan pesanan selesai.', color: colors.primary, tint: colors.primarySoft, icon: 'shield-checkmark-outline' },
-  CONFIRMED: { title: 'Penyerahan sedang berlangsung', description: 'Ikuti detail meetup atau pengiriman, lalu selesaikan setelah pesanan diterima.', color: colors.purple, tint: colors.purpleSoft, icon: 'cube-outline' },
+  CONFIRMED: { title: 'Penyerahan sedang berlangsung', description: 'Ikuti detail transaksi, lalu selesaikan setelah pesanan diterima.', color: colors.purple, tint: colors.purpleSoft, icon: 'cube-outline' },
   COMPLETED: { title: 'Transaksi selesai', description: 'Dana escrow sudah dilepas ke seller setelah dikurangi biaya layanan.', color: colors.success, tint: colors.successSoft, icon: 'checkmark-circle-outline' },
   CANCELLED: { title: 'Transaksi dibatalkan', description: 'Dana dan stok telah dikembalikan sesuai kondisi terakhir transaksi.', color: colors.danger, tint: colors.dangerSoft, icon: 'close-circle-outline' },
 });
@@ -43,14 +45,7 @@ const cancellationReasons = [
   'Kesepakatan dibatalkan bersama',
 ];
 
-const disputeReasons: { value: DisputeReason; label: string }[] = [
-  { value: 'ITEM_NOT_AS_DESCRIBED', label: 'Barang tidak sesuai deskripsi' },
-  { value: 'ITEM_DAMAGED', label: 'Barang rusak' },
-  { value: 'NOT_RECEIVED', label: 'Barang tidak diterima' },
-  { value: 'SELLER_NO_SHOW', label: 'Seller tidak hadir' },
-  { value: 'BUYER_NO_SHOW', label: 'Buyer tidak hadir' },
-  { value: 'OTHER', label: 'Masalah lainnya' },
-];
+const disputeReasons: readonly { value: DisputeReason; label: string }[] = DISPUTE_REASON_OPTIONS;
 
 function dateTime(value?: string | null) {
   return value ? new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '';
@@ -63,8 +58,8 @@ function Timeline({ transaction }: { transaction: Transaction }) {
   const standard = [
     { title: 'Pesanan dibuat', copy: 'Stok direservasi untuk buyer.', time: transaction.createdAt, icon: 'receipt-outline' as const, reached: true },
     { title: 'Pembayaran diterima', copy: 'Dana dipindahkan ke escrow BMarket.', time: transaction.paidAt, icon: 'wallet-outline' as const, reached: ['PAID', 'CONFIRMED', 'COMPLETED'].includes(transaction.status) },
-    { title: service ? 'Pengerjaan jasa' : meetup ? 'Koordinasi meetup' : 'Pengiriman diproses', copy: service ? 'Penjual mengerjakan jasa lalu mengunggah file hasilnya di halaman transaksi.' : meetup ? 'Buyer dan seller menyepakati waktu serta lokasi melalui chat BMarket.' : 'Kurir simulasi mulai memproses kiriman.', time: meetup ? transaction.paidAt : transaction.confirmedAt, icon: meetup ? 'chatbubbles-outline' as const : 'bicycle-outline' as const, reached: meetup ? ['PAID', 'CONFIRMED', 'COMPLETED'].includes(transaction.status) : ['CONFIRMED', 'COMPLETED'].includes(transaction.status) },
-    { title: 'Transaksi selesai', copy: service ? 'Buyer menerima hasil jasa dan dana dilepas.' : meetup ? 'Kode serah-terima valid dan dana dilepas.' : 'Kiriman diterima dan dana dilepas.', time: transaction.completedAt, icon: 'checkmark-circle-outline' as const, reached: transaction.status === 'COMPLETED' },
+    { title: service ? 'Pengerjaan jasa' : meetup ? 'Koordinasi meetup' : 'Proses penyerahan lama', copy: service ? 'Penjual mengerjakan jasa lalu mengunggah file hasilnya di halaman transaksi.' : meetup ? 'Buyer dan seller menyepakati waktu serta lokasi melalui chat BMarket.' : 'Transaksi historis melanjutkan alur penyerahan yang tersimpan.', time: meetup ? transaction.paidAt : transaction.confirmedAt, icon: meetup ? 'chatbubbles-outline' as const : 'archive-outline' as const, reached: meetup ? ['PAID', 'CONFIRMED', 'COMPLETED'].includes(transaction.status) : ['CONFIRMED', 'COMPLETED'].includes(transaction.status) },
+    { title: 'Transaksi selesai', copy: service ? 'Buyer menerima hasil jasa dan dana dilepas.' : meetup ? 'Kode serah-terima valid dan dana dilepas.' : 'Penyerahan selesai dan dana dilepas.', time: transaction.completedAt, icon: 'checkmark-circle-outline' as const, reached: transaction.status === 'COMPLETED' },
   ];
   const steps = transaction.status === 'CANCELLED'
     ? [...standard.filter((step, index) => index === 0 || Boolean(step.time)), { title: 'Transaksi dibatalkan', copy: transaction.cancellationReason || 'Transaksi dihentikan.', time: transaction.cancelledAt, icon: 'close-circle-outline' as const, reached: true, cancelled: true }]
@@ -114,7 +109,7 @@ export default function TransactionDetailScreen() {
   const [acceptVisible, setAcceptVisible] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
-  const query = useQuery({ queryKey: ['transaction', id], queryFn: () => endpoints.transaction(id), refetchInterval: 5000 });
+  const query = useQuery({ queryKey: ['transaction', id], queryFn: () => endpoints.transaction(id), refetchInterval: PAYMENT_POLL_INTERVAL_MS });
   const transaction = query.data;
 
   useEffect(() => {
@@ -124,7 +119,7 @@ export default function TransactionDetailScreen() {
   }, [handoverCodeVisible, handoverExpiresAt]);
 
   const buyer = transaction ? (transaction.buyerId === user?.id || transaction.buyer.id === user?.id) : false;
-  const payment = useQuery({ queryKey: ['payment', id], queryFn: () => endpoints.payment(id), enabled: Boolean(transaction && buyer), refetchInterval: transaction?.status === 'PENDING' ? 5000 : false });
+  const payment = useQuery({ queryKey: ['payment', id], queryFn: () => endpoints.payment(id), enabled: Boolean(transaction && buyer), refetchInterval: transaction?.status === 'PENDING' ? PAYMENT_POLL_INTERVAL_MS : false });
 
   const action = useMutation({
     mutationFn: ({ kind, reason }: { kind: Exclude<ActionKind, 'PAY'>; reason?: string }) => endpoints.setTransactionStatus(id, kind, reason),
@@ -364,7 +359,7 @@ export default function TransactionDetailScreen() {
         <View style={[styles.statusAside, mobile && styles.statusAsideMobile]}>
           <Text style={styles.statusAsideLabel}>{buyer ? 'TOTAL PEMBAYARAN' : 'NILAI PESANAN'}</Text>
           <Text style={styles.statusAsideValue}>{money(buyer ? grandTotal : transaction.totalPrice)}</Text>
-          <Text style={styles.statusAsideMeta}>{service ? 'Jasa' : meetup ? 'Meetup kampus' : 'Kurir instan'} · {buyer ? 'Pembelian' : 'Penjualan'}</Text>
+          <Text style={styles.statusAsideMeta}>{service ? 'Jasa' : meetup ? 'Meetup kampus' : 'Transaksi historis'} · {buyer ? 'Pembelian' : 'Penjualan'}</Text>
         </View>
       </View>
 
@@ -414,8 +409,8 @@ export default function TransactionDetailScreen() {
             </Card>
           ) : <Card style={styles.fulfillmentCard}>
             <View style={styles.fulfillmentHeader}>
-              <View style={styles.fulfillmentHeading}><View style={styles.fulfillmentIcon}><Ionicons name={meetup ? 'people-outline' : 'bicycle-outline'} size={22} color={colors.primary} /></View><View><Text style={styles.cardTitle}>{meetup ? 'Meetup langsung' : 'Kurir Instan'}</Text><Text style={styles.cardCopy}>{meetup ? 'Atur waktu dan lokasi lewat chat. Dana dilepas setelah seller memverifikasi kode dari buyer.' : 'Pengiriman ini merupakan simulasi untuk pengembangan BMarket.'}</Text></View></View>
-              <View style={styles.fulfillmentBadge}><Text style={styles.fulfillmentBadgeText}>{meetup ? 'MEETUP' : 'SIMULASI'}</Text></View>
+              <View style={styles.fulfillmentHeading}><View style={styles.fulfillmentIcon}><Ionicons name={meetup ? 'people-outline' : 'archive-outline'} size={22} color={colors.primary} /></View><View><Text style={styles.cardTitle}>{meetup ? 'Meetup langsung' : 'Penyerahan transaksi lama'}</Text><Text style={styles.cardCopy}>{meetup ? 'Atur waktu dan lokasi lewat chat. Dana dilepas setelah seller memverifikasi kode dari buyer.' : 'Detail penyerahan lama tetap tersimpan untuk kompatibilitas riwayat.'}</Text></View></View>
+              <View style={styles.fulfillmentBadge}><Text style={styles.fulfillmentBadgeText}>{meetup ? 'MEETUP' : 'RIWAYAT'}</Text></View>
             </View>
             {meetup ? (
               <View style={styles.fulfillmentDetails}>
@@ -424,12 +419,7 @@ export default function TransactionDetailScreen() {
                 {transaction.handoverVerifiedAt ? <DetailRow icon="shield-checkmark-outline" label="Serah-terima" value={`Terverifikasi ${dateTime(transaction.handoverVerifiedAt)}`} success /> : null}
               </View>
             ) : (
-              <View style={styles.fulfillmentDetails}>
-                <DetailRow icon="bicycle-outline" label="Kurir" value={transaction.courierProvider === 'GRABEXPRESS' ? 'GrabExpress Instant (simulasi)' : 'GoSend Instant (simulasi)'} />
-                <DetailRow icon="location-outline" label="Tujuan" value={transaction.deliveryAddress || '-'} />
-                <DetailRow icon="call-outline" label="Penerima" value={transaction.recipientPhone || '-'} />
-                {transaction.trackingNumber ? <DetailRow icon="navigate-outline" label="Nomor tracking" value={transaction.trackingNumber} /> : null}
-              </View>
+              <View style={styles.fulfillmentDetails}><DetailRow icon="archive-outline" label="Kompatibilitas" value="Data penyerahan transaksi ini berasal dari versi BMarket sebelumnya" /></View>
             )}
           </Card>}
 
@@ -442,7 +432,7 @@ export default function TransactionDetailScreen() {
             <SummaryRow label="Harga satuan" value={money(transaction.price)} />
             <SummaryRow label="Jumlah" value={`${transaction.quantity} item`} />
             <SummaryRow label="Subtotal" value={money(transaction.totalPrice)} />
-            <SummaryRow label="Ongkir" value={Number(transaction.shippingFee) ? money(transaction.shippingFee) : 'Gratis'} />
+            {Number(transaction.shippingFee) > 0 ? <SummaryRow label="Biaya penyerahan lama" value={money(transaction.shippingFee)} /> : null}
             {!buyer ? <SummaryRow label={`Biaya layanan (${Number(transaction.commissionRate)}%)`} value={`- ${money(transaction.commissionAmt)}`} muted /> : null}
             <View style={styles.summaryDivider} />
             <SummaryRow label={buyer ? 'Total pembayaran' : 'Pendapatan seller'} value={money(buyer ? grandTotal : transaction.sellerReceives)} total />
@@ -459,7 +449,7 @@ export default function TransactionDetailScreen() {
 
           <Card style={styles.actionCard}>
             <Text style={styles.cardEyebrow}>TINDAKAN</Text><Text style={styles.cardTitle}>Tindakan berikutnya</Text>
-            <Text style={styles.actionHelp}>{buyer && transaction.status === 'PENDING' ? 'Bayar melalui Midtrans Snap Sandbox. BMarket menunggu notifikasi server Midtrans sebelum menandai pesanan dibayar.' : serviceInProgress ? (buyer ? (deliverables.length ? 'Pratinjau dan periksa file hasil jasa. Jika sudah sesuai, tekan Terima hasil untuk menyelesaikan transaksi dan membuka unduhan file. Jika tidak sesuai, buka sengketa.' : 'Tunggu penjual mengunggah file hasil jasa. Gunakan chat untuk membahas detail pengerjaan.') : 'Kerjakan jasa sesuai kesepakatan, lalu unggah file hasilnya di kartu Hasil jasa. Dana dilepas setelah buyer menerima hasil.') : meetup && ['PAID', 'CONFIRMED'].includes(transaction.status) ? (buyer ? 'Chat dengan seller untuk menyepakati waktu dan lokasi. Setelah barang benar-benar kamu terima, buat kode dan berikan 6 angka tersebut kepada seller.' : 'Chat dengan buyer untuk menyepakati waktu dan lokasi. Setelah barang diserahkan, minta kode 6 angka dari buyer lalu masukkan di bawah.') : !buyer && transaction.status === 'PAID' ? 'Siapkan pengiriman setelah detail penerima sesuai.' : buyer && transaction.status === 'CONFIRMED' ? 'Selesaikan hanya setelah kiriman benar-benar diterima.' : active ? 'Menunggu tindakan dari pihak lain.' : 'Tidak ada tindakan lain untuk transaksi ini.'}</Text>
+            <Text style={styles.actionHelp}>{buyer && transaction.status === 'PENDING' ? 'Bayar melalui Midtrans Snap Sandbox. BMarket menunggu notifikasi server Midtrans sebelum menandai pesanan dibayar.' : serviceInProgress ? (buyer ? (deliverables.length ? 'Pratinjau dan periksa file hasil jasa. Jika sudah sesuai, tekan Terima hasil untuk menyelesaikan transaksi dan membuka unduhan file. Jika tidak sesuai, buka sengketa.' : 'Tunggu penjual mengunggah hasil jasa. Gunakan chat untuk membahas detail pengerjaan.') : 'Kerjakan jasa sesuai kesepakatan, lalu unggah hasilnya. Dana dilepas setelah buyer menerima hasil.') : meetup && ['PAID', 'CONFIRMED'].includes(transaction.status) ? (buyer ? 'Chat dengan seller untuk menyepakati waktu dan lokasi. Setelah barang benar-benar kamu terima, buat kode dan berikan 6 angka tersebut kepada seller.' : 'Chat dengan buyer untuk menyepakati waktu dan lokasi. Setelah barang diserahkan, minta kode 6 angka dari buyer lalu masukkan di bawah.') : active ? 'Transaksi historis ini tetap dapat diselesaikan dengan alur versi sebelumnya.' : 'Tidak ada tindakan lain untuk transaksi ini.'}</Text>
             {buyer && transaction.status === 'PENDING' ? <Button title={payment.data?.status === 'PENDING' ? 'Lanjutkan pembayaran Midtrans' : 'Bayar dengan Midtrans'} icon="card-outline" onPress={() => openDialog('PAY')} /> : null}
             {!buyer && transaction.status === 'PAID' && !meetup && preorderReady ? <Button title="Siapkan pengiriman" icon="cube-outline" onPress={() => openDialog('CONFIRMED')} /> : null}
             {!buyer && transaction.status === 'PAID' && !meetup && preorder && !preorderReady ? <InlineAlert tone="warning" message="Pengiriman belum dapat diproses. Ubah status batch pre-order menjadi Siap diambil/dikirim dari Etalase Saya terlebih dahulu." /> : null}

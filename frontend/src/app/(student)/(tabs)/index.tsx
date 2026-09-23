@@ -11,6 +11,7 @@ import { ListingCard } from '@/components/listing-card';
 import { webTransition, makeStyles, colors } from '@/constants/theme';
 import { useAuth } from '@/store/auth';
 import type { Listing } from '@/types';
+import { CATEGORY_METADATA } from '@/lib/domain-metadata';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -20,13 +21,7 @@ const openSearch = (params: Record<string, string> = {}) => router.push({ pathna
 // Category accent colors work on light and dark backgrounds; the icon tile uses the accent at low opacity.
 const categories = [
   { value: 'Semua', label: 'Semua', icon: 'grid-outline' as IconName, color: '#2F7FE0' },
-  { value: 'ELECTRONICS', label: 'Elektronik', icon: 'game-controller-outline' as IconName, color: '#5F72E0' },
-  { value: 'BOOKS', label: 'Buku', icon: 'book-outline' as IconName, color: '#E0801F' },
-  { value: 'FASHION', label: 'Fashion', icon: 'shirt-outline' as IconName, color: '#A064D6' },
-  { value: 'FOOD', label: 'Makanan', icon: 'fast-food-outline' as IconName, color: '#DE6155' },
-  { value: 'SERVICES', label: 'Jasa', icon: 'construct-outline' as IconName, color: '#1F9C80' },
-  { value: 'SPORTS', label: 'Olahraga', icon: 'basketball-outline' as IconName, color: '#D0961E' },
-  { value: 'OTHER', label: 'Lainnya', icon: 'apps-outline' as IconName, color: '#7C8EA2' },
+  ...Object.entries(CATEGORY_METADATA).map(([value, meta]) => ({ value, ...meta, icon: meta.icon as IconName })),
 ];
 
 // Rotating marketplace-style taglines under the greeting.

@@ -15,8 +15,8 @@ export function validateEnvironment(config: Environment) {
     throw new Error('JWT_SECRET minimal 32 karakter.');
   }
 
-  if (String(config.MIDTRANS_IS_PRODUCTION || 'false').toLowerCase() !== 'false') {
-    throw new Error('Integrasi BMarket saat ini hanya mendukung MIDTRANS_IS_PRODUCTION=false (Sandbox).');
+  if (!['true', 'false'].includes(String(config.MIDTRANS_IS_PRODUCTION || 'false').toLowerCase())) {
+    throw new Error('MIDTRANS_IS_PRODUCTION harus bernilai true atau false.');
   }
 
   if (config.NODE_ENV === 'production') {

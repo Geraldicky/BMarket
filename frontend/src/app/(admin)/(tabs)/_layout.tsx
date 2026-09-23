@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FeedbackDialog } from '@/components/ui';
 import { colors, shadowSoft, webTransition, makeStyles, useColorScheme } from '@/constants/theme';
 import { useAuth } from '@/store/auth';
+import { BrandLogo } from '@/components/brand-logo';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -112,7 +113,7 @@ export default function AdminTabs() {
           >
             <Ionicons name={open && !desktop ? 'close' : 'menu'} size={24} color={colors.white} />
           </Pressable>
-          <Text style={[styles.wordmark, mobile && styles.wordmarkMobile]}>BMarket</Text>
+          <BrandLogo style={[styles.wordmark, mobile && styles.wordmarkMobile]} />
           {!mobile ? <View style={styles.consoleBadge}><Ionicons name="shield-checkmark" size={15} color={colors.white} /><Text style={styles.consoleText}>Admin Console</Text></View> : null}
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Profil akun" onPress={() => setProfileOpen(true)} style={({ pressed }) => [styles.profile, pressed && { opacity: .75 }]}>
@@ -164,8 +165,8 @@ const useStyles = makeStyles(() => ({
   headerMobile: { paddingHorizontal: 12 },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   burger: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,.12)', ...webTransition },
-  wordmark: { color: colors.white, fontFamily: 'PoppinsBold', fontSize: 24, letterSpacing: -.5 },
-  wordmarkMobile: { fontSize: 20 },
+  wordmark: { width: 146, height: 46 },
+  wordmarkMobile: { width: 116, height: 38 },
   consoleBadge: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, backgroundColor: 'rgba(255,255,255,.14)', borderWidth: 1, borderColor: 'rgba(255,255,255,.12)' },
   consoleText: { color: colors.white, fontFamily: 'PoppinsSemiBold', fontSize: 12 },
   profile: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4, paddingLeft: 4, paddingRight: 8, borderRadius: 12, ...webTransition },

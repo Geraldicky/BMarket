@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { endpoints } from '@/lib/api';
 import { useAuth } from '@/store/auth';
 import { colors, webTransition, makeStyles } from '@/constants/theme';
+import { BrandLogo } from '@/components/brand-logo';
 
 /**
  * Mobile counterpart of StudentDesktopHeader, shared by every student page on small screens.
@@ -30,7 +31,7 @@ export function StudentMobileHeader({ back = false }: { back?: boolean }) {
         <View style={styles.brandRow}>
           {back ? <Pressable accessibilityRole="button" accessibilityLabel="Kembali" hitSlop={8} onPress={goBack} style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}><Ionicons name="chevron-back" size={22} color="#FFFFFF" /></Pressable> : null}
           <Pressable accessibilityRole="button" accessibilityLabel="Beranda" onPress={() => router.replace('/(student)/(tabs)')}>
-            <Text style={styles.brand}>BMarket</Text>
+            <BrandLogo style={styles.brandLogo} />
           </Pressable>
         </View>
         <View style={styles.actions}>
@@ -52,7 +53,7 @@ const useStyles = makeStyles(() => ({
   inner: { height: 60, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
   backButton: { width: 36, height: 36, marginLeft: -6, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  brand: { fontFamily: 'PoppinsBold', fontSize: 22, color: '#FFFFFF', letterSpacing: -.35 },
+  brandLogo: { width: 118, height: 38 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   iconButton: { position: 'relative', width: 38, height: 38, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,.18)', backgroundColor: 'rgba(0,0,0,.08)', alignItems: 'center', justifyContent: 'center', ...webTransition },
   badge: { position: 'absolute', right: -4, top: -4, minWidth: 16, height: 16, paddingHorizontal: 3, borderRadius: 8, backgroundColor: colors.badge, alignItems: 'center', justifyContent: 'center' },

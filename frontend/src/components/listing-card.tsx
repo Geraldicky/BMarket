@@ -6,14 +6,10 @@ import { colors, shadowHover, webTransition, makeStyles } from '@/constants/them
 import type { Listing } from '@/types';
 import { money } from './ui';
 import { useAuth } from '@/store/auth';
+import { CATEGORY_LABELS, CATEGORY_METADATA, CONDITION_LABELS } from '@/lib/domain-metadata';
 
-const categoryIcons: Record<string, React.ComponentProps<typeof Ionicons>['name']> = {
-  ELECTRONICS: 'phone-portrait-outline', BOOKS: 'book-outline', FASHION: 'shirt-outline', FOOD: 'fast-food-outline', SERVICES: 'construct-outline', SPORTS: 'basketball-outline', OTHER: 'cube-outline',
-};
-const categoryLabels: Record<string, string> = { ELECTRONICS: 'Elektronik', BOOKS: 'Buku', FASHION: 'Fashion', FOOD: 'Makanan', SERVICES: 'Jasa', SPORTS: 'Olahraga', OTHER: 'Lainnya' };
-const conditionLabels: Record<string, string> = { NEW: 'Baru', LIKE_NEW: 'Seperti baru', GOOD: 'Kondisi baik', FAIR: 'Cukup baik' };
 // Category accents for the no-photo placeholder; drawn at low opacity so they suit light and dark themes.
-const placeholderAccents: Record<string, string> = { ELECTRONICS: '#3D7BE0', BOOKS: '#E0801F', FASHION: '#A064D6', FOOD: '#DE6155', SERVICES: '#1F9C80', SPORTS: '#D0961E', OTHER: '#7C8EA2' };
+const categoryMeta = (category: string) => CATEGORY_METADATA[category as keyof typeof CATEGORY_METADATA] || CATEGORY_METADATA.OTHER;
 
 function shortDeadline(value?: string | null) {
   if (!value) return null;
@@ -68,12 +64,12 @@ export function ListingCard({ item, onPress, style, compact = false, saved = fal
           {showImage ? (
             <Image source={cover} style={[styles.image, compact && styles.imageCompact, storefront && styles.imageStorefront, mobile && styles.imageMobile]} contentFit="cover" transition={180} cachePolicy="memory-disk" onError={() => setFailedUri(cover!)} />
           ) : (
-            <View style={[styles.image, compact && styles.imageCompact, storefront && styles.imageStorefront, mobile && styles.imageMobile, styles.placeholder, { backgroundColor: `${placeholderAccents[item.category] || placeholderAccents.OTHER}1F` }]}>
-              <View style={styles.placeholderRing}><Ionicons name={categoryIcons[item.category] || 'storefront-outline'} size={compact ? 28 : 36} color={colors.muted} /></View>
+            <View style={[styles.image, compact && styles.imageCompact, storefront && styles.imageStorefront, mobile && styles.imageMobile, styles.placeholder, { backgroundColor: `${categoryMeta(item.category).color}1F` }]}>
+              <View style={styles.placeholderRing}><Ionicons name={categoryMeta(item.category).icon} size={compact ? 28 : 36} color={colors.muted} /></View>
             </View>
           )}
 
-          <View style={styles.categoryTag}><Text style={styles.categoryTagText}>{categoryLabels[item.category] || item.category}</Text></View>
+          <View style={styles.categoryTag}><Text style={styles.categoryTagText}>{CATEGORY_LABELS[item.category] || item.category}</Text></View>
           {state ? <View style={[styles.stateBadge, styles[`state_${state.tone}`]]}><Ionicons name={state.icon} size={11} color={state.tone === 'warning' ? colors.warning : state.tone === 'preorder' ? colors.purple : state.tone === 'service' ? colors.success : colors.textSoft} /><Text style={[styles.stateText, styles[`stateText_${state.tone}`]]}>{state.label}</Text></View> : null}
         </View>
 
@@ -81,7 +77,7 @@ export function ListingCard({ item, onPress, style, compact = false, saved = fal
           <Text numberOfLines={2} style={[styles.title, compact && styles.titleCompact]}>{item.title}</Text>
           <Text numberOfLines={1} style={[styles.price, compact && styles.priceCompact]}>{money(item.price)}</Text>
           <View style={styles.metaRow}>
-            {item.condition ? <Text numberOfLines={1} style={styles.meta}>{conditionLabels[item.condition] || item.condition}</Text> : null}
+            {item.condition ? <Text numberOfLines={1} style={styles.meta}>{CONDITION_LABELS[item.condition] || item.condition}</Text> : null}
             {item.condition && stockCaption ? <View style={styles.dot} /> : null}
             {stockCaption ? <Text numberOfLines={1} style={styles.meta}>{stockCaption}</Text> : null}
           </View>

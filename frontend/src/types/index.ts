@@ -205,11 +205,6 @@ export interface DeliverableArchiveEntryPreview {
   content: string; // UTF-8 text, or base64 for images
 }
 
-export interface CheckoutOptions {
-  fulfillmentMethods: FulfillmentMethod[];
-  couriers: { provider: CourierProvider; label: string; fee: number; eta: string }[];
-}
-
 export interface Message {
   id: string;
   chatRoomId: string;

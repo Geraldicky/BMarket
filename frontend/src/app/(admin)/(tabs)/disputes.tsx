@@ -189,8 +189,7 @@ function DisputeDetail({ dispute, note, onNoteChange, busy, onStartReview, onDec
         <InfoRow label="Status" value={transaction ? transactionStatusLabel[transaction.status] || transaction.status : null} />
         <InfoRow label="Harga" value={transaction ? `${money(transaction.price)} × ${transaction.quantity}` : null} />
         <InfoRow label="Total dibayar" value={transaction ? money(transaction.grandTotal || transaction.totalPrice) : null} />
-        <InfoRow label="Penyerahan" value={service ? 'File hasil jasa' : transaction?.fulfillmentMethod === 'INSTANT_COURIER' ? 'Kurir instan' : 'Meetup kampus'} />
-        <InfoRow label="Alamat kirim" value={transaction?.deliveryAddress} />
+        <InfoRow label="Penyerahan" value={service ? 'File hasil jasa' : transaction?.fulfillmentMethod === 'CAMPUS_MEETUP' ? 'Meetup kampus' : 'Transaksi historis'} />
         <InfoRow label="Dipesan" value={transaction ? date(transaction.createdAt) : null} />
         <InfoRow label="Catatan buyer" value={transaction?.note} />
       </Section>

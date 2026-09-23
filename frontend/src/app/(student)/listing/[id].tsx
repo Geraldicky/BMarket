@@ -8,19 +8,12 @@ import { Button, Card, ErrorState, FeedbackDialog, Field, InlineAlert, Loader, m
 import { colors, radius, makeStyles } from '@/constants/theme';
 import { endpoints, errorMessage } from '@/lib/api';
 import { useAuth } from '@/store/auth';
-import type { CourierProvider, FulfillmentMethod } from '@/types';
+import { CATEGORY_LABELS, CONDITION_LABELS, LISTING_MODE_LABELS } from '@/lib/domain-metadata';
 
-const categoryLabels: Record<string, string> = {
-  ELECTRONICS: 'Elektronik', BOOKS: 'Buku', FASHION: 'Fashion', FOOD: 'Makanan',
-  SERVICES: 'Jasa', SPORTS: 'Olahraga', OTHER: 'Lainnya',
-};
-const conditionLabels: Record<string, string> = {
-  NEW: 'Baru', LIKE_NEW: 'Seperti baru', GOOD: 'Kondisi baik', FAIR: 'Cukup baik',
-};
+const categoryLabels = CATEGORY_LABELS;
+const conditionLabels = CONDITION_LABELS;
 
-const modeLabels: Record<string, string> = {
-  ONE_OFF: 'BARANG SATUAN', STOCKED: 'PRODUK STOK', PREORDER: 'PRE-ORDER', SERVICE: 'JASA',
-};
+const modeLabels = LISTING_MODE_LABELS;
 
 function fullDate(value?: string | null) {
   if (!value) return '—';
@@ -40,18 +33,9 @@ export default function ListingDetailScreen() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [failedImages, setFailedImages] = useState<string[]>([]);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [fulfillmentMethod, setFulfillmentMethod] = useState<FulfillmentMethod>('CAMPUS_MEETUP');
-  const [courierProvider, setCourierProvider] = useState<CourierProvider>('GOSEND');
-  const [deliveryAddress, setDeliveryAddress] = useState('');
-  const [recipientPhone, setRecipientPhone] = useState(user?.phone || '');
   const [feedback, setFeedback] = useState<{ tone: 'warning' | 'danger'; title: string; message: string } | null>(null);
 
   const query = useQuery({ queryKey: ['listing', id], queryFn: () => endpoints.listing(id) });
-  const checkoutOptions = useQuery({
-    queryKey: ['checkout-options', id],
-    queryFn: () => endpoints.checkoutOptions(id),
-    enabled: checkoutOpen,
-  });
   const sellerTrust = useQuery({
     queryKey: ['seller-profile', query.data?.sellerId],
     queryFn: () => endpoints.userProfile(query.data!.sellerId),
@@ -69,18 +53,10 @@ export default function ListingDetailScreen() {
     mutationFn: () => {
       const amount = Number(quantity);
       if (!Number.isInteger(amount) || amount < 1) throw new Error('Jumlah pembelian minimal 1.');
-      if (effectiveFulfillmentMethod === 'INSTANT_COURIER' && (!deliveryAddress.trim() || !recipientPhone.trim())) {
-        throw new Error('Lengkapi alamat penerima dan nomor telepon.');
-      }
       return endpoints.buy({
         listingId: id,
         quantity: amount,
         note: note.trim() || undefined,
-        // Jasa tidak memiliki metode penyerahan.
-        fulfillmentMethod: query.data?.mode === 'SERVICE' ? undefined : effectiveFulfillmentMethod,
-        courierProvider: effectiveFulfillmentMethod === 'INSTANT_COURIER' ? effectiveCourierProvider : undefined,
-        deliveryAddress: effectiveFulfillmentMethod === 'INSTANT_COURIER' ? deliveryAddress.trim() : undefined,
-        recipientPhone: effectiveFulfillmentMethod === 'INSTANT_COURIER' ? recipientPhone.trim() : undefined,
       });
     },
     onSuccess: transaction => {
@@ -133,16 +109,7 @@ export default function ListingDetailScreen() {
     && orderQuantity >= 1
     && (item.mode === 'SERVICE' || orderQuantity <= buyerLimit);
   const orderTotal = Number(item.price) * (quantityValid ? orderQuantity : 0);
-  const availableMethods = item.fulfillmentMethods?.length ? item.fulfillmentMethods : ['CAMPUS_MEETUP'] as FulfillmentMethod[];
-  const checkoutMethods = checkoutOptions.data?.fulfillmentMethods?.length ? checkoutOptions.data.fulfillmentMethods : availableMethods;
-  const effectiveFulfillmentMethod = checkoutMethods.includes(fulfillmentMethod) ? fulfillmentMethod : (checkoutMethods[0] ?? 'CAMPUS_MEETUP');
-  const checkoutCouriers = checkoutOptions.data?.couriers ?? [];
-  const effectiveCourierProvider = checkoutCouriers.some(option => option.provider === courierProvider)
-    ? courierProvider
-    : (checkoutCouriers[0]?.provider ?? courierProvider);
-  const selectedCourier = checkoutCouriers.find(option => option.provider === effectiveCourierProvider);
-  const shippingFee = effectiveFulfillmentMethod === 'INSTANT_COURIER' ? Number(selectedCourier?.fee || 0) : 0;
-  const orderGrandTotal = orderTotal + shippingFee;
+  const orderGrandTotal = orderTotal;
 
   const changeImage = (direction: -1 | 1) => {
     if (images.length < 2) return;
@@ -165,9 +132,6 @@ export default function ListingDetailScreen() {
       return;
     }
     buy.reset();
-    const initialMethod = availableMethods.includes(fulfillmentMethod) ? fulfillmentMethod : availableMethods[0];
-    setFulfillmentMethod(initialMethod);
-    setRecipientPhone(current => current || user?.phone || '');
     setCheckoutOpen(true);
   };
 
@@ -249,7 +213,7 @@ export default function ListingDetailScreen() {
             </View>
             {item.mode !== 'SERVICE' ? <View style={styles.factItem}>
               <View style={styles.factIcon}><Ionicons name="swap-horizontal-outline" size={18} color={colors.primary} /></View>
-              <View style={styles.flex}><Text style={styles.factLabel}>Penyerahan</Text><Text style={styles.factValue}>{availableMethods.includes('CAMPUS_MEETUP') && availableMethods.includes('INSTANT_COURIER') ? 'Meetup / Kurir' : availableMethods.includes('INSTANT_COURIER') ? 'Kurir Instan' : 'Meetup langsung'}</Text></View>
+              <View style={styles.flex}><Text style={styles.factLabel}>Penyerahan</Text><Text style={styles.factValue}>Meetup langsung</Text></View>
             </View> : null}
           </View>
 
@@ -312,8 +276,7 @@ export default function ListingDetailScreen() {
         {item.mode !== 'SERVICE' ? <View style={styles.deliverySummary}>
           <Text style={styles.detailLabel}>METODE PENYERAHAN</Text>
           <View style={styles.availableDeliveryRow}>
-            {availableMethods.includes('CAMPUS_MEETUP') ? <View style={styles.availableDeliveryChip}><Ionicons name="people-outline" size={15} color={colors.primary} /><Text style={styles.availableDeliveryText}>Meetup langsung</Text></View> : null}
-            {availableMethods.includes('INSTANT_COURIER') ? <View style={styles.availableDeliveryChip}><Ionicons name="bicycle-outline" size={15} color={colors.primary} /><Text style={styles.availableDeliveryText}>Kurir Instan</Text></View> : null}
+            <View style={styles.availableDeliveryChip}><Ionicons name="people-outline" size={15} color={colors.primary} /><Text style={styles.availableDeliveryText}>Meetup langsung · koordinasi lewat chat</Text></View>
           </View>
         </View> : null}
       </Card>
@@ -322,7 +285,7 @@ export default function ListingDetailScreen() {
         <View style={[styles.modalBackdrop, mobile && styles.modalBackdropMobile]}>
           <View style={[styles.checkoutModal, mobile && styles.checkoutModalMobile]}>
             <View style={styles.modalHeader}>
-              <View><Text style={styles.modalEyebrow}>CHECKOUT BMARKET</Text><Text style={styles.modalTitle}>Periksa pesananmu</Text><Text style={styles.modalSubtitle}>{item.mode === 'PREORDER' ? 'Pesanan akan tercatat sebagai pre-order dan pembayaran ditahan di escrow.' : item.mode === 'SERVICE' ? 'Pastikan jumlah pesanan jasa sudah sesuai.' : 'Pastikan jumlah dan metode penyerahan sudah sesuai.'}</Text></View>
+              <View><Text style={styles.modalEyebrow}>CHECKOUT BMARKET</Text><Text style={styles.modalTitle}>Periksa pesananmu</Text><Text style={styles.modalSubtitle}>{item.mode === 'PREORDER' ? 'Pesanan akan tercatat sebagai pre-order dan pembayaran ditahan di escrow.' : item.mode === 'SERVICE' ? 'Pastikan jumlah pesanan jasa sudah sesuai.' : 'Meetup dikoordinasikan lewat chat setelah pembayaran.'}</Text></View>
               <Pressable accessibilityLabel="Tutup checkout" onPress={closeCheckout} style={styles.modalClose}><Ionicons name="close" size={21} color={colors.textSoft} /></Pressable>
             </View>
 
@@ -343,55 +306,20 @@ export default function ListingDetailScreen() {
                 </View>
               </View>
             ) : <View style={styles.fulfillmentSection}>
-              <View><Text style={styles.sectionLabel}>METODE PENYERAHAN</Text><Text style={styles.sectionHelp}>Pembayaran tetap melalui BMarket agar transaksi dan biaya layanan tercatat.</Text></View>
-              {checkoutOptions.isError ? <View style={styles.optionsError}><Text style={styles.optionsErrorText}>Pilihan penyerahan belum dapat dimuat.</Text><Button title="Coba lagi" variant="secondary" icon="refresh-outline" onPress={() => checkoutOptions.refetch()} /></View> : null}
-              <View style={styles.fulfillmentOptions}>
-                {availableMethods.includes('CAMPUS_MEETUP') ? (
-                  <Pressable onPress={() => setFulfillmentMethod('CAMPUS_MEETUP')} style={[styles.fulfillmentOption, effectiveFulfillmentMethod === 'CAMPUS_MEETUP' && styles.fulfillmentOptionActive]}>
-                    <View style={styles.fulfillmentIcon}><Ionicons name="people-outline" size={21} color={colors.primary} /></View>
-                    <View style={styles.flex}><Text style={styles.fulfillmentTitle}>Meetup langsung</Text><Text style={styles.fulfillmentCaption}>Atur waktu & lokasi lewat chat · gratis</Text></View>
-                    <Ionicons name={effectiveFulfillmentMethod === 'CAMPUS_MEETUP' ? 'checkmark-circle' : 'ellipse-outline'} size={21} color={effectiveFulfillmentMethod === 'CAMPUS_MEETUP' ? colors.primary : colors.borderStrong} />
-                  </Pressable>
-                ) : null}
-                {availableMethods.includes('INSTANT_COURIER') ? (
-                  <Pressable onPress={() => setFulfillmentMethod('INSTANT_COURIER')} style={[styles.fulfillmentOption, effectiveFulfillmentMethod === 'INSTANT_COURIER' && styles.fulfillmentOptionActive]}>
-                    <View style={styles.fulfillmentIcon}><Ionicons name="bicycle-outline" size={21} color={colors.primary} /></View>
-                    <View style={styles.flex}><Text style={styles.fulfillmentTitle}>Kurir Instan</Text><Text style={styles.fulfillmentCaption}>Ongkir simulasi · estimasi 1–3 jam</Text></View>
-                    <Ionicons name={effectiveFulfillmentMethod === 'INSTANT_COURIER' ? 'checkmark-circle' : 'ellipse-outline'} size={21} color={effectiveFulfillmentMethod === 'INSTANT_COURIER' ? colors.primary : colors.borderStrong} />
-                  </Pressable>
-                ) : null}
+              <View><Text style={styles.sectionLabel}>MEETUP LANGSUNG</Text><Text style={styles.sectionHelp}>Tidak ada ongkir. Jadwal dan lokasi disepakati dengan seller lewat chat.</Text></View>
+              <View style={styles.meetupChatInfo}>
+                <View style={styles.meetupChatIcon}><Ionicons name="chatbubbles-outline" size={21} color={colors.primary} /></View>
+                <View style={styles.flex}>
+                  <Text style={styles.meetupChatTitle}>Koordinasikan meetup setelah checkout</Text>
+                  <Text style={styles.meetupChatText}>Saat barang sudah kamu terima, buat kode serah-terima dan berikan 6 angka tersebut kepada seller.</Text>
+                </View>
               </View>
-
-              {effectiveFulfillmentMethod === 'CAMPUS_MEETUP' ? (
-                <View style={styles.meetupChatInfo}>
-                  <View style={styles.meetupChatIcon}><Ionicons name="chatbubbles-outline" size={21} color={colors.primary} /></View>
-                  <View style={styles.flex}>
-                    <Text style={styles.meetupChatTitle}>Jadwal dan lokasi ditentukan lewat chat</Text>
-                    <Text style={styles.meetupChatText}>Setelah checkout, hubungi seller untuk menyepakati waktu dan tempat meetup. Saat barang sudah kamu terima, buat kode serah-terima dan berikan 6 angka tersebut kepada seller.</Text>
-                  </View>
-                </View>
-              ) : (
-                <View style={styles.deliveryFields}>
-                  <Text style={styles.fieldLabel}>Pilih layanan kurir</Text>
-                  <View style={styles.courierOptions}>
-                    {(checkoutOptions.data?.couriers || []).map(courier => (
-                      <Pressable key={courier.provider} onPress={() => setCourierProvider(courier.provider)} style={[styles.courierOption, effectiveCourierProvider === courier.provider && styles.courierOptionActive]}>
-                        <View><Text style={styles.courierName}>{courier.label}</Text><Text style={styles.courierEta}>{courier.eta}</Text></View><Text style={styles.courierFee}>{money(courier.fee)}</Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                  {checkoutOptions.isLoading ? <Text style={styles.loadingOptions}>Menghitung ongkir simulasi…</Text> : null}
-                  <Field label="Alamat penerima" multiline value={deliveryAddress} onChangeText={setDeliveryAddress} placeholder="Tulis alamat lengkap dan petunjuk lokasi" />
-                  <Field label="Nomor telepon penerima" value={recipientPhone} onChangeText={setRecipientPhone} keyboardType="phone-pad" placeholder="08xxxxxxxxxx" />
-                </View>
-              )}
             </View>}
 
             <View style={styles.checkoutRows}>
               <View style={styles.checkoutRow}><Text style={styles.checkoutLabel}>Harga satuan</Text><Text style={styles.checkoutValue}>{money(item.price)}</Text></View>
               <View style={styles.checkoutRow}><Text style={styles.checkoutLabel}>Jumlah</Text><Text style={styles.checkoutValue}>{orderQuantity}</Text></View>
               <View style={styles.checkoutRow}><Text style={styles.checkoutLabel}>Subtotal</Text><Text style={styles.checkoutValue}>{money(orderTotal)}</Text></View>
-              {item.mode !== 'SERVICE' ? <View style={styles.checkoutRow}><Text style={styles.checkoutLabel}>Ongkir</Text><Text style={styles.checkoutValue}>{shippingFee ? money(shippingFee) : 'Gratis'}</Text></View> : null}
               <View style={styles.checkoutDivider} />
               <View style={styles.checkoutRow}><Text style={styles.checkoutTotalLabel}>Total pembayaran</Text><Text style={styles.checkoutTotal}>{money(orderGrandTotal)}</Text></View>
             </View>
@@ -406,7 +334,7 @@ export default function ListingDetailScreen() {
 
             <View style={[styles.modalActions, mobile && styles.modalActionsMobile]}>
               <Button title="Kembali" variant="ghost" disabled={buy.isPending} onPress={closeCheckout} style={styles.modalButton} />
-              <Button title="Buat pesanan" icon="arrow-forward" loading={buy.isPending} disabled={checkoutOptions.isLoading || checkoutOptions.isError} onPress={() => buy.mutate()} style={styles.modalButtonPrimary} />
+              <Button title="Buat pesanan" icon="arrow-forward" loading={buy.isPending} onPress={() => buy.mutate()} style={styles.modalButtonPrimary} />
             </View>
           </View>
         </View>
@@ -551,27 +479,11 @@ const useStyles = makeStyles(() => ({
   fulfillmentSection: { gap: 11 },
   sectionLabel: { fontFamily: 'PoppinsBold', fontSize: 10.5, letterSpacing: .7, color: colors.primary },
   sectionHelp: { fontFamily: 'PoppinsRegular', fontSize: 11.5, lineHeight: 17, color: colors.muted, marginTop: 2 },
-  optionsError: { padding: 11, borderRadius: 10, backgroundColor: colors.dangerSoft, gap: 8 },
-  optionsErrorText: { fontFamily: 'PoppinsMedium', fontSize: 11.5, color: colors.danger },
-  fulfillmentOptions: { flexDirection: 'row', gap: 8 },
-  fulfillmentOption: { flex: 1, minHeight: 70, padding: 11, borderRadius: 11, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', gap: 9 },
-  fulfillmentOptionActive: { borderColor: colors.primaryBorder, backgroundColor: colors.primarySoft },
-  fulfillmentIcon: { width: 38, height: 38, borderRadius: 10, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
-  fulfillmentTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 11.5, color: colors.text },
-  fulfillmentCaption: { fontFamily: 'PoppinsRegular', fontSize: 10.5, lineHeight: 14, color: colors.muted, marginTop: 1 },
-  deliveryFields: { gap: 10, padding: 12, borderRadius: 11, backgroundColor: colors.background },
   meetupChatInfo: { padding: 12, borderRadius: 11, borderWidth: 1, borderColor: colors.primaryBorder, backgroundColor: colors.primarySoft, flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   meetupChatIcon: { width: 38, height: 38, borderRadius: 10, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   meetupChatTitle: { fontFamily: 'PoppinsSemiBold', fontSize: 11.5, color: colors.text },
   meetupChatText: { fontFamily: 'PoppinsRegular', fontSize: 10.5, lineHeight: 16, color: colors.textSoft, marginTop: 2 },
   fieldLabel: { fontFamily: 'PoppinsMedium', fontSize: 11.5, color: colors.textSoft },
-  loadingOptions: { fontFamily: 'PoppinsRegular', fontSize: 11.5, color: colors.muted },
-  courierOptions: { gap: 7 },
-  courierOption: { minHeight: 54, padding: 10, borderRadius: 9, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  courierOptionActive: { borderColor: colors.primaryBorder, backgroundColor: colors.primarySoft },
-  courierName: { fontFamily: 'PoppinsSemiBold', fontSize: 11.5, color: colors.text },
-  courierEta: { fontFamily: 'PoppinsRegular', fontSize: 10.5, color: colors.muted, marginTop: 1 },
-  courierFee: { fontFamily: 'PoppinsBold', fontSize: 11.5, color: colors.primaryDark },
   checkoutRows: { gap: 9, padding: 13, borderRadius: 11, backgroundColor: colors.background },
   checkoutRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16 },
   checkoutLabel: { fontFamily: 'PoppinsRegular', fontSize: 11.5, color: colors.muted },

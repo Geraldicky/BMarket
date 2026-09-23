@@ -4,7 +4,7 @@ import {
   Injectable, NotFoundException, ForbiddenException, BadRequestException,
 } from '@nestjs/common';
 import {
-  Category, Condition, FulfillmentMethod, ListingMode, ListingStatus, ListingType, PreorderStatus,
+  Category, Condition, ListingMode, ListingStatus, ListingType, PreorderStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateListingDto, UpdateListingDto, ListingFilterDto } from './dto/listing.dto';
@@ -88,7 +88,6 @@ export class ListingsService {
     condition?: Condition | null;
     stock?: number | null;
     images?: string[];
-    fulfillmentMethods?: FulfillmentMethod[];
     preorderDeadline?: Date | null;
     preorderReadyAt?: Date | null;
     preorderQuota?: number | null;
@@ -97,12 +96,6 @@ export class ListingsService {
   }) {
     if (!input.images?.length) throw new BadRequestException('Tambahkan minimal satu foto listing.');
     if (input.images.length > 4) throw new BadRequestException('Maksimal empat foto untuk setiap listing.');
-    if (input.mode === 'SERVICE') {
-      if (input.fulfillmentMethods?.length) throw new BadRequestException('Jasa tidak memiliki metode penyerahan.');
-    } else if (!input.fulfillmentMethods?.length) {
-      throw new BadRequestException('Pilih minimal satu metode penyerahan.');
-    }
-
     const expectedType = this.typeForMode(input.mode);
     if (input.type !== expectedType) {
       throw new BadRequestException(input.mode === 'SERVICE' ? 'Mode jasa harus menggunakan tipe SERVICE.' : 'Mode barang harus menggunakan tipe PRODUCT.');
@@ -151,7 +144,6 @@ export class ListingsService {
     if (filter.type) where.type = filter.type;
     if (filter.mode) where.mode = filter.mode;
     if (filter.condition) where.condition = filter.condition;
-    if (filter.fulfillmentMethod) where.fulfillmentMethods = { has: filter.fulfillmentMethod };
     if (filter.keyword) where.OR = [
       { title: { contains: filter.keyword, mode: 'insensitive' } },
       { description: { contains: filter.keyword, mode: 'insensitive' } },
@@ -219,7 +211,6 @@ export class ListingsService {
       condition: this.conditionApplies(mode, dto.category) ? dto.condition : null,
       stock,
       images: dto.images,
-      fulfillmentMethods: dto.fulfillmentMethods,
       preorderDeadline,
       preorderReadyAt,
       preorderQuota: mode === 'PREORDER' ? dto.preorderQuota : null,
@@ -241,7 +232,7 @@ export class ListingsService {
         sellerId,
         stock,
         stockLeft: stock,
-        fulfillmentMethods: mode === 'SERVICE' ? [] : dto.fulfillmentMethods ?? [],
+        fulfillmentMethods: mode === 'SERVICE' ? [] : ['CAMPUS_MEETUP'],
         preorderStatus: mode === 'PREORDER' ? 'OPEN' : null,
         preorderDeadline: mode === 'PREORDER' ? preorderDeadline : null,
         preorderReadyAt: mode === 'PREORDER' ? preorderReadyAt : null,
@@ -277,11 +268,7 @@ export class ListingsService {
     const nextCategory = dto.category ?? listing.category;
     const nextCondition = this.conditionApplies(nextMode, nextCategory) ? (dto.condition ?? listing.condition) : null;
     const nextImages = dto.images ?? this.parseImages(listing.images);
-    // Jasa tidak pernah menyimpan metode penyerahan. Metode yang dikirim untuk jasa tetap diteruskan
-    // ke validasi agar ditolak; nilai lama dari listing jasa tidak dibawa saat berubah menjadi barang.
-    const nextFulfillmentMethods = nextMode === 'SERVICE'
-      ? (dto.fulfillmentMethods?.length ? dto.fulfillmentMethods : [])
-      : (dto.fulfillmentMethods ?? (listing.mode === 'SERVICE' ? [] : listing.fulfillmentMethods));
+    const nextFulfillmentMethods = nextMode === 'SERVICE' ? [] : ['CAMPUS_MEETUP' as const];
     const nextDeadline = dto.preorderDeadline ? new Date(dto.preorderDeadline) : listing.preorderDeadline;
     const nextReadyAt = dto.preorderReadyAt === null
       ? null
@@ -304,7 +291,6 @@ export class ListingsService {
       condition: nextCondition,
       stock: nextStock,
       images: nextImages,
-      fulfillmentMethods: nextFulfillmentMethods,
       preorderDeadline: nextMode === 'PREORDER' ? nextDeadline : null,
       preorderReadyAt: nextMode === 'PREORDER' ? nextReadyAt : null,
       preorderQuota: nextQuota,

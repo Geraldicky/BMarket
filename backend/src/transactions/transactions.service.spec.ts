@@ -11,7 +11,7 @@ const listing = {
   stockLeft: 3,
   price: 100000,
   images: JSON.stringify(['http://localhost:3000/uploads/product.jpg']),
-  fulfillmentMethods: ['CAMPUS_MEETUP', 'INSTANT_COURIER'],
+  fulfillmentMethods: ['CAMPUS_MEETUP'],
 };
 
 const meetupCheckout = {
@@ -87,6 +87,10 @@ describe('TransactionsService checkout flow', () => {
     }));
     expect(tx.transaction.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
+        fulfillmentMethod: 'CAMPUS_MEETUP',
+        shippingFee: 0,
+        totalPrice: 200000,
+        grandTotal: 200000,
         reservationExpiresAt: expect.any(Date),
         listingTitleSnapshot: listing.title,
         listingImageSnapshot: 'http://localhost:3000/uploads/product.jpg',
@@ -122,7 +126,7 @@ describe('TransactionsService checkout flow', () => {
     expect(tx.listing.update).not.toHaveBeenCalled();
   });
 
-  it('adds courier fee to buyer total without charging seller commission on shipping', async () => {
+  it('rejects obsolete courier checkout attempts', async () => {
     const tx = {
       listing: {
         findUnique: vi.fn().mockResolvedValue(listing),
@@ -140,24 +144,12 @@ describe('TransactionsService checkout flow', () => {
     };
     const service = serviceWithTransactionClient(tx);
 
-    await service.create('buyer-1', {
+    await expect(service.create('buyer-1', {
       listingId: listing.id,
       quantity: 1,
       fulfillmentMethod: 'INSTANT_COURIER',
-      courierProvider: 'GOSEND',
-      deliveryAddress: 'Jl. Kebon Jeruk Raya No. 27, Jakarta Barat',
-      recipientPhone: '081234567890',
-    });
-
-    expect(tx.transaction.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
-        totalPrice: 100000,
-        shippingFee: 18000,
-        grandTotal: 118000,
-        commissionAmt: 5000,
-        sellerReceives: 95000,
-      }),
-    }));
+    })).rejects.toThrow(/Meetup/i);
+    expect(tx.transaction.create).not.toHaveBeenCalled();
   });
 
   it('completes a paid campus meetup when seller enters the buyer handover code', async () => {
@@ -249,6 +241,24 @@ describe('TransactionsService checkout flow', () => {
     const service = new TransactionsService(prisma as never, notifications as never);
 
     await expect(service.findById(current.id, current.buyerId)).resolves.toMatchObject({ id: current.id });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('keeps a legacy courier transaction readable without creating new courier behavior', async () => {
+    const current = {
+      id: 'legacy-transaction', buyerId: 'buyer-1', sellerId: 'seller-1', status: 'COMPLETED',
+      fulfillmentMethod: 'INSTANT_COURIER', courierProvider: 'GOSEND', deliveryAddress: 'Legacy address',
+      recipientPhone: '0800000000', trackingNumber: 'SIM-LEGACY', handoverCodeHash: null,
+      listingTitleSnapshot: 'Legacy item', listingImageSnapshot: null, listingTypeSnapshot: 'PRODUCT',
+      listingModeSnapshot: 'STOCKED', listingConditionSnapshot: 'GOOD',
+      listing: { ...listing, images: '[]' }, buyer: { id: 'buyer-1' }, seller: { id: 'seller-1' },
+    };
+    const prisma = { transaction: { findUnique: vi.fn().mockResolvedValue(current) }, $transaction: vi.fn() };
+    const service = new TransactionsService(prisma as never, notifications as never);
+
+    await expect(service.findById(current.id, current.buyerId)).resolves.toMatchObject({
+      id: current.id, fulfillmentMethod: 'INSTANT_COURIER', listing: { title: 'Legacy item' },
+    });
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 

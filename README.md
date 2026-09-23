@@ -13,7 +13,7 @@ Buy, sell, pre-order, and chat with other Binusians — all in one place.
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?logo=supabase&logoColor=white)](https://supabase.com/)
 
-**[🌐 Live App](https://b-market-hazel.vercel.app)** · **[💚 API Health](https://bmarket-api-production.up.railway.app/api/health)**
+**[🌐 Live App](https://binus-market.vercel.app)** · **[💚 API Health](https://bmarket-api-production.up.railway.app/api/health)**
 
 </div>
 
@@ -325,7 +325,7 @@ BMarket/
 
 | Service | Used for | Link |
 | --- | --- | --- |
-| **Vercel** | Web frontend | [b-market-hazel.vercel.app](https://b-market-hazel.vercel.app) |
+| **Vercel** | Web frontend | [binus-market.vercel.app](https://binus-market.vercel.app) |
 | **Railway** | API + Socket.IO | [bmarket-api-production.up.railway.app](https://bmarket-api-production.up.railway.app/api/health) |
 | **Supabase** | Database + image storage | — |
 | **Brevo** | OTP emails | — |
@@ -344,6 +344,7 @@ BMarket buyer checkout uses Midtrans Snap Sandbox. A browser return is only navi
    MIDTRANS_SERVER_KEY=SB-Mid-server-...
    MIDTRANS_CLIENT_KEY=SB-Mid-client-...
    MIDTRANS_IS_PRODUCTION=false
+   MIDTRANS_TIMEOUT_MS=15000
    MIDTRANS_FINISH_URL=https://binus-market.vercel.app/transaction/{transactionId}
    ```
 
@@ -355,7 +356,7 @@ BMarket buyer checkout uses Midtrans Snap Sandbox. A browser return is only navi
 
 5. Deploy the Prisma migration with `npm run db:deploy`, then create a checkout and use a [Midtrans Sandbox test payment](https://docs.midtrans.com/docs/testing-payment-on-sandbox) from the Snap page. Returning to BMarket may briefly show **Menunggu konfirmasi pembayaran** until the verified webhook arrives.
 
-The current integration intentionally rejects `MIDTRANS_IS_PRODUCTION=true`. Live keys, live payments, and production readiness are a separate deployment change. The Server Key belongs only in the backend environment; never expose it through `EXPO_PUBLIC_*` variables or frontend responses.
+Sandbox is selected with `MIDTRANS_IS_PRODUCTION=false`; the backend derives the matching Snap and transaction-status endpoints from that flag. Switching to live payments requires an explicit production review, live keys, and `MIDTRANS_IS_PRODUCTION=true`. The Server Key belongs only in the backend environment; never expose it through `EXPO_PUBLIC_*` variables or frontend responses.
 
 ---
 
@@ -363,7 +364,6 @@ The current integration intentionally rejects `MIDTRANS_IS_PRODUCTION=true`. Liv
 
 BMarket is an **academic project**. Buyer payments use the Midtrans Sandbox (no real funds). These features remain simulated:
 
-- Legacy balance top-up, escrow accounting, and commission
-- Instant courier, shipping fees, and tracking
+- Legacy wallet top-up UI, internal escrow accounting, and commission
 
-There is no production payment gateway or courier integration.
+There is no courier integration. New physical transactions use campus Meetup only; legacy transaction fields remain solely so old records stay readable.

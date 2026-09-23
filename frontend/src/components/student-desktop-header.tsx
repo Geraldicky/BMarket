@@ -7,6 +7,7 @@ import { endpoints } from '@/lib/api';
 import { FeedbackDialog, money } from '@/components/ui';
 import { useAuth } from '@/store/auth';
 import { colors, webTransition, makeStyles } from '@/constants/theme';
+import { BrandLogo } from '@/components/brand-logo';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -70,7 +71,7 @@ export function StudentDesktopHeader() {
     <View style={styles.header}>
       <View style={[styles.headerMain, compactDesktop && styles.headerMainCompact]}>
         <Pressable onPress={() => router.replace('/(student)/(tabs)')} style={[styles.brand, compactDesktop && styles.brandCompact]}>
-          <Text style={styles.brandWordmark}>BMarket</Text>
+          <BrandLogo style={styles.brandWordmark} />
         </Pressable>
 
         <View style={styles.headerActions}>
@@ -189,7 +190,7 @@ const useStyles = makeStyles(() => ({
   headerMainCompact: { paddingHorizontal: 18 },
   brand: { width: 146, justifyContent: 'center' },
   brandCompact: { width: 122 },
-  brandWordmark: { fontFamily: 'PoppinsBold', fontSize: 27, lineHeight: 32, color: '#FFFFFF', letterSpacing: -.5 },
+  brandWordmark: { width: 150, height: 48 },
   headerActions: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 12, zIndex: 1100 },
   sellButton: { height: 40, borderRadius: 9, paddingHorizontal: 14, backgroundColor: colors.brandRaised, borderWidth: 1, borderColor: colors.primaryBorderStrong, flexDirection: 'row', alignItems: 'center', gap: 6, ...webTransition },
   sellButtonText: { fontFamily: 'PoppinsSemiBold', fontSize: 12, color: '#FFFFFF' },

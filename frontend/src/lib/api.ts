@@ -1,7 +1,7 @@
 import { create, isAxiosError } from 'axios';
 import Constants from 'expo-constants';
 import { getStoredValue } from './token-storage';
-import type { ActivityListingEntry, AdminListingPage, ApiEnvelope, ChatRoom, CheckoutOptions, Complaint, CourierProvider, CreatePaymentResponse, DeliverableArchive, DeliverableArchiveEntryPreview, Dispute, DisputeReason, FulfillmentMethod, Listing, ListingMode, ListingStatus, Message, Notification, Page, Payment, PreorderStatus, PublicProfile, Review, Transaction, TransactionDeliverable, TransactionStatus, User, WalletLedger } from '@/types';
+import type { ActivityListingEntry, AdminListingPage, ApiEnvelope, ChatRoom, Complaint, CreatePaymentResponse, DeliverableArchive, DeliverableArchiveEntryPreview, Dispute, DisputeReason, Listing, ListingMode, ListingStatus, Message, Notification, Page, Payment, PreorderStatus, PublicProfile, Review, Transaction, TransactionDeliverable, TransactionStatus, User, WalletLedger } from '@/types';
 
 export type AuthResult = { user: User; token: string };
 export type VerificationPending = {
@@ -18,9 +18,8 @@ const host = Constants.expoConfig?.hostUri?.split(':')[0];
 export const API_URL = process.env.EXPO_PUBLIC_API_URL || `http://${host || 'localhost'}:3000/api`;
 export const SOCKET_URL = API_URL.replace(/\/api\/?$/, '');
 export const TOKEN_KEY = 'bmarket_access_token';
-const defaultTimeout = API_URL.includes('railway.app') ? 70000 : 15000;
-const configuredTimeout = Number(process.env.EXPO_PUBLIC_API_TIMEOUT_MS || defaultTimeout);
-export const API_TIMEOUT_MS = Number.isFinite(configuredTimeout) && configuredTimeout >= 5000 ? configuredTimeout : defaultTimeout;
+const configuredTimeout = Number(process.env.EXPO_PUBLIC_API_TIMEOUT_MS || 15000);
+export const API_TIMEOUT_MS = Number.isFinite(configuredTimeout) && configuredTimeout >= 5000 ? configuredTimeout : 15000;
 export const api = create({ baseURL: API_URL, timeout: API_TIMEOUT_MS });
 api.interceptors.request.use(async config => { const token = await getStoredValue(TOKEN_KEY); if (token) config.headers.Authorization = `Bearer ${token}`; return config; });
 const unwrap = <T>(response: { data: ApiEnvelope<T> }) => response.data.data;
@@ -45,8 +44,7 @@ export const endpoints = {
   updatePreorderStatus: (id: string, status: PreorderStatus) => api.put<ApiEnvelope<Listing>>(`/listings/${id}/preorder-status`, { status }).then(unwrap),
   transactions: (role?: 'buyer' | 'seller') => api.get<ApiEnvelope<Transaction[]>>('/transactions', { params: role ? { role } : undefined }).then(unwrap),
   transaction: (id: string) => api.get<ApiEnvelope<Transaction>>(`/transactions/${id}`).then(unwrap),
-  checkoutOptions: (listingId: string) => api.get<ApiEnvelope<CheckoutOptions>>(`/transactions/checkout-options/${listingId}`).then(unwrap),
-  buy: (body: { listingId: string; quantity: number; note?: string; fulfillmentMethod?: FulfillmentMethod; courierProvider?: CourierProvider; deliveryAddress?: string; recipientPhone?: string }) => api.post<ApiEnvelope<Transaction>>('/transactions', body).then(unwrap),
+  buy: (body: { listingId: string; quantity: number; note?: string }) => api.post<ApiEnvelope<Transaction>>('/transactions', body).then(unwrap),
   createPayment: (transactionId: string) => api.post<ApiEnvelope<CreatePaymentResponse>>(`/payments/transactions/${transactionId}`).then(unwrap),
   payment: (transactionId: string) => api.get<ApiEnvelope<Payment | null>>(`/payments/transactions/${transactionId}`).then(unwrap),
   issueHandoverCode: (id: string) => api.post<ApiEnvelope<{ code: string; expiresAt: string; expiresInSeconds: number }>>(`/transactions/${id}/handover-code`).then(unwrap),

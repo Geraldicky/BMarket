@@ -11,6 +11,12 @@ describe('environment configuration', () => {
 
   it('parses an origin allowlist', () => expect(allowedOrigins('https://one.test, https://two.test')).toEqual(['https://one.test', 'https://two.test']));
 
+  it('rejects an invalid Midtrans mode flag', () => expect(() => validateEnvironment({
+    DATABASE_URL: 'postgresql://localhost/test',
+    JWT_SECRET: 'a-secure-secret-that-is-at-least-32-characters',
+    MIDTRANS_IS_PRODUCTION: 'sandbox',
+  })).toThrow(/true atau false/));
+
   it('requires Brevo and storage credentials in production', () => expect(() => validateEnvironment({
     NODE_ENV: 'production',
     DATABASE_URL: 'postgresql://localhost/test',
