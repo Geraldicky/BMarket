@@ -69,8 +69,50 @@ export class DisputesService {
   }
 
   async resolve(id: string, adminId: string, action: 'START_REVIEW' | 'REFUND_BUYER' | 'RELEASE_SELLER' | 'REJECT', note?: string) {
+    // Provider I/O must not hold a database transaction connection. The
+    // payment row is claimed first so seller release cannot race the refund;
+    // the deterministic refund key makes retries safe after provider success.
+    if (action === 'REFUND_BUYER') {
+      const prepared = await this.prisma.$transaction(async tx => {
+        const pendingRefund = await tx.dispute.findUnique({
+          where: { id },
+          include: { transaction: { include: { payments: { where: { provider: 'MIDTRANS', status: 'SETTLED' }, select: { id: true, orderId: true, amount: true, providerStatus: true, providerTransactionId: true, refundRequestedAt: true }, take: 1 } } } },
+        });
+        if (!pendingRefund) throw new NotFoundException('Sengketa tidak ditemukan.');
+        if (['RESOLVED', 'REJECTED'].includes(pendingRefund.status)) throw new BadRequestException('Sengketa ini sudah ditutup.');
+        const order = pendingRefund.transaction;
+        if (!order.isEscrowHeld || !['PAID', 'CONFIRMED'].includes(order.status)) throw new BadRequestException('Dana escrow transaksi sudah tidak tersedia untuk resolusi.');
+        const payment = order.payments[0];
+        if (!payment) return { orderId: order.id, payment: null, claimAt: null };
+        const claimAt = payment.refundRequestedAt ?? new Date();
+        if (!payment.refundRequestedAt) {
+          const claimed = await tx.payment.updateMany({
+            where: { id: payment.id, status: 'SETTLED', refundRequestedAt: null },
+            data: { refundRequestedAt: claimAt },
+          });
+          if (!claimed.count) throw new BadRequestException('Refund sedang diproses oleh permintaan lain.');
+        }
+        return { orderId: order.id, payment, claimAt };
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 2_000, timeout: 5_000 });
+
+      if (prepared.payment) {
+        const payment = prepared.payment;
+        const reason = note?.trim() || 'Refund melalui resolusi sengketa BMarket';
+        try {
+          if (!this.midtrans) throw new BadRequestException('Layanan refund Midtrans tidak tersedia.');
+          if (payment.providerStatus === 'capture') await this.midtrans.cancel(payment.orderId);
+          else await this.midtrans.refund(payment.providerTransactionId || payment.orderId, Number(payment.amount), reason, `BMARKET-DISPUTE-${prepared.orderId.replace(/-/g, '').slice(0, 22)}`);
+        } catch (error) {
+          if (!payment.refundRequestedAt && prepared.claimAt) {
+            await this.prisma.payment.updateMany({ where: { id: payment.id, status: 'SETTLED', refundRequestedAt: prepared.claimAt }, data: { refundRequestedAt: null } }).catch(() => undefined);
+          }
+          throw error;
+        }
+      }
+    }
+
     const result = await this.prisma.$transaction(async tx => {
-      const dispute = await tx.dispute.findUnique({ where: { id }, include: { transaction: { include: { listing: { select: { type: true, mode: true, status: true } }, payments: { where: { provider: 'MIDTRANS', status: 'SETTLED' }, select: { id: true, orderId: true, amount: true, providerStatus: true }, take: 1 } } } } });
+      const dispute = await tx.dispute.findUnique({ where: { id }, include: { transaction: { include: { listing: { select: { type: true, mode: true, status: true } }, payments: { where: { provider: 'MIDTRANS', status: 'SETTLED' }, select: { id: true, orderId: true, amount: true, providerStatus: true, refundRequestedAt: true }, take: 1 } } } } });
       if (!dispute) throw new NotFoundException('Sengketa tidak ditemukan.');
       if (['RESOLVED','REJECTED'].includes(dispute.status)) throw new BadRequestException('Sengketa ini sudah ditutup.');
       if (action === 'START_REVIEW') {
@@ -87,13 +129,6 @@ export class DisputesService {
       let refundAmount: Prisma.Decimal | null = null;
 
       if (action === 'REFUND_BUYER') {
-        if (this.isMidtransFunded(order)) {
-          if (!this.midtrans) throw new BadRequestException('Layanan refund Midtrans tidak tersedia.');
-          const payment = order.payments[0];
-          const reason = note?.trim() || 'Refund melalui resolusi sengketa BMarket';
-          if (payment.providerStatus === 'capture') await this.midtrans.cancel(payment.orderId);
-          else await this.midtrans.refund(payment.orderId, Number(payment.amount), reason, `BMARKET-DISPUTE-${order.id.replace(/-/g, '').slice(0, 22)}`);
-        }
         if (!this.isMidtransFunded(order)) {
           const refunded = await tx.user.updateMany({ where: { id: order.buyerId, escrow: { gte: escrowTotal } }, data: { escrow: { decrement: escrowTotal }, balance: { increment: escrowTotal } } });
           if (!refunded.count) throw new BadRequestException('Saldo escrow tidak konsisten.');
@@ -107,6 +142,7 @@ export class DisputesService {
         await tx.transaction.update({ where: { id: order.id }, data: { status: 'CANCELLED', isEscrowHeld: false, cancelledAt: now, cancelledBy: 'ADMIN', cancellationReason: 'Refund melalui resolusi sengketa.', handoverCodeHash: null, handoverCodeExpiresAt: null } });
         resolution = 'REFUND_BUYER'; refundAmount = escrowTotal;
       } else if (action === 'RELEASE_SELLER') {
+        if (order.payments?.some(payment => payment.refundRequestedAt)) throw new BadRequestException('Refund Midtrans sedang diproses; dana seller tidak dapat dilepas.');
         if (!this.isMidtransFunded(order)) {
           const released = await tx.user.updateMany({ where: { id: order.buyerId, escrow: { gte: escrowTotal } }, data: { escrow: { decrement: escrowTotal } } });
           if (!released.count) throw new BadRequestException('Saldo escrow tidak konsisten.');
@@ -122,7 +158,7 @@ export class DisputesService {
 
       const updated = await tx.dispute.update({ where: { id }, data: { status, resolution, resolutionNote: note?.trim() || null, refundAmount, resolvedById: adminId, resolvedAt: now } });
       return { dispute: this.map(updated), buyerId: order.buyerId, sellerId: order.sellerId, transactionId: order.id, action };
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 2_000, timeout: 5_000 });
 
     if (result.action !== 'START_REVIEW') {
       const title = result.action === 'REFUND_BUYER' ? 'Sengketa: refund buyer' : result.action === 'RELEASE_SELLER' ? 'Sengketa: dana dilepas ke seller' : 'Sengketa ditolak';

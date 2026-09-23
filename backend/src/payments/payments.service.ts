@@ -24,9 +24,14 @@ export class PaymentsService {
 
   private async serializable<T>(operation: (tx: Prisma.TransactionClient) => Promise<T>, attempt = 0): Promise<T> {
     try {
-      return await this.prisma.$transaction(operation, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      return await this.prisma.$transaction(operation, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        maxWait: 2_000,
+        timeout: 5_000,
+      });
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034' && attempt < 2) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034' && attempt < 1) {
+        await new Promise(resolve => setTimeout(resolve, 25 + Math.floor(Math.random() * 50)));
         return this.serializable(operation, attempt + 1);
       }
       throw error;
@@ -106,7 +111,13 @@ export class PaymentsService {
   }
 
   private async expireReservation(transactionId: string) {
-    return this.serializable(async tx => {
+    const candidate = await this.prisma.transaction.findUnique({
+      where: { id: transactionId },
+      select: { status: true, reservationExpiresAt: true },
+    });
+    if (!candidate || candidate.status !== 'PENDING' || !candidate.reservationExpiresAt || candidate.reservationExpiresAt.getTime() > Date.now()) return false;
+
+    return this.prisma.$transaction(async tx => {
       const current = await tx.transaction.findUnique({ where: { id: transactionId }, include: { listing: { select: { type: true, mode: true, status: true } } } });
       if (!current || current.status !== 'PENDING' || !current.reservationExpiresAt || current.reservationExpiresAt.getTime() > Date.now()) return false;
       const now = new Date();
@@ -122,7 +133,7 @@ export class PaymentsService {
         });
       }
       return true;
-    });
+    }, { maxWait: 2_000, timeout: 5_000 });
   }
 
   async create(transactionId: string, buyerId: string) {
@@ -270,6 +281,24 @@ export class PaymentsService {
       context.mappedStatus = mapped;
       context.verifiedPaymentTime = paidAt?.toISOString() ?? null;
       context.paidWithinReservation = paidWithinReservation;
+
+      // A verified pending/authorize notification cannot change transaction,
+      // stock, wallet, or escrow state. Avoid consuming an interactive
+      // transaction connection for the common Snap polling/notification case.
+      if (mapped === 'PENDING') {
+        if (payment.status !== 'PENDING' || payment.providerStatus !== provider.transaction_status) {
+          await this.prisma.payment.update({
+            where: { id: payment.id },
+            data: {
+              status: 'PENDING', paymentType: provider.payment_type, providerStatus: provider.transaction_status,
+              providerTransactionId: provider.transaction_id, fraudStatus: provider.fraud_status,
+            },
+          });
+        }
+        context.outcome = 'PENDING_NO_TRANSACTION';
+        this.logger.log(JSON.stringify({ ...context, event: 'MIDTRANS_WEBHOOK_PROCESSED' }));
+        return { paymentId: payment.id, status: mapped, transactionStatus: transaction.status };
+      }
 
       stage = 'DATABASE_TRANSITION';
       const result = await this.serializable(async tx => {

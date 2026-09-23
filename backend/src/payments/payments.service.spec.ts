@@ -176,6 +176,21 @@ describe('PaymentsService', () => {
     const { service, prisma } = setup({ transaction, payment: storedPayment(transaction), provider });
     await expect(service.handleNotification({ ...notification, transaction_status: 'pending' })).resolves.toMatchObject({ status: 'PENDING', transactionStatus: 'PENDING' });
     expect(prisma.transaction.updateMany).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('retries one serialization conflict with backoff but does not amplify transaction-start failures', async () => {
+    const { service, prisma } = setup();
+    const conflict = new Prisma.PrismaClientKnownRequestError('write conflict', { code: 'P2034', clientVersion: '5.10.0' });
+    prisma.$transaction.mockRejectedValueOnce(conflict).mockResolvedValueOnce('ok');
+    await expect((service as any).serializable(vi.fn())).resolves.toBe('ok');
+    expect(prisma.$transaction).toHaveBeenCalledTimes(2);
+
+    prisma.$transaction.mockClear();
+    const unavailable = new Prisma.PrismaClientKnownRequestError('Unable to start a transaction in the given time.', { code: 'P2028', clientVersion: '5.10.0' });
+    prisma.$transaction.mockRejectedValue(unavailable);
+    await expect((service as any).serializable(vi.fn())).rejects.toMatchObject({ code: 'P2028' });
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
   });
 
   it('recovers a system-expired checkout when verified settlement occurred before reservation expiry', async () => {

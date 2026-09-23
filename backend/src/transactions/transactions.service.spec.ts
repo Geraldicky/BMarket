@@ -216,7 +216,10 @@ describe('TransactionsService checkout flow', () => {
       listing: { update: vi.fn().mockResolvedValue({}) },
     };
     const prisma = {
-      transaction: { findMany: vi.fn().mockResolvedValue([{ id: current.id }]) },
+      transaction: {
+        findMany: vi.fn().mockResolvedValue([{ id: current.id }]),
+        findUnique: vi.fn().mockResolvedValue({ status: 'PENDING', reservationExpiresAt: expiredAt }),
+      },
       $transaction: vi.fn((operation: (client: unknown) => unknown) => operation(tx)),
     };
     withLedgerMocks(tx as Record<string, any>);
@@ -230,6 +233,40 @@ describe('TransactionsService checkout flow', () => {
       where: { id: listing.id },
       data: { stockLeft: { increment: 1 }, status: 'ACTIVE' },
     });
+  });
+
+  it('does not open an interactive transaction while polling transaction detail', async () => {
+    const current = {
+      id: 'transaction-1', buyerId: 'buyer-1', sellerId: 'seller-1', status: 'PENDING',
+      listingTitleSnapshot: null, listingImageSnapshot: null, listingTypeSnapshot: null,
+      listingModeSnapshot: null, listingConditionSnapshot: null, handoverCodeHash: null,
+      listing: { ...listing, images: '[]' }, buyer: { id: 'buyer-1' }, seller: { id: 'seller-1' },
+    };
+    const prisma = {
+      transaction: { findUnique: vi.fn().mockResolvedValue(current) },
+      $transaction: vi.fn(),
+    };
+    const service = new TransactionsService(prisma as never, notifications as never);
+
+    await expect(service.findById(current.id, current.buyerId)).resolves.toMatchObject({ id: current.id });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('does not overlap reservation cleanup runs', async () => {
+    let release!: (rows: { id: string }[]) => void;
+    const rows = new Promise<{ id: string }[]>(resolve => { release = resolve; });
+    const prisma = {
+      transaction: { findMany: vi.fn().mockReturnValue(rows) },
+      $transaction: vi.fn(),
+    };
+    const service = new TransactionsService(prisma as never, notifications as never);
+
+    const first = service.expirePendingReservations();
+    await expect(service.expirePendingReservations()).resolves.toBe(0);
+    release([]);
+    await expect(first).resolves.toBe(0);
+    expect(prisma.transaction.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('requires a cancellation reason', async () => {

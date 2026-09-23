@@ -11,7 +11,7 @@ function createNotifications() {
 function createPrisma() {
   return {
     transaction: { findUnique: vi.fn() },
-    dispute: { create: vi.fn(), findMany: vi.fn(), count: vi.fn() },
+    dispute: { create: vi.fn(), findUnique: vi.fn(), findMany: vi.fn(), count: vi.fn() },
     $transaction: vi.fn(),
   };
 }
@@ -100,7 +100,7 @@ describe('DisputesService — escrow safety', () => {
     const order = {
       id: 'tx-1', buyerId: 'buyer-1', sellerId: 'seller-1', listingId: 'listing-1', status: 'PAID', isEscrowHeld: true,
       grandTotal: 100000, totalPrice: 100000, sellerReceives: 95000, quantity: 1,
-      listingTypeSnapshot: 'PRODUCT', listing: { type: 'PRODUCT', mode: 'ONE_OFF', status: 'SOLD' },
+      listingTypeSnapshot: 'PRODUCT', listing: { type: 'PRODUCT', mode: 'ONE_OFF', status: 'SOLD' }, payments: [],
     };
     const tx = {
       dispute: {
@@ -115,6 +115,7 @@ describe('DisputesService — escrow safety', () => {
       listing: { update: vi.fn().mockResolvedValue({}) },
       transaction: { update: vi.fn().mockResolvedValue({}) },
     };
+    prisma.dispute.findUnique.mockResolvedValue({ id: 'd-1', status: 'IN_REVIEW', transaction: { ...order, payments: [] } });
     prisma.$transaction.mockImplementation((operation: (client: unknown) => unknown) => operation(tx));
 
     const result = await service.resolve('d-1', 'admin-1', 'REFUND_BUYER', 'Barang tidak sesuai bukti.');
@@ -130,6 +131,35 @@ describe('DisputesService — escrow safety', () => {
       create: expect.objectContaining({ type: 'REFUND', idempotencyKey: 'DISPUTE:REFUND:tx-1' }),
     }));
     expect(notifications.createMany).toHaveBeenCalled();
+  });
+
+  it('finishes Midtrans refund I/O before opening the database transaction', async () => {
+    const payment = { id: 'pay-1', orderId: 'BMARKET-ORDER', amount: 100000, providerStatus: 'settlement', providerTransactionId: 'qris-provider-id' };
+    const order = {
+      id: 'tx-1', buyerId: 'buyer-1', sellerId: 'seller-1', listingId: 'listing-1', status: 'PAID', isEscrowHeld: true,
+      grandTotal: 100000, totalPrice: 100000, sellerReceives: 95000, quantity: 1, payments: [payment],
+      listingTypeSnapshot: 'PRODUCT', listing: { type: 'PRODUCT', mode: 'STOCKED', status: 'ACTIVE' },
+    };
+    const tx = {
+      dispute: {
+        findUnique: vi.fn().mockResolvedValue({ id: 'd-1', status: 'IN_REVIEW', transactionId: 'tx-1', evidenceUrls: '[]', transaction: order }),
+        update: vi.fn().mockResolvedValue({ id: 'd-1', status: 'RESOLVED', resolution: 'REFUND_BUYER', evidenceUrls: '[]' }),
+      },
+      payment: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      listing: { update: vi.fn().mockResolvedValue({}) },
+      transaction: { update: vi.fn().mockResolvedValue({}) },
+    };
+    const midtrans = { refund: vi.fn().mockResolvedValue({ transaction_status: 'refund' }), cancel: vi.fn() };
+    prisma.dispute.findUnique.mockResolvedValue({ id: 'd-1', status: 'IN_REVIEW', transaction: order });
+    prisma.$transaction.mockImplementation((operation: (client: unknown) => unknown) => operation(tx));
+    service = new DisputesService(prisma as never, notifications as never, midtrans as never);
+
+    await service.resolve('d-1', 'admin-1', 'REFUND_BUYER', 'Refund QRIS');
+
+    expect(midtrans.refund).toHaveBeenCalledWith('qris-provider-id', 100000, 'Refund QRIS', 'BMARKET-DISPUTE-tx1');
+    expect(prisma.$transaction).toHaveBeenCalledTimes(2);
+    expect(prisma.$transaction.mock.invocationCallOrder[0]).toBeLessThan(midtrans.refund.mock.invocationCallOrder[0]);
+    expect(midtrans.refund.mock.invocationCallOrder[0]).toBeLessThan(prisma.$transaction.mock.invocationCallOrder[1]);
   });
 
   it('releases disputed escrow to seller and writes both buyer and seller ledger rows', async () => {

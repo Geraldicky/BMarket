@@ -33,6 +33,7 @@ export function deliverablePreviewType(fileName: string): string | null {
 export class TransactionsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(TransactionsService.name);
   private reservationTimer?: NodeJS.Timeout;
+  private reservationCleanupRunning = false;
 
   constructor(private prisma: PrismaService, private notifications: NotificationsService, private uploads: UploadsService, @Optional() private midtrans?: MidtransService) {}
 
@@ -72,9 +73,14 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
 
   private async serializable<T>(operation: (tx: Prisma.TransactionClient) => Promise<T>, attempt = 0): Promise<T> {
     try {
-      return await this.prisma.$transaction(operation, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      return await this.prisma.$transaction(operation, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        maxWait: 2_000,
+        timeout: 5_000,
+      });
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034' && attempt < 2) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034' && attempt < 1) {
+        await new Promise(resolve => setTimeout(resolve, 25 + Math.floor(Math.random() * 50)));
         return this.serializable(operation, attempt + 1);
       }
       throw error;
@@ -116,7 +122,15 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async expirePendingReservation(id: string): Promise<boolean> {
-    return this.serializable(async tx => {
+    // Most calls are no-ops. Check without reserving an interactive-transaction
+    // connection, then use a short atomic transaction only for an elapsed row.
+    const candidate = await this.prisma.transaction.findUnique({
+      where: { id },
+      select: { status: true, reservationExpiresAt: true },
+    });
+    if (!candidate || candidate.status !== 'PENDING' || !candidate.reservationExpiresAt || candidate.reservationExpiresAt.getTime() > Date.now()) return false;
+
+    return this.prisma.$transaction(async tx => {
       const current = await tx.transaction.findUnique({
         where: { id },
         include: { listing: { select: { type: true, status: true, mode: true, preorderStatus: true, preorderDeadline: true, stockLeft: true } }, dispute: true },
@@ -152,22 +166,28 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
         });
       }
       return true;
-    });
+    }, { maxWait: 2_000, timeout: 5_000 });
   }
 
   async expirePendingReservations(limit = 100): Promise<number> {
-    const expired = await this.prisma.transaction.findMany({
-      where: { status: 'PENDING', reservationExpiresAt: { lte: new Date() } },
-      orderBy: { reservationExpiresAt: 'asc' },
-      take: Math.max(1, Math.min(limit, 500)),
-      select: { id: true },
-    });
-    let count = 0;
-    for (const { id } of expired) {
-      if (await this.expirePendingReservation(id)) count += 1;
+    if (this.reservationCleanupRunning) return 0;
+    this.reservationCleanupRunning = true;
+    try {
+      const expired = await this.prisma.transaction.findMany({
+        where: { status: 'PENDING', reservationExpiresAt: { lte: new Date() } },
+        orderBy: { reservationExpiresAt: 'asc' },
+        take: Math.max(1, Math.min(limit, 100)),
+        select: { id: true },
+      });
+      let count = 0;
+      for (const { id } of expired) {
+        if (await this.expirePendingReservation(id)) count += 1;
+      }
+      if (count) this.logger.log(`${count} checkout reservation kedaluwarsa dikembalikan ke stok.`);
+      return count;
+    } finally {
+      this.reservationCleanupRunning = false;
     }
-    if (count) this.logger.log(`${count} checkout reservation kedaluwarsa dikembalikan ke stok.`);
-    return count;
   }
 
   private handoverHash(transactionId: string, code: string) {
@@ -176,7 +196,6 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
   }
 
   async getCheckoutOptions(listingId: string) {
-    await this.expirePendingReservations();
     const listing = await this.prisma.listing.findUnique({
       where: { id: listingId },
       select: { id: true, status: true, mode: true, stockLeft: true, preorderStatus: true, preorderDeadline: true, fulfillmentMethods: true },
@@ -196,7 +215,6 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
   }
 
   async findByUserId(userId: string, role?: 'buyer' | 'seller') {
-    await this.expirePendingReservations();
     const where: Prisma.TransactionWhereInput = role === 'buyer'
       ? { buyerId: userId }
       : role === 'seller'
@@ -217,7 +235,6 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
   }
 
   async findById(id: string, userId: string) {
-    await this.expirePendingReservation(id);
     const transaction = await this.prisma.transaction.findUnique({
       where: { id },
       include: {
@@ -244,7 +261,6 @@ export class TransactionsService implements OnModuleInit, OnModuleDestroy {
   }
 
   async create(buyerId: string, dto: CreateTransactionDto) {
-    await this.expirePendingReservations();
     const result = await this.serializable(async tx => {
       const listing = await tx.listing.findUnique({ where: { id: dto.listingId } });
       if (!listing || listing.status !== 'ACTIVE') throw new BadRequestException('Listing tidak tersedia.');
