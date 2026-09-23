@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import { describe, expect, it, vi } from 'vitest';
 import { PaymentsService } from './payments.service';
 
@@ -28,7 +29,7 @@ function setup(options: { transaction?: any; payment?: any; provider?: any } = {
       create: vi.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'pay-1', status: 'PENDING', createdAt: new Date(), updatedAt: new Date(), ...data })),
       update: vi.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'pay-1', orderId: 'BMARKET-ORDER', amount: 100000, createdAt: new Date(), updatedAt: new Date(), ...data })),
     },
-    listing: { update: vi.fn().mockResolvedValue({}) },
+    listing: { update: vi.fn().mockResolvedValue({}), updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
   };
   prisma.$transaction = vi.fn((operation: (tx: any) => unknown) => operation(prisma));
   const midtrans: any = {
@@ -38,7 +39,7 @@ function setup(options: { transaction?: any; payment?: any; provider?: any } = {
     refund: vi.fn().mockResolvedValue({ transaction_status: 'refund' }),
     cancel: vi.fn().mockResolvedValue({ transaction_status: 'cancel' }),
   };
-  const notifications: any = { create: vi.fn().mockResolvedValue({}) };
+  const notifications: any = { create: vi.fn().mockResolvedValue({}), createMany: vi.fn().mockResolvedValue({ count: 0 }) };
   return { service: new PaymentsService(prisma, midtrans, notifications), prisma, midtrans, notifications };
 }
 
@@ -102,6 +103,27 @@ describe('PaymentsService', () => {
     expect(notifications.create).toHaveBeenCalledTimes(1);
   });
 
+  it('settles a realistic QRIS payload with Decimal database amounts', async () => {
+    const transaction = baseTransaction({
+      id: '9636d22b-f491-41c5-bbb3-8c8e179ed745',
+      grandTotal: new Prisma.Decimal('100000.00'),
+      reservationExpiresAt: new Date('2026-09-23T09:45:29.653Z'),
+    });
+    const qrisNotification = {
+      order_id: 'BMARKET-9636d22bf49141c5bb-aa1d1562bf844434', status_code: '200', gross_amount: '100000.00',
+      signature_key: 'signed', transaction_status: 'settlement', payment_type: 'qris', transaction_id: 'qris-provider-id',
+    };
+    const provider = { ...qrisNotification, settlement_time: '2026-09-23 16:44:30', fraud_status: 'accept' };
+    const payment = storedPayment(transaction, { orderId: qrisNotification.order_id, amount: new Prisma.Decimal('100000') });
+    const { service, prisma } = setup({ transaction, payment, provider });
+
+    await expect(service.handleNotification(qrisNotification)).resolves.toMatchObject({ status: 'SETTLED', transactionStatus: 'PAID' });
+    expect(prisma.transaction.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: 'PAID', isEscrowHeld: true, paidAt: new Date('2026-09-23T09:44:30.000Z') }),
+    }));
+    expect(prisma.payment.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: 'SETTLED', paymentType: 'qris' }) }));
+  });
+
   it('handles repeated settlement idempotently', async () => {
     const transaction = baseTransaction({ status: 'PAID', isEscrowHeld: true });
     const { service, prisma, notifications } = setup({ transaction, payment: storedPayment(transaction, { status: 'SETTLED', settledAt: new Date() }), provider: settledStatus });
@@ -117,6 +139,14 @@ describe('PaymentsService', () => {
     midtrans.verifySignature.mockReturnValue(false);
     await expect(service.handleNotification(notification)).rejects.toThrow(/signature/i);
     expect(midtrans.getStatus).not.toHaveBeenCalled();
+  });
+
+  it('rejects a provider order ID mismatch before any database mutation', async () => {
+    const transaction = baseTransaction();
+    const { service, prisma } = setup({ transaction, payment: storedPayment(transaction), provider: { ...settledStatus, order_id: 'DIFFERENT-ORDER' } });
+    await expect(service.handleNotification(notification)).rejects.toThrow(/Order ID/i);
+    expect(prisma.payment.findUnique).not.toHaveBeenCalled();
+    expect(prisma.transaction.updateMany).not.toHaveBeenCalled();
   });
 
   it('does not mark paid when the verified provider amount mismatches', async () => {
@@ -138,6 +168,47 @@ describe('PaymentsService', () => {
     expect(result).toMatchObject({ status: expected, transactionStatus: 'PENDING' });
     expect(prisma.transaction.updateMany).not.toHaveBeenCalled();
     expect(prisma.payment.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: expected }) }));
+  });
+
+  it('keeps the transaction pending for a verified pending provider status', async () => {
+    const transaction = baseTransaction();
+    const provider = { ...settledStatus, transaction_status: 'pending' };
+    const { service, prisma } = setup({ transaction, payment: storedPayment(transaction), provider });
+    await expect(service.handleNotification({ ...notification, transaction_status: 'pending' })).resolves.toMatchObject({ status: 'PENDING', transactionStatus: 'PENDING' });
+    expect(prisma.transaction.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('recovers a system-expired checkout when verified settlement occurred before reservation expiry', async () => {
+    const reservationExpiresAt = new Date('2026-09-23T09:45:29.653Z');
+    const transaction = baseTransaction({
+      status: 'CANCELLED', isEscrowHeld: false, reservationExpiresAt,
+      cancelledBy: 'SYSTEM', cancellationReason: 'Reservasi pembayaran kedaluwarsa.', cancelledAt: new Date('2026-09-23T09:45:33.898Z'),
+      listing: { title: 'Keyboard', type: 'PRODUCT', mode: 'STOCKED', status: 'ACTIVE', stockLeft: 1 },
+    });
+    const provider = { ...settledStatus, payment_type: 'qris', settlement_time: '2026-09-23 16:45:20' };
+    const { service, prisma, midtrans } = setup({ transaction, payment: storedPayment(transaction, { status: 'EXPIRED' }), provider });
+
+    await expect(service.handleNotification(notification)).resolves.toMatchObject({ status: 'SETTLED', transactionStatus: 'PAID' });
+    expect(prisma.listing.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: { stockLeft: { decrement: 1 } } }));
+    expect(prisma.transaction.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ status: 'CANCELLED', cancelledBy: 'SYSTEM' }),
+      data: expect.objectContaining({ status: 'PAID', isEscrowHeld: true, cancelledAt: null, cancelledBy: null }),
+    }));
+    expect(midtrans.refund).not.toHaveBeenCalled();
+  });
+
+  it('preserves refund behavior when verified settlement occurred after reservation expiry', async () => {
+    const transaction = baseTransaction({
+      status: 'CANCELLED', isEscrowHeld: false, reservationExpiresAt: new Date('2026-09-23T09:45:29.653Z'),
+      cancelledBy: 'SYSTEM', cancellationReason: 'Reservasi pembayaran kedaluwarsa.',
+      listing: { title: 'Keyboard', type: 'PRODUCT', mode: 'STOCKED', status: 'ACTIVE', stockLeft: 1 },
+    });
+    const provider = { ...settledStatus, payment_type: 'qris', transaction_id: 'qris-provider-id', settlement_time: '2026-09-23 16:45:40' };
+    const { service, prisma, midtrans } = setup({ transaction, payment: storedPayment(transaction, { status: 'EXPIRED' }), provider });
+
+    await expect(service.handleNotification(notification)).resolves.toMatchObject({ status: 'CANCELLED', action: 'REFUNDED_OR_CANCELLED' });
+    expect(midtrans.refund).toHaveBeenCalledWith('qris-provider-id', 100000, expect.any(String), expect.stringMatching(/^BMARKET-REFUND-/));
+    expect(prisma.transaction.updateMany).not.toHaveBeenCalled();
   });
 });
 

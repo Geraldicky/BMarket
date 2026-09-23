@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { PaymentStatus, Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -197,88 +197,192 @@ export class PaymentsService {
     return 'FAILED';
   }
 
+  private amountInCents(value: unknown, label: string): bigint {
+    const normalized = value instanceof Prisma.Decimal ? value.toFixed(2) : String(value ?? '').trim();
+    const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(normalized);
+    if (!match) throw new BadRequestException(`${label} tidak memiliki format nominal IDR yang valid.`);
+    return BigInt(match[1]) * 100n + BigInt((match[2] || '').padEnd(2, '0'));
+  }
+
+  private verifiedPaymentTime(status: MidtransStatus): Date | null {
+    const raw = status.transaction_status?.toLowerCase() === 'settlement'
+      ? status.settlement_time
+      : status.transaction_status?.toLowerCase() === 'capture'
+        ? status.transaction_time
+        : undefined;
+    if (!raw) return null;
+    const withTimezone = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(raw)
+      ? `${raw.replace(' ', 'T')}+07:00`
+      : raw;
+    const parsed = new Date(withTimezone);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  private rejectionReason(error: unknown) {
+    const message = error instanceof HttpException ? error.message : error instanceof Error ? error.message : String(error);
+    return message.replace(/[\r\n]+/g, ' ').slice(0, 300);
+  }
+
   async handleNotification(notification: MidtransNotification) {
-    if (!this.midtrans.verifySignature(notification)) throw new UnauthorizedException('Signature Midtrans tidak valid.');
-    const provider = await this.midtrans.getStatus(notification.order_id);
-    if (provider.order_id !== notification.order_id) throw new BadRequestException('Order ID hasil verifikasi Midtrans tidak cocok.');
+    const context: Record<string, unknown> = {
+      event: 'MIDTRANS_WEBHOOK_RECEIVED',
+      orderId: notification?.order_id || null,
+      notificationStatus: notification?.transaction_status || null,
+    };
+    let stage = 'SIGNATURE';
+    this.logger.log(JSON.stringify(context));
 
-    const payment = await this.prisma.payment.findUnique({
-      where: { orderId: notification.order_id },
-      include: { transaction: { include: { listing: { select: { title: true, type: true, mode: true, status: true } } } } },
-    });
-    if (!payment) throw new NotFoundException('Payment tidak ditemukan.');
-    const providerAmount = Number(provider.gross_amount);
-    const notificationAmount = Number(notification.gross_amount);
-    if (!Number.isFinite(providerAmount) || !Number.isFinite(notificationAmount) || providerAmount !== notificationAmount || providerAmount !== Number(payment.amount) || providerAmount !== Number(payment.transaction.grandTotal)) {
-      throw new BadRequestException('Nominal notifikasi Midtrans tidak cocok.');
-    }
-    const mapped = this.mappedStatus(provider);
-    const transaction = payment.transaction;
+    try {
+      if (!this.midtrans.verifySignature(notification)) throw new UnauthorizedException('Signature Midtrans tidak valid.');
 
-    if (mapped === 'SETTLED' && (transaction.status === 'CANCELLED' || !transaction.reservationExpiresAt || transaction.reservationExpiresAt.getTime() <= Date.now())) {
-      if (payment.refundRequestedAt) {
-        return { paymentId: payment.id, status: 'CANCELLED', transactionStatus: transaction.status, action: 'REFUND_ALREADY_REQUESTED' };
-      }
-      const refundKey = `BMARKET-REFUND-${transaction.id.replace(/-/g, '').slice(0, 24)}`;
-      if (provider.transaction_status === 'capture') await this.midtrans.cancel(payment.orderId);
-      else await this.midtrans.refund(payment.orderId, Number(payment.amount), 'Checkout BMarket sudah kedaluwarsa atau dibatalkan', refundKey);
-      await this.prisma.payment.update({ where: { id: payment.id }, data: {
-        status: 'CANCELLED', refundRequestedAt: new Date(), paymentType: provider.payment_type, providerStatus: provider.transaction_status, providerTransactionId: provider.transaction_id, fraudStatus: provider.fraud_status,
-      } });
-      await this.expireReservation(transaction.id);
-      this.logger.warn(`Pembayaran ${payment.orderId} diterima setelah checkout tidak valid dan dikirim untuk refund/cancel.`);
-      return { paymentId: payment.id, status: 'CANCELLED', transactionStatus: transaction.status, action: 'REFUNDED_OR_CANCELLED' };
-    }
+      stage = 'PROVIDER_STATUS';
+      const provider = await this.midtrans.getStatus(notification.order_id);
+      context.providerStatus = provider.transaction_status || null;
 
-    const result = await this.serializable(async tx => {
-      const current = await tx.transaction.findUnique({ where: { id: transaction.id } });
-      if (!current) throw new NotFoundException('Transaksi tidak ditemukan.');
-      const paymentData = {
-        status: mapped, paymentType: provider.payment_type, providerStatus: provider.transaction_status, providerTransactionId: provider.transaction_id,
-        fraudStatus: provider.fraud_status, ...(mapped === 'SETTLED' ? { settledAt: payment.settledAt ?? new Date() } : {}),
-      };
+      stage = 'ORDER_ID_VALIDATION';
+      if (provider.order_id !== notification.order_id) throw new BadRequestException('Order ID hasil verifikasi Midtrans tidak cocok.');
 
-      if (mapped !== 'SETTLED') {
-        if (payment.status !== mapped) await tx.payment.update({ where: { id: payment.id }, data: paymentData });
-        if (current.status === 'PAID' && ['FAILED', 'CANCELLED'].includes(mapped)) {
-          const cancelledAt = new Date();
-          const changed = await tx.transaction.updateMany({
-            where: { id: current.id, status: 'PAID', isEscrowHeld: true },
-            data: { status: 'CANCELLED', isEscrowHeld: false, cancelledAt, cancelledBy: 'SYSTEM', cancellationReason: 'Pembayaran dibatalkan atau dibalik oleh Midtrans.' },
-          });
-          if (changed.count && (transaction.listingTypeSnapshot ?? transaction.listing.type) === 'PRODUCT') {
-            await tx.listing.update({
-              where: { id: transaction.listingId },
-              data: { stockLeft: { increment: transaction.quantity }, ...((transaction.listingModeSnapshot ?? transaction.listing.mode) === 'ONE_OFF' && transaction.listing.status === 'SOLD' ? { status: 'ACTIVE' as const } : {}) },
-            });
-          }
-          return { transitioned: false, reversed: Boolean(changed.count), transactionStatus: changed.count ? 'CANCELLED' as const : current.status };
-        }
-        return { transitioned: false, reversed: false, transactionStatus: current.status };
-      }
-      if (current.status !== 'PENDING') {
-        if (payment.status !== 'SETTLED') await tx.payment.update({ where: { id: payment.id }, data: paymentData });
-        return { transitioned: false, reversed: false, transactionStatus: current.status };
-      }
-      const changed = await tx.transaction.updateMany({
-        where: { id: current.id, status: 'PENDING', isEscrowHeld: false, reservationExpiresAt: { gt: new Date() } },
-        data: { status: 'PAID', isEscrowHeld: true, paidAt: new Date() },
+      stage = 'PAYMENT_LOOKUP';
+      const payment = await this.prisma.payment.findUnique({
+        where: { orderId: notification.order_id },
+        include: { transaction: { include: { listing: { select: { title: true, type: true, mode: true, status: true, stockLeft: true } } } } },
       });
-      if (!changed.count) throw new ConflictException('Transaksi berubah saat pembayaran dikonfirmasi.');
-      await tx.payment.update({ where: { id: payment.id }, data: paymentData });
-      return { transitioned: true, reversed: false, transactionStatus: 'PAID' as const };
-    });
+      if (!payment) throw new NotFoundException('Payment tidak ditemukan.');
+      const transaction = payment.transaction;
+      context.paymentId = payment.id;
+      context.transactionId = transaction.id;
+      context.transactionStatus = transaction.status;
 
-    if (result.transitioned) {
-      await this.notifications.create(transaction.sellerId, 'TRANSACTION', 'Pembayaran diterima', `${transaction.listingTitleSnapshot || transaction.listing.title} sudah dibayar melalui Midtrans. Dana aman di escrow.`, 'TRANSACTION', transaction.id).catch(() => undefined);
+      stage = 'AMOUNT_VALIDATION';
+      const notificationAmount = this.amountInCents(notification.gross_amount, 'Nominal notification');
+      const providerAmount = this.amountInCents(provider.gross_amount, 'Nominal provider');
+      const paymentAmount = this.amountInCents(payment.amount, 'Nominal payment');
+      const transactionAmount = this.amountInCents(transaction.grandTotal, 'Nominal transaksi');
+      if (notificationAmount !== providerAmount || providerAmount !== paymentAmount || paymentAmount !== transactionAmount) {
+        throw new BadRequestException('Nominal notifikasi Midtrans tidak cocok.');
+      }
+
+      const mapped = this.mappedStatus(provider);
+      const paidAt = mapped === 'SETTLED' ? this.verifiedPaymentTime(provider) : null;
+      const paidWithinReservation = Boolean(
+        paidAt && transaction.reservationExpiresAt && paidAt.getTime() <= transaction.reservationExpiresAt.getTime(),
+      );
+      context.mappedStatus = mapped;
+      context.verifiedPaymentTime = paidAt?.toISOString() ?? null;
+      context.paidWithinReservation = paidWithinReservation;
+
+      stage = 'DATABASE_TRANSITION';
+      const result = await this.serializable(async tx => {
+        const current = await tx.transaction.findUnique({
+          where: { id: transaction.id },
+          include: { listing: { select: { type: true, mode: true, status: true, stockLeft: true } } },
+        });
+        if (!current) throw new NotFoundException('Transaksi tidak ditemukan.');
+        const paymentData = {
+          status: mapped, paymentType: provider.payment_type, providerStatus: provider.transaction_status, providerTransactionId: provider.transaction_id,
+          fraudStatus: provider.fraud_status, ...(mapped === 'SETTLED' ? { settledAt: payment.settledAt ?? paidAt ?? new Date() } : {}),
+        };
+
+        if (mapped !== 'SETTLED') {
+          if (payment.status !== mapped) await tx.payment.update({ where: { id: payment.id }, data: paymentData });
+          if (current.status === 'PAID' && ['FAILED', 'CANCELLED'].includes(mapped)) {
+            const changed = await tx.transaction.updateMany({
+              where: { id: current.id, status: 'PAID', isEscrowHeld: true },
+              data: { status: 'CANCELLED', isEscrowHeld: false, cancelledAt: new Date(), cancelledBy: 'SYSTEM', cancellationReason: 'Pembayaran dibatalkan atau dibalik oleh Midtrans.' },
+            });
+            if (changed.count && (current.listingTypeSnapshot ?? current.listing.type) === 'PRODUCT') {
+              await tx.listing.update({
+                where: { id: current.listingId },
+                data: { stockLeft: { increment: current.quantity }, ...((current.listingModeSnapshot ?? current.listing.mode) === 'ONE_OFF' && current.listing.status === 'SOLD' ? { status: 'ACTIVE' as const } : {}) },
+              });
+            }
+            return { transitioned: false, reversed: Boolean(changed.count), late: false, transactionStatus: changed.count ? 'CANCELLED' as const : current.status };
+          }
+          return { transitioned: false, reversed: false, late: false, transactionStatus: current.status };
+        }
+
+        if (current.status === 'PAID') {
+          if (payment.status !== 'SETTLED') await tx.payment.update({ where: { id: payment.id }, data: paymentData });
+          return { transitioned: false, reversed: false, late: false, transactionStatus: current.status };
+        }
+
+        const reservationStillActive = Boolean(current.reservationExpiresAt && current.reservationExpiresAt.getTime() > Date.now());
+        const recoverableSystemExpiry = current.status === 'CANCELLED'
+          && current.cancelledBy === 'SYSTEM'
+          && /reservasi pembayaran kedaluwarsa/i.test(current.cancellationReason || '')
+          && paidWithinReservation;
+        const pendingCanSettle = current.status === 'PENDING' && (reservationStillActive || paidWithinReservation);
+        if (!pendingCanSettle && !recoverableSystemExpiry) {
+          return { transitioned: false, reversed: false, late: true, transactionStatus: current.status };
+        }
+
+        if (recoverableSystemExpiry && (current.listingTypeSnapshot ?? current.listing.type) === 'PRODUCT' && current.listing.stockLeft !== null) {
+          const reserved = await tx.listing.updateMany({
+            where: { id: current.listingId, stockLeft: { gte: current.quantity } },
+            data: { stockLeft: { decrement: current.quantity } },
+          });
+          if (!reserved.count) return { transitioned: false, reversed: false, late: true, transactionStatus: current.status };
+          if ((current.listingModeSnapshot ?? current.listing.mode) === 'ONE_OFF' && current.listing.status === 'ACTIVE' && current.listing.stockLeft - current.quantity === 0) {
+            await tx.listing.update({ where: { id: current.listingId }, data: { status: 'SOLD' } });
+          }
+        }
+
+        const changed = await tx.transaction.updateMany({
+          where: recoverableSystemExpiry
+            ? { id: current.id, status: 'CANCELLED', cancelledBy: 'SYSTEM', isEscrowHeld: false }
+            : { id: current.id, status: 'PENDING', isEscrowHeld: false },
+          data: {
+            status: 'PAID', isEscrowHeld: true, paidAt: paidAt ?? new Date(),
+            cancelledAt: null, cancelledBy: null, cancellationReason: null,
+          },
+        });
+        if (!changed.count) throw new ConflictException('Transaksi berubah saat pembayaran dikonfirmasi.');
+        await tx.payment.update({ where: { id: payment.id }, data: paymentData });
+        return { transitioned: true, reversed: false, late: false, transactionStatus: 'PAID' as const };
+      });
+
+      if (mapped === 'SETTLED' && result.late) {
+        stage = 'LATE_SETTLEMENT';
+        if (payment.refundRequestedAt) {
+          context.outcome = 'REFUND_ALREADY_REQUESTED';
+          this.logger.warn(JSON.stringify({ ...context, event: 'MIDTRANS_WEBHOOK_PROCESSED' }));
+          return { paymentId: payment.id, status: 'CANCELLED', transactionStatus: result.transactionStatus, action: 'REFUND_ALREADY_REQUESTED' };
+        }
+        const refundKey = `BMARKET-REFUND-${transaction.id.replace(/-/g, '').slice(0, 24)}`;
+        if (provider.transaction_status === 'capture') await this.midtrans.cancel(payment.orderId);
+        else await this.midtrans.refund(provider.transaction_id || payment.orderId, Number(payment.amount), 'Checkout BMarket sudah kedaluwarsa atau stok tidak lagi tersedia', refundKey);
+        await this.prisma.payment.update({ where: { id: payment.id }, data: {
+          status: 'CANCELLED', refundRequestedAt: new Date(), paymentType: provider.payment_type, providerStatus: provider.transaction_status,
+          providerTransactionId: provider.transaction_id, fraudStatus: provider.fraud_status,
+        } });
+        await this.expireReservation(transaction.id);
+        context.outcome = 'REFUNDED_OR_CANCELLED';
+        this.logger.warn(JSON.stringify({ ...context, event: 'MIDTRANS_WEBHOOK_PROCESSED' }));
+        return { paymentId: payment.id, status: 'CANCELLED', transactionStatus: result.transactionStatus, action: 'REFUNDED_OR_CANCELLED' };
+      }
+
+      if (result.transitioned) {
+        await this.notifications.create(transaction.sellerId, 'TRANSACTION', 'Pembayaran diterima', `${transaction.listingTitleSnapshot || transaction.listing.title} sudah dibayar melalui Midtrans. Dana aman di escrow.`, 'TRANSACTION', transaction.id).catch(() => undefined);
+      }
+      if (result.reversed) {
+        await this.notifications.createMany([transaction.buyerId, transaction.sellerId].map(userId => ({
+          userId, type: 'TRANSACTION' as const, title: 'Pembayaran dibatalkan Midtrans',
+          body: `${transaction.listingTitleSnapshot || transaction.listing.title} dibatalkan karena pembayaran dibalik oleh penyedia.`, entityType: 'TRANSACTION', entityId: transaction.id,
+        }))).catch(() => undefined);
+      }
+      if (mapped === 'EXPIRED') await this.expireReservation(transaction.id);
+      context.outcome = result.transitioned ? 'TRANSACTION_PAID' : 'IDEMPOTENT_OR_NO_TRANSITION';
+      context.transactionStatus = result.transactionStatus;
+      this.logger.log(JSON.stringify({ ...context, event: 'MIDTRANS_WEBHOOK_PROCESSED' }));
+      return { paymentId: payment.id, status: mapped, transactionStatus: result.transactionStatus };
+    } catch (error) {
+      this.logger.warn(JSON.stringify({
+        ...context,
+        event: 'MIDTRANS_WEBHOOK_REJECTED',
+        stage,
+        reason: this.rejectionReason(error),
+      }));
+      throw error;
     }
-    if (result.reversed) {
-      await this.notifications.createMany([transaction.buyerId, transaction.sellerId].map(userId => ({
-        userId, type: 'TRANSACTION' as const, title: 'Pembayaran dibatalkan Midtrans',
-        body: `${transaction.listingTitleSnapshot || transaction.listing.title} dibatalkan karena pembayaran dibalik oleh penyedia.`, entityType: 'TRANSACTION', entityId: transaction.id,
-      }))).catch(() => undefined);
-    }
-    if (mapped === 'EXPIRED') await this.expireReservation(transaction.id);
-    return { paymentId: payment.id, status: mapped, transactionStatus: result.transactionStatus };
   }
 }
