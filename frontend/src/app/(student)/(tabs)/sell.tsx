@@ -9,6 +9,8 @@ import { BackButton } from '@/components/back-button';
 import { endpoints, errorMessage } from '@/lib/api';
 import { colors, radius, shadowSoft, webTransition, makeStyles } from '@/constants/theme';
 import type { Listing, PreorderStatus, Transaction } from '@/types';
+import { ListingImageFallback } from '@/components/listing-image-fallback';
+import { UserAvatar } from '@/components/user-avatar';
 
 const statusLabel: Record<string, string> = {
   ACTIVE: 'Aktif',
@@ -248,7 +250,7 @@ export default function SellScreen() {
       const label = derivedLabel(item);
       return <Card key={item.id} style={[styles.item, !desktop && styles.itemMobile]}>
         <Pressable onPress={() => router.push({ pathname: '/(student)/listing/[id]', params: { id: item.id } })} style={({ pressed }) => [styles.media, !desktop && styles.mediaMobile, pressed && styles.pressed]}>
-          {item.images?.[0] ? <Image source={item.images[0]} style={styles.image} contentFit="cover" transition={140} cachePolicy="memory-disk" /> : <Ionicons name={item.type === 'SERVICE' ? 'construct-outline' : 'cube-outline'} size={30} color={colors.muted} />}
+          {item.images?.[0] ? <Image source={item.images[0]} style={styles.image} contentFit="cover" transition={140} cachePolicy="memory-disk" /> : <ListingImageFallback type={item.type} category={item.category} size={30} />}
           {(item.images?.length || 0) > 1 ? <View style={styles.imageCount}><Ionicons name="images-outline" size={11} color={colors.white} /><Text style={styles.imageCountText}>{item.images.length}</Text></View> : null}
         </Pressable>
 
@@ -304,7 +306,7 @@ export default function SellScreen() {
             {sellerTransactions.isLoading ? <Loader /> : !preorderOrders.length ? <View style={styles.ordersEmpty}><Ionicons name="receipt-outline" size={26} color={colors.muted} /><Text style={styles.ordersEmptyTitle}>Belum ada pesanan</Text><Text style={styles.ordersEmptyCopy}>Buyer yang ikut pre-order akan muncul di sini setelah checkout.</Text></View> : preorderOrders.map(order => {
               const status = ({ PENDING: 'Menunggu bayar', PAID: 'Sudah bayar', CONFIRMED: 'Diproses', COMPLETED: 'Selesai', CANCELLED: 'Dibatalkan' } as Record<string, string>)[order.status] || order.status;
               return <Pressable key={order.id} onPress={() => { setOrdersTarget(null); router.push({ pathname: '/(student)/transaction/[id]', params: { id: order.id } }); }} style={({ pressed }) => [styles.orderRow, pressed && styles.pressed]}>
-                <View style={styles.orderAvatar}><Text style={styles.orderAvatarText}>{order.buyer?.name?.[0]?.toUpperCase() || 'B'}</Text></View>
+                <UserAvatar name={order.buyer?.name} avatarUrl={order.buyer?.avatarUrl} style={styles.orderAvatar} textStyle={styles.orderAvatarText} />
                 <View style={styles.flex}><Text style={styles.orderBuyer}>{order.buyer?.name || 'Buyer BMarket'}</Text><Text style={styles.orderMeta}>{order.quantity} item · {dateLabel(order.createdAt)}</Text></View>
                 <View style={styles.orderEnd}><Text style={styles.orderAmount}>{money(order.totalPrice)}</Text><Text style={[styles.orderStatus, order.status === 'COMPLETED' && { color: colors.success }, order.status === 'CANCELLED' && { color: colors.danger }]}>{status}</Text></View>
                 <Ionicons name="chevron-forward" size={16} color={colors.muted} />

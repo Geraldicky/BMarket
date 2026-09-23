@@ -10,6 +10,7 @@ import { getStoredValue } from '@/lib/token-storage';
 import { colors, radius, shadowSoft, spacing, makeStyles } from '@/constants/theme';
 import { useAuth } from '@/store/auth';
 import type { ChatRoom, Message } from '@/types';
+import { UserAvatar } from '@/components/user-avatar';
 
 function messageTime(value: string) {
   return new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit' }).format(new Date(value));
@@ -40,7 +41,7 @@ function RoomItem({ room, currentUserId, active }: { room: ChatRoom; currentUser
       onPress={() => router.replace({ pathname: '/(student)/chat/[id]', params: { id: room.id, name: other.name || 'Chat' } })}
       style={({ pressed }) => [styles.roomRow, active && styles.roomRowActive, pressed && { opacity: .68 }]}
     >
-      <View style={styles.sidebarAvatar}><Text style={styles.sidebarAvatarText}>{other.name?.[0]?.toUpperCase() || '?'}</Text></View>
+      <UserAvatar name={other.name} avatarUrl={other.avatarUrl} style={styles.sidebarAvatar} textStyle={styles.sidebarAvatarText} />
       <View style={styles.sidebarRoomBody}>
         <View style={styles.sidebarNameRow}><Text numberOfLines={1} style={styles.sidebarName}>{other.name || 'Binusian'}</Text><Text style={styles.sidebarTime}>{roomTime(message?.createdAt)}</Text></View>
         <Text numberOfLines={1} style={[styles.sidebarPreview, room.unreadCount ? styles.sidebarPreviewUnread : undefined]}>{message?.content || 'Belum ada pesan'}</Text>
@@ -119,7 +120,7 @@ function ChatRoomContent({ id, transactionId, name, desktop }: ChatRoomContentPr
   const conversation = (
     <View style={[styles.conversation, desktop && styles.conversationDesktop]}>
       {desktop ? <View style={styles.chatHeader}>
-        <View style={styles.chatAvatar}><Text style={styles.chatAvatarText}>{otherName[0]?.toUpperCase() || '?'}</Text></View>
+        <UserAvatar name={otherName} avatarUrl={other?.avatarUrl} style={styles.chatAvatar} textStyle={styles.chatAvatarText} />
         <View style={styles.chatHeaderBody}><Text numberOfLines={1} style={styles.chatName}>{otherName}</Text><Text style={styles.chatStatus}>Percakapan BMarket · pesan otomatis terhapus setelah 7 hari</Text></View>
         {transaction.data ? <Pressable onPress={() => router.push({ pathname: '/(student)/transaction/[id]', params: { id: transaction.data!.id } })} style={styles.orderButton}><Ionicons name="receipt-outline" size={16} color={colors.primary} /><Text style={styles.orderButtonText}>Lihat pesanan</Text></Pressable> : null}
       </View> : null}

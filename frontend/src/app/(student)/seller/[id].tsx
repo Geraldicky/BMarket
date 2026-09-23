@@ -1,5 +1,4 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -9,6 +8,7 @@ import { Button, Card, date, Empty, ErrorState, FeedbackDialog, Loader, Screen }
 import { colors, makeStyles } from '@/constants/theme';
 import { endpoints, errorMessage } from '@/lib/api';
 import { useAuth } from '@/store/auth';
+import { UserAvatar } from '@/components/user-avatar';
 
 function Stars({ rating, size = 17 }: { rating: number; size?: number }) {
   const styles = useStyles();
@@ -62,9 +62,7 @@ export default function SellerProfileScreen() {
     <Pressable onPress={() => router.back()} style={styles.back}><Ionicons name="arrow-back" size={18} color={colors.primary} /><Text style={styles.backText}>Kembali</Text></Pressable>
 
     <Card style={[styles.hero, mobile && styles.heroMobile]}>
-      <View style={styles.avatar}>
-        {profile.avatarUrl ? <Image source={profile.avatarUrl} style={styles.avatarImage} contentFit="cover" /> : <Text style={styles.avatarText}>{profile.name?.[0]?.toUpperCase() || 'B'}</Text>}
-      </View>
+      <UserAvatar name={profile.name} avatarUrl={profile.avatarUrl} style={styles.avatar} imageStyle={styles.avatarImage} textStyle={styles.avatarText} />
       <View style={[styles.identity, mobile && styles.identityMobile]}>
         <View style={styles.nameRow}><Text style={styles.name}>{profile.name}</Text>{profile.isVerified ? <View style={styles.verified}><Ionicons name="checkmark-circle" size={15} color={colors.success} /><Text style={styles.verifiedText}>BINUSIAN TERVERIFIKASI</Text></View> : null}</View>
         <View style={styles.ratingRow}><Stars rating={profile.avgRating} /><Text style={styles.ratingValue}>{profile.totalReviews ? profile.avgRating.toFixed(1) : 'Belum ada rating'}</Text>{profile.totalReviews ? <Text style={styles.ratingCount}>({profile.totalReviews} review)</Text> : null}</View>
@@ -84,7 +82,7 @@ export default function SellerProfileScreen() {
     {!profile.listings.length ? <Empty icon="storefront-outline" title="Belum ada listing aktif" message="Seller ini belum memiliki listing yang sedang tersedia." /> : <View style={styles.grid}>{profile.listings.map(item => <ListingCard key={item.id} item={{ ...item, seller: { id: profile.id, name: profile.name, avatarUrl: profile.avatarUrl, isVerified: profile.isVerified } }} onPress={() => router.push({ pathname: '/(student)/listing/[id]', params: { id: item.id } })} style={{ width: columns === 1 ? '100%' : `${100 / columns - 1.4}%` }} />)}</View>}
 
     <View style={styles.sectionHeader}><View><Text style={styles.sectionTitle}>Review buyer</Text><Text style={styles.sectionCopy}>{profile.totalReviews ? `${profile.totalReviews} pengalaman transaksi selesai.` : 'Belum ada review untuk seller ini.'}</Text></View></View>
-    {!profile.reviews.length ? <Empty icon="star-outline" title="Belum ada review" message="Review akan muncul setelah buyer menyelesaikan transaksi dan memberikan rating." /> : <View style={styles.reviewList}>{profile.reviews.map(review => <Card key={review.id} style={styles.reviewCard}><View style={styles.reviewHead}><View style={styles.reviewerAvatar}><Text style={styles.reviewerInitial}>{review.reviewer?.name?.[0]?.toUpperCase() || 'B'}</Text></View><View style={styles.reviewIdentity}><Text style={styles.reviewerName}>{review.reviewer?.name || 'Binusian'}</Text><Text style={styles.reviewMeta}>{review.listingTitle || 'Transaksi BMarket'} · {date(review.createdAt)}</Text></View><Stars rating={review.rating} size={15} /></View>{review.comment ? <Text style={styles.reviewComment}>{review.comment}</Text> : <Text style={styles.reviewEmpty}>Buyer memberikan rating tanpa komentar.</Text>}</Card>)}</View>}
+    {!profile.reviews.length ? <Empty icon="star-outline" title="Belum ada review" message="Review akan muncul setelah buyer menyelesaikan transaksi dan memberikan rating." /> : <View style={styles.reviewList}>{profile.reviews.map(review => <Card key={review.id} style={styles.reviewCard}><View style={styles.reviewHead}><UserAvatar name={review.reviewer?.name} avatarUrl={review.reviewer?.avatarUrl} style={styles.reviewerAvatar} textStyle={styles.reviewerInitial} /><View style={styles.reviewIdentity}><Text style={styles.reviewerName}>{review.reviewer?.name || 'Binusian'}</Text><Text style={styles.reviewMeta}>{review.listingTitle || 'Transaksi BMarket'} · {date(review.createdAt)}</Text></View><Stars rating={review.rating} size={15} /></View>{review.comment ? <Text style={styles.reviewComment}>{review.comment}</Text> : <Text style={styles.reviewEmpty}>Buyer memberikan rating tanpa komentar.</Text>}</Card>)}</View>}
     <FeedbackDialog visible={Boolean(pendingAction)} tone={pendingAction === 'REPORT' || pendingAction === 'BLOCK' ? 'danger' : 'warning'} title={pendingAction === 'REPORT' ? 'Laporkan pengguna ini?' : pendingAction === 'UNBLOCK' ? 'Buka blokir pengguna?' : 'Blokir pengguna ini?'} message={pendingAction === 'REPORT' ? 'Laporan akan masuk ke antrean admin untuk diperiksa.' : pendingAction === 'UNBLOCK' ? 'Pengguna ini akan dapat kembali menghubungimu melalui chat BMarket.' : 'Pesan baru dari pengguna ini akan diblokir sampai kamu membuka blokir.'} primaryLabel={pendingAction === 'REPORT' ? 'Kirim laporan' : pendingAction === 'UNBLOCK' ? 'Buka blokir' : 'Blokir'} secondaryLabel="Batal" loading={toggleBlock.isPending || report.isPending} onClose={() => setPendingAction(null)} onSecondary={() => setPendingAction(null)} onPrimary={() => pendingAction === 'REPORT' ? report.mutate() : toggleBlock.mutate()} />
     <FeedbackDialog visible={Boolean(feedback)} tone={feedback?.tone || 'success'} title={feedback?.title || ''} message={feedback?.message || ''} onClose={() => setFeedback(null)} />
   </Screen>;

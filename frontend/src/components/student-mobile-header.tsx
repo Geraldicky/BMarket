@@ -7,6 +7,7 @@ import { endpoints } from '@/lib/api';
 import { useAuth } from '@/store/auth';
 import { colors, webTransition, makeStyles } from '@/constants/theme';
 import { BrandLogo } from '@/components/brand-logo';
+import { UserAvatar } from '@/components/user-avatar';
 
 /**
  * Mobile counterpart of StudentDesktopHeader, shared by every student page on small screens.
@@ -41,7 +42,7 @@ export function StudentMobileHeader({ back = false }: { back?: boolean }) {
             <Ionicons name={unread ? 'notifications' : 'notifications-outline'} size={19} color="#FFFFFF" />
             {unread ? <View style={styles.badge}><Text style={styles.badgeText}>{unread > 9 ? '9+' : unread}</Text></View> : null}
           </Pressable>
-          <Pressable accessibilityLabel="Profil" onPress={() => router.push('/(student)/(tabs)/profile')} style={({ pressed }) => [styles.avatar, pressed && styles.pressed]}><Text style={styles.avatarText}>{user?.name?.[0]?.toUpperCase() || 'B'}</Text></Pressable>
+          <Pressable accessibilityLabel="Profil" onPress={() => router.push('/(student)/(tabs)/profile')} style={({ pressed }) => [pressed && styles.pressed]}><UserAvatar name={user?.name} avatarUrl={user?.avatarUrl} style={styles.avatar} textStyle={styles.avatarText} /></Pressable>
         </View>
       </View>
     </View>

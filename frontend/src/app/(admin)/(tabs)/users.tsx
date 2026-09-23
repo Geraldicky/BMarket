@@ -6,6 +6,7 @@ import { AdminEmptyState, AdminStatusPill } from '@/components/admin-ui';
 import { Button, Card, ErrorState, FeedbackDialog, Field, Loader, Screen, Title } from '@/components/ui';
 import { colors, radius, makeStyles } from '@/constants/theme';
 import { endpoints, errorMessage } from '@/lib/api';
+import { UserAvatar } from '@/components/user-avatar';
 
 type TargetUser = { id: string; name: string; isActive: boolean } | null;
 type StatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
@@ -59,7 +60,7 @@ export default function UsersScreen() {
       </Card>
       {query.isLoading ? <Loader /> : query.isError ? <ErrorState message={errorMessage(query.error)} retry={() => query.refetch()} /> : !users.length ? <Card><AdminEmptyState title="Tidak ada pengguna" message="Data pengguna belum tersedia." /></Card> : !visible.length ? <Card><AdminEmptyState compact icon="search-outline" title="Pengguna tidak ditemukan" message="Coba ubah kata kunci atau filter status." /></Card> : <View style={styles.list}>{visible.map(user => <Card key={user.id} style={styles.card}>
         <View style={[styles.row, mobile && styles.rowMobile]}>
-          <View style={styles.avatar}><Text style={styles.avatarText}>{user.name?.[0]?.toUpperCase() || 'B'}</Text></View>
+          <UserAvatar name={user.name} avatarUrl={user.avatarUrl} style={styles.avatar} textStyle={styles.avatarText} />
           <View style={[styles.body, mobile && styles.bodyMobile]}><Text style={styles.name}>{user.name}</Text><Text style={styles.email}>{user.email}</Text><Text style={styles.nim}>NIM {user.studentId || '-'}</Text></View>
           <AdminStatusPill label={user.isActive ? 'Aktif' : 'Nonaktif'} tone={user.isActive ? 'success' : 'danger'} />
           <Button title={user.isActive ? 'Nonaktifkan' : 'Aktifkan'} variant={user.isActive ? 'danger' : 'secondary'} loading={workingId === user.id} onPress={() => setTarget({ id: user.id, name: user.name, isActive: Boolean(user.isActive) })} style={[styles.action, mobile && styles.actionMobile]} />

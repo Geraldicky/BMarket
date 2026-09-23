@@ -7,6 +7,8 @@ import type { Listing } from '@/types';
 import { money } from './ui';
 import { useAuth } from '@/store/auth';
 import { CATEGORY_LABELS, CATEGORY_METADATA, CONDITION_LABELS } from '@/lib/domain-metadata';
+import { ListingImageFallback } from '@/components/listing-image-fallback';
+import { UserAvatar } from '@/components/user-avatar';
 
 // Category accents for the no-photo placeholder; drawn at low opacity so they suit light and dark themes.
 const categoryMeta = (category: string) => CATEGORY_METADATA[category as keyof typeof CATEGORY_METADATA] || CATEGORY_METADATA.OTHER;
@@ -65,7 +67,7 @@ export function ListingCard({ item, onPress, style, compact = false, saved = fal
             <Image source={cover} style={[styles.image, compact && styles.imageCompact, storefront && styles.imageStorefront, mobile && styles.imageMobile]} contentFit="cover" transition={180} cachePolicy="memory-disk" onError={() => setFailedUri(cover!)} />
           ) : (
             <View style={[styles.image, compact && styles.imageCompact, storefront && styles.imageStorefront, mobile && styles.imageMobile, styles.placeholder, { backgroundColor: `${categoryMeta(item.category).color}1F` }]}>
-              <View style={styles.placeholderRing}><Ionicons name={categoryMeta(item.category).icon} size={compact ? 28 : 36} color={colors.muted} /></View>
+              <View style={styles.placeholderRing}><ListingImageFallback type={item.type} category={item.category} size={compact ? 28 : 36} /></View>
             </View>
           )}
 
@@ -82,7 +84,7 @@ export function ListingCard({ item, onPress, style, compact = false, saved = fal
             {stockCaption ? <Text numberOfLines={1} style={styles.meta}>{stockCaption}</Text> : null}
           </View>
           <View style={styles.sellerRow}>
-            <View style={styles.avatar}><Text style={styles.avatarText}>{item.seller?.name?.[0]?.toUpperCase() || 'B'}</Text></View>
+            <UserAvatar name={item.seller?.name} avatarUrl={item.seller?.avatarUrl} style={styles.avatar} textStyle={styles.avatarText} />
             <Text numberOfLines={1} style={styles.seller}>{item.seller?.name || 'Binusian'}</Text>
             <Ionicons name="checkmark-circle" size={13} color={colors.primary} />
           </View>

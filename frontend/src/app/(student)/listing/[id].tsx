@@ -9,6 +9,8 @@ import { colors, radius, makeStyles } from '@/constants/theme';
 import { endpoints, errorMessage } from '@/lib/api';
 import { useAuth } from '@/store/auth';
 import { CATEGORY_LABELS, CONDITION_LABELS, LISTING_MODE_LABELS } from '@/lib/domain-metadata';
+import { ListingImageFallback } from '@/components/listing-image-fallback';
+import { UserAvatar } from '@/components/user-avatar';
 
 const categoryLabels = CATEGORY_LABELS;
 const conditionLabels = CONDITION_LABELS;
@@ -165,7 +167,7 @@ export default function ListingDetailScreen() {
               />
             ) : (
               <View style={styles.placeholder}>
-                <View style={styles.placeholderIcon}><Ionicons name={item.type === 'SERVICE' ? 'construct-outline' : 'cube-outline'} size={52} color={colors.muted} /></View>
+                <View style={styles.placeholderIcon}><ListingImageFallback type={item.type} category={item.category} size={52} /></View>
                 <Text style={styles.placeholderText}>{imageFailed ? 'Foto tidak dapat dimuat' : 'Foto belum tersedia'}</Text>
               </View>
             )}
@@ -232,7 +234,7 @@ export default function ListingDetailScreen() {
           ) : null}
 
           <Pressable onPress={() => router.push({ pathname: '/(student)/seller/[id]', params: { id: item.sellerId } })} style={styles.seller}>
-            <View style={styles.avatar}><Text style={styles.avatarText}>{item.seller?.name?.[0]?.toUpperCase() || 'B'}</Text></View>
+            <UserAvatar name={item.seller?.name} avatarUrl={item.seller?.avatarUrl} style={styles.avatar} textStyle={styles.avatarText} />
             <View style={styles.sellerBody}>
               <Text style={styles.sellerEyebrow}>DIJUAL OLEH</Text>
               <Text style={styles.sellerName}>{item.seller?.name || 'Binusian'}</Text>
@@ -292,7 +294,7 @@ export default function ListingDetailScreen() {
             <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent} showsVerticalScrollIndicator={false}>
             <View style={styles.checkoutProduct}>
               <View style={styles.checkoutMedia}>
-                {item.images?.[0] ? <Image source={item.images[0]} style={styles.checkoutImage} contentFit="cover" /> : <Ionicons name={item.type === 'SERVICE' ? 'construct-outline' : 'cube-outline'} size={28} color={colors.primary} />}
+                {item.images?.[0] ? <Image source={item.images[0]} style={styles.checkoutImage} contentFit="cover" /> : <ListingImageFallback type={item.type} category={item.category} size={28} color={colors.primary} />}
               </View>
               <View style={styles.checkoutProductBody}><Text numberOfLines={2} style={styles.checkoutTitle}>{item.title}</Text><Text style={styles.checkoutSeller}>Dijual oleh {item.seller?.name || 'Binusian'}</Text><Text style={styles.checkoutPrice}>{money(item.price)}</Text></View>
             </View>

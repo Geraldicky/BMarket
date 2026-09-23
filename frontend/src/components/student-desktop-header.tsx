@@ -8,6 +8,7 @@ import { FeedbackDialog, money } from '@/components/ui';
 import { useAuth } from '@/store/auth';
 import { colors, webTransition, makeStyles } from '@/constants/theme';
 import { BrandLogo } from '@/components/brand-logo';
+import { UserAvatar } from '@/components/user-avatar';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -98,7 +99,7 @@ export function StudentDesktopHeader() {
               onPress={() => setProfileOpen(open => !open)}
               style={({ pressed }) => [styles.profile, profileOpen && styles.profileActive, pressed && styles.profilePressed]}
             >
-              <View style={styles.avatar}><Text style={styles.avatarText}>{user?.name?.[0]?.toUpperCase() || 'B'}</Text></View>
+              <UserAvatar name={user?.name} avatarUrl={user?.avatarUrl} style={styles.avatar} textStyle={styles.avatarText} />
               {!compactDesktop ? <View style={styles.profileCopy}><Text numberOfLines={1} style={styles.name}>{user?.name || 'Binusian'}</Text><Text style={styles.verified}>Terverifikasi</Text></View> : null}
               <Ionicons name={profileOpen ? 'chevron-up' : 'chevron-down'} size={13} color="#C7D7EA" />
             </Pressable>
@@ -106,7 +107,7 @@ export function StudentDesktopHeader() {
             {profileOpen ? (
               <View style={styles.profileMenu}>
                 <View style={styles.menuIdentity}>
-                  <View style={styles.menuAvatar}><Text style={styles.menuAvatarText}>{user?.name?.[0]?.toUpperCase() || 'B'}</Text></View>
+                  <UserAvatar name={user?.name} avatarUrl={user?.avatarUrl} style={styles.menuAvatar} textStyle={styles.menuAvatarText} />
                   <View style={styles.menuIdentityCopy}>
                     <View style={styles.menuNameRow}><Text numberOfLines={1} style={styles.menuName}>{user?.name || 'Binusian'}</Text></View>
                     <Text numberOfLines={1} style={styles.menuEmail}>{user?.email || 'Akun BINUS terverifikasi'}</Text>

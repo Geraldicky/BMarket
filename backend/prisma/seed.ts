@@ -3,6 +3,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { demoImageJson } from './demo-assets';
 
 const prisma = new PrismaClient();
 
@@ -62,7 +63,7 @@ async function main(): Promise<void> {
       condition: 'GOOD',
       status: 'ACTIVE',
       sellerId: student1.id,
-      images: JSON.stringify(['https://placehold.co/1200x900/png?text=Asus+VivoBook+14']),
+      images: demoImageJson('Asus VivoBook 14'),
       stock: 3,
       stockLeft: 3,
     },
@@ -77,7 +78,7 @@ async function main(): Promise<void> {
       type: 'SERVICE',
       status: 'ACTIVE',
       sellerId: student1.id,
-      images: JSON.stringify(['https://placehold.co/1200x900/png?text=Jasa+Edit+Video']),
+      images: demoImageJson('Jasa Edit Video'),
       // Jasa tidak punya stock
     },
   });
@@ -92,7 +93,7 @@ async function main(): Promise<void> {
       condition: 'LIKE_NEW',
       status: 'ACTIVE',
       sellerId: student2.id,
-      images: JSON.stringify(['https://placehold.co/1200x900/png?text=Buku+Algoritma']),
+      images: demoImageJson('Buku Algoritma'),
       stock: 5,
       stockLeft: 5,
     },
@@ -108,7 +109,7 @@ async function main(): Promise<void> {
       condition: 'LIKE_NEW',
       status: 'ACTIVE',
       sellerId: student2.id,
-      images: JSON.stringify(['https://placehold.co/1200x900/png?text=Tas+Kuliah']),
+      images: demoImageJson('Tas Kuliah'),
       stock: 2,
       stockLeft: 2,
     },

@@ -4,18 +4,18 @@
     "slug": "bmarket",
     "version": "2.0.0",
     "orientation": "portrait",
-    "icon": "./assets/branding/logo.png",
+    "icon": "./assets/branding/app-icon-platform.png",
     "scheme": "bmarket",
     "userInterfaceStyle": "light",
     "ios": {
-      "icon": "./assets/branding/logo.png",
+      "icon": "./assets/branding/app-icon-platform.png",
       "bundleIdentifier": "id.ac.binus.bmarket",
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0057B8",
-        "foregroundImage": "./assets/branding/logo.png"
+        "backgroundColor": "#0B57B7",
+        "foregroundImage": "./assets/branding/app-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": true,
       "package": "id.ac.binus.bmarket",
@@ -23,7 +23,7 @@
     },
     "web": {
       "output": "single",
-      "favicon": "./assets/branding/logo.png"
+      "favicon": "./assets/branding/app-icon.png"
     },
     "plugins": [
       "expo-router",

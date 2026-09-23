@@ -15,6 +15,8 @@ import { useAuth } from '@/store/auth';
 import type { DisputeReason, Transaction, TransactionDeliverable, TransactionStatus } from '@/types';
 import { DISPUTE_REASON_OPTIONS } from '@/lib/domain-metadata';
 import { PAYMENT_POLL_INTERVAL_MS } from '@/lib/runtime-config';
+import { ListingImageFallback } from '@/components/listing-image-fallback';
+import { UserAvatar } from '@/components/user-avatar';
 
 const DELIVERABLE_MAX_BYTES = 20 * 1024 * 1024;
 const DELIVERABLE_MAX_FILES = 5;
@@ -368,7 +370,7 @@ export default function TransactionDetailScreen() {
           <Card style={styles.orderCard}>
             <Text style={styles.cardTitle}>Ringkasan pesanan</Text>
             <View style={[styles.productRow, mobile && styles.productRowMobile]}>
-              <View style={styles.productMedia}>{transaction.listing.images?.[0] ? <Image source={transaction.listing.images[0]} style={styles.productImage} contentFit="cover" transition={140} cachePolicy="memory-disk" /> : <Ionicons name={transaction.listing.type === 'SERVICE' ? 'construct-outline' : 'cube-outline'} size={34} color={colors.primary} />}</View>
+              <View style={styles.productMedia}>{transaction.listing.images?.[0] ? <Image source={transaction.listing.images[0]} style={styles.productImage} contentFit="cover" transition={140} cachePolicy="memory-disk" /> : <ListingImageFallback type={transaction.listing.type} size={34} color={colors.primary} />}</View>
               <View style={styles.productBody}><Text style={styles.productType}>{transaction.listing.type === 'SERVICE' ? 'JASA' : 'BARANG'}</Text><Text style={styles.productTitle}>{transaction.listing.title}</Text><Text style={styles.productMeta}>{money(transaction.price)} × {transaction.quantity}</Text></View>
               <Text style={styles.productTotal}>{money(transaction.totalPrice)}</Text>
             </View>
@@ -443,7 +445,7 @@ export default function TransactionDetailScreen() {
 
           <Card style={styles.personCard}>
             <Text style={styles.cardEyebrow}>LAWAN TRANSAKSI</Text><Text style={styles.cardTitle}>{buyer ? 'Informasi seller' : 'Informasi buyer'}</Text>
-            <Pressable disabled={!counterpart.id} onPress={() => counterpart.id && router.push({ pathname: '/(student)/seller/[id]', params: { id: counterpart.id } })} style={styles.personRow}><View style={styles.avatar}><Text style={styles.avatarText}>{counterpart.name?.[0]?.toUpperCase() || 'B'}</Text></View><View style={styles.flex}><Text style={styles.personName}>{counterpart.name || 'Binusian'}</Text><Text style={styles.personEmail}>{counterpart.email || 'Akun BINUS terverifikasi'}</Text><Text style={styles.personLink}>Lihat profil publik</Text></View><Ionicons name="chevron-forward" size={18} color={colors.muted} /></Pressable>
+            <Pressable disabled={!counterpart.id} onPress={() => counterpart.id && router.push({ pathname: '/(student)/seller/[id]', params: { id: counterpart.id } })} style={styles.personRow}><UserAvatar name={counterpart.name} avatarUrl={counterpart.avatarUrl} style={styles.avatar} textStyle={styles.avatarText} /><View style={styles.flex}><Text style={styles.personName}>{counterpart.name || 'Binusian'}</Text><Text style={styles.personEmail}>{counterpart.email || 'Akun BINUS terverifikasi'}</Text><Text style={styles.personLink}>Lihat profil publik</Text></View><Ionicons name="chevron-forward" size={18} color={colors.muted} /></Pressable>
             <Button title="Buka chat" variant="secondary" icon="chatbubble-outline" onPress={chat} />
           </Card>
 

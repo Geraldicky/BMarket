@@ -8,6 +8,7 @@ import { BackButton } from '@/components/back-button';
 import { endpoints, errorMessage } from '@/lib/api';
 import { colors, makeStyles, useThemeStore, type ThemeMode } from '@/constants/theme';
 import { useAuth } from '@/store/auth';
+import { UserAvatar } from '@/components/user-avatar';
 
 type Feedback = { tone: 'success' | 'warning' | 'danger'; title: string; message: string } | null;
 
@@ -110,13 +111,11 @@ export default function ProfileScreen() {
     }
   };
 
-  const initials = user?.name?.split(' ').map(part => part[0]).join('').slice(0, 2).toUpperCase() || 'B';
-
   return <Screen>
     <BackButton />
     <Title eyebrow="PUSAT AKUN" subtitle="Kelola identitas, saldo, dan keamanan akun BMarket.">Profil</Title>
     <View style={[styles.hero, mobile && styles.heroMobile]}>
-      <View style={[styles.avatar, mobile && styles.avatarMobile]}><Text style={styles.initial}>{initials}</Text></View>
+      <UserAvatar name={user?.name} avatarUrl={user?.avatarUrl} style={[styles.avatar, mobile && styles.avatarMobile]} textStyle={styles.initial} />
       <View style={[styles.identity, mobile && styles.identityMobile]}>
         <View style={styles.nameRow}><Text style={[styles.name, mobile && styles.nameMobile]}>{user?.name || 'Binusian'}</Text><View style={styles.verified}><Ionicons name="checkmark-circle" size={14} color={colors.success} /><Text style={styles.verifiedText}>Terverifikasi</Text></View></View>
         <Text style={styles.email}>{user?.email || ''}</Text>

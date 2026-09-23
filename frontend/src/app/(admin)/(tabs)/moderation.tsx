@@ -7,6 +7,7 @@ import { Button, Card, date, ErrorState, FeedbackDialog, Field, Loader, money, S
 import { endpoints, errorMessage } from '@/lib/api';
 import { colors, radius, makeStyles } from '@/constants/theme';
 import type { Complaint } from '@/types';
+import { ListingImageFallback } from '@/components/listing-image-fallback';
 
 export default function ModerationScreen() {
   const styles = useStyles();
@@ -53,7 +54,7 @@ export default function ModerationScreen() {
             return <View key={report.id} style={styles.reportCard}>
               <View style={styles.reportHeader}><AdminStatusPill label={report.status === 'OPEN' ? 'Laporan baru' : 'Sedang ditinjau'} tone={report.status === 'OPEN' ? 'danger' : 'warning'} /><Text style={styles.date}>{date(report.createdAt)}</Text></View>
               <View style={[styles.listingRow, mobile && styles.listingRowMobile]}>
-                <View style={styles.media}>{listing?.images?.[0] ? <Image source={{ uri: listing.images[0] }} style={styles.image} resizeMode="cover" /> : <Ionicons name="cube-outline" size={28} color={colors.muted} />}</View>
+                <View style={styles.media}>{listing?.images?.[0] ? <Image source={{ uri: listing.images[0] }} style={styles.image} resizeMode="cover" /> : <ListingImageFallback type={listing?.type} category={listing?.category} size={28} />}</View>
                 <View style={[styles.listingBody, mobile && styles.listingBodyMobile]}><Text style={styles.listingLabel}>LISTING DILAPORKAN</Text><Text numberOfLines={2} style={styles.listingTitle}>{listing?.title || 'Listing sudah tidak tersedia'}</Text>{listing ? <Text style={styles.listingMeta}>{money(listing.price)} · {listing.type === 'SERVICE' ? 'Jasa' : 'Barang'} · {listing.seller?.name || 'Seller'}</Text> : null}</View>
                 {listing ? <AdminStatusPill label={listing.status} tone={listing.status === 'ACTIVE' ? 'success' : 'danger'} /> : null}
               </View>

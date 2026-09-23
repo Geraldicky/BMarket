@@ -8,6 +8,8 @@ import { Button, Card, date, ErrorState, FeedbackDialog, Field, Loader, money, S
 import { colors, radius, makeStyles } from '@/constants/theme';
 import { endpoints, errorMessage } from '@/lib/api';
 import type { Listing, ListingMode, ListingStatus } from '@/types';
+import { ListingImageFallback } from '@/components/listing-image-fallback';
+import { UserAvatar } from '@/components/user-avatar';
 
 type StatusFilter = 'ALL' | ListingStatus;
 type ModeFilter = 'ALL' | ListingMode;
@@ -196,13 +198,13 @@ export default function AdminProductsScreen() {
               <Card style={styles.listingCard}>
               <View style={[styles.listingRow, !desktop && styles.listingRowMobile]}>
                 <View style={[styles.media, mobile && styles.mediaMobile]}>
-                  {listing.images?.[0] ? <Image source={{ uri: listing.images[0] }} style={styles.image} resizeMode="cover" /> : <Ionicons name="image-outline" size={27} color={colors.muted} />}
+                  {listing.images?.[0] ? <Image source={{ uri: listing.images[0] }} style={styles.image} resizeMode="cover" /> : <ListingImageFallback type={listing.type} category={listing.category} size={27} />}
                 </View>
                 <View style={[styles.listingBody, mobile && styles.listingBodyMobile]}>
                   <View style={styles.titleLine}><Text numberOfLines={2} style={styles.listingTitle}>{listing.title}</Text><AdminStatusPill label={statusLabel[listing.status]} tone={statusTone(listing.status)} /></View>
                   <Text style={styles.price}>{money(listing.price)}</Text>
                   <Text style={styles.meta}>{modeLabel[listing.mode]} · {listing.category} · dibuat {date(listing.createdAt)}</Text>
-                  <View style={styles.sellerRow}><View style={styles.sellerAvatar}><Text style={styles.sellerInitial}>{listing.seller?.name?.[0]?.toUpperCase() || 'B'}</Text></View><View><Text style={styles.sellerName}>{listing.seller?.name || 'Seller BMarket'}</Text><Text style={styles.sellerMeta}>{listing.seller?.email || 'Email tidak tersedia'}{listing.seller?.studentId ? ` · NIM ${listing.seller.studentId}` : ''}</Text></View></View>
+                  <View style={styles.sellerRow}><UserAvatar name={listing.seller?.name} avatarUrl={listing.seller?.avatarUrl} style={styles.sellerAvatar} textStyle={styles.sellerInitial} /><View><Text style={styles.sellerName}>{listing.seller?.name || 'Seller BMarket'}</Text><Text style={styles.sellerMeta}>{listing.seller?.email || 'Email tidak tersedia'}{listing.seller?.studentId ? ` · NIM ${listing.seller.studentId}` : ''}</Text></View></View>
                 </View>
                 <View style={[styles.side, mobile && styles.sideMobile]}>
                   {reportCount > 0 ? <View style={styles.reportBadge}><Ionicons name="flag-outline" size={15} color={colors.danger} /><Text style={styles.reportBadgeText}>{reportCount} laporan terbuka</Text></View> : <View style={styles.cleanBadge}><Ionicons name="shield-checkmark-outline" size={15} color={colors.success} /><Text style={styles.cleanBadgeText}>Belum ada laporan</Text></View>}
@@ -257,7 +259,7 @@ export default function AdminProductsScreen() {
                   {detail.images?.[0] ? <>
                     <Image source={{ uri: detail.images[0] }} style={styles.image} resizeMode="cover" />
                     <View style={styles.zoomBadge}><Ionicons name="search-outline" size={15} color={colors.white} /></View>
-                  </> : <Ionicons name="image-outline" size={34} color={colors.muted} />}
+                  </> : <ListingImageFallback type={detail.type} category={detail.category} size={34} />}
                 </Pressable>
                 <View style={styles.heroInfo}>
                   <Text style={[styles.heroPrice, mobile && styles.heroPriceMobile]}>{money(detail.price)}</Text>

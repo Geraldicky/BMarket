@@ -1,9 +1,10 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { demoImageJson } from './demo-assets';
 
 const prisma = new PrismaClient();
 const password = 'demo12345';
-const image = (label: string) => JSON.stringify([`https://placehold.co/1200x900/png?text=${encodeURIComponent(label)}`]);
+const image = demoImageJson;
 
 const day = 24 * 60 * 60 * 1000;
 const now = new Date();

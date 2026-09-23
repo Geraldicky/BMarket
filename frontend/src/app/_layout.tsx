@@ -6,6 +6,7 @@ import { useFonts } from 'expo-font';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuth } from '@/store/auth';
 import { palettes, useThemeStore } from '@/constants/theme';
+import { FontAssets } from '@/lib/assets';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -22,12 +23,7 @@ function NavigationGate() {
   const { user, hydrated, bootstrap } = useAuth();
   const scheme = useThemeStore(state => state.scheme);
   const hydrateTheme = useThemeStore(state => state.hydrate);
-  const [fontsLoaded] = useFonts({
-    PoppinsRegular: require('../../assets/fonts/Poppins-Regular.ttf'),
-    PoppinsMedium: require('../../assets/fonts/Poppins-Medium.ttf'),
-    PoppinsSemiBold: require('../../assets/fonts/Poppins-SemiBold.ttf'),
-    PoppinsBold: require('../../assets/fonts/Poppins-Bold.ttf'),
-  });
+  const [fontsLoaded] = useFonts(FontAssets);
   const group = segments[0];
   const palette = palettes[scheme];
 

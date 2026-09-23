@@ -11,6 +11,7 @@ import { getStoredValue } from '@/lib/token-storage';
 import { colors, radius, shadowSoft, makeStyles } from '@/constants/theme';
 import { useAuth } from '@/store/auth';
 import type { ChatRoom, Message } from '@/types';
+import { UserAvatar } from '@/components/user-avatar';
 
 function messageTime(value?: string) {
   if (!value) return '';
@@ -41,7 +42,7 @@ function RoomRow({ room, currentUserId, active = false, onPress }: { room: ChatR
       onPress={onPress ?? (() => router.push({ pathname: '/(student)/chat/[id]', params: { id: room.id, name: other.name || 'Chat' } }))}
       style={({ pressed }) => [styles.roomRow, active && styles.roomRowActive, pressed && styles.pressed]}
     >
-      <View style={styles.avatar}><Text style={styles.avatarText}>{other.name?.[0]?.toUpperCase() || '?'}</Text></View>
+      <UserAvatar name={other.name} avatarUrl={other.avatarUrl} style={styles.avatar} textStyle={styles.avatarText} />
       <View style={styles.roomBody}>
         <View style={styles.nameRow}><Text numberOfLines={1} style={styles.name}>{other.name || 'Binusian'}</Text><Text style={styles.time}>{messageTime(message?.createdAt)}</Text></View>
         <Text numberOfLines={1} style={[styles.preview, room.unreadCount ? styles.previewUnread : undefined]}>{message?.content || 'Belum ada pesan'}</Text>
@@ -108,7 +109,7 @@ function DesktopConversation({ roomId, transactionId, rooms, currentUserId }: { 
   return (
     <View style={styles.conversation}>
       <View style={styles.chatHeader}>
-        <View style={styles.chatAvatar}><Text style={styles.chatAvatarText}>{otherName[0]?.toUpperCase() || '?'}</Text></View>
+        <UserAvatar name={otherName} avatarUrl={other?.avatarUrl} style={styles.chatAvatar} textStyle={styles.chatAvatarText} />
         <View style={styles.chatHeaderBody}>
           <Text numberOfLines={1} style={styles.chatName}>{otherName}</Text>
           <Text style={styles.chatStatus}>Percakapan BMarket · pesan otomatis terhapus setelah 7 hari</Text>

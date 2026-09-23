@@ -8,6 +8,7 @@ import { FeedbackDialog } from '@/components/ui';
 import { colors, shadowSoft, webTransition, makeStyles, useColorScheme } from '@/constants/theme';
 import { useAuth } from '@/store/auth';
 import { BrandLogo } from '@/components/brand-logo';
+import { UserAvatar } from '@/components/user-avatar';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -68,7 +69,6 @@ export default function AdminTabs() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const current = navItems.find(item => item.segment && segments.includes(item.segment))?.segment;
-  const initial = user?.name?.trim()?.[0]?.toUpperCase() || 'A';
 
   const progress = useSharedValue(desktop ? 1 : 0);
   useEffect(() => {
@@ -117,7 +117,7 @@ export default function AdminTabs() {
           {!mobile ? <View style={styles.consoleBadge}><Ionicons name="shield-checkmark" size={15} color={colors.white} /><Text style={styles.consoleText}>Admin Console</Text></View> : null}
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Profil akun" onPress={() => setProfileOpen(true)} style={({ pressed }) => [styles.profile, pressed && { opacity: .75 }]}>
-          <View style={styles.avatar}><Text style={styles.avatarText}>{initial}</Text></View>
+          <UserAvatar name={user?.name} avatarUrl={user?.avatarUrl} style={styles.avatar} textStyle={styles.avatarText} />
           {!mobile ? <View><Text style={styles.profileName}>{user?.name || 'Admin BMarket'}</Text><Text style={styles.profileRole}>Administrator</Text></View> : null}
           <Ionicons name={profileOpen ? 'chevron-up' : 'chevron-down'} size={16} color="rgba(255,255,255,.85)" />
         </Pressable>
@@ -126,7 +126,7 @@ export default function AdminTabs() {
         <Pressable style={styles.menuBackdrop} onPress={() => setProfileOpen(false)}>
           <Pressable onPress={() => {}} style={[styles.menu, { top: (mobile ? 60 : 68) + insets.top + 6, right: mobile ? 12 : 20 }]}>
             <View style={styles.menuAccount}>
-              <View style={styles.menuAvatar}><Text style={styles.menuAvatarText}>{initial}</Text></View>
+              <UserAvatar name={user?.name} avatarUrl={user?.avatarUrl} style={styles.menuAvatar} textStyle={styles.menuAvatarText} />
               <View style={styles.menuCopy}>
                 <Text numberOfLines={1} style={styles.menuName}>{user?.name || 'Admin BMarket'}</Text>
                 <Text numberOfLines={1} style={styles.menuEmail}>{user?.email || 'Akun administrator'}</Text>

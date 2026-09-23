@@ -10,6 +10,7 @@ import { colors, radius, makeStyles } from '@/constants/theme';
 import { endpoints, errorMessage } from '@/lib/api';
 import { useAuth } from '@/store/auth';
 import type { Transaction, TransactionStatus } from '@/types';
+import { ListingImageFallback } from '@/components/listing-image-fallback';
 
 type RoleFilter = 'ALL' | 'BUYER' | 'SELLER';
 type StatusFilter = 'ALL' | 'ACTION' | 'PROCESS' | 'COMPLETED' | 'CANCELLED';
@@ -155,7 +156,7 @@ export default function TransactionsScreen() {
               <Pressable key={transaction.id} onPress={() => router.push({ pathname: '/(student)/transaction/[id]', params: { id: transaction.id } })} style={({ pressed }) => [pressed && styles.pressed]}>
                 <Card style={[styles.item, mobile && styles.itemMobile, action && styles.itemAction]}>
                   <View style={[styles.product, compactMobile && styles.productCompact]}>
-                    {transaction.listing.images?.[0] ? <Image source={transaction.listing.images[0]} style={styles.productImage} contentFit="cover" transition={140} cachePolicy="memory-disk" /> : <Ionicons name={transaction.listing.type === 'SERVICE' ? 'construct-outline' : 'cube-outline'} size={26} color={colors.primary} />}
+                    {transaction.listing.images?.[0] ? <Image source={transaction.listing.images[0]} style={styles.productImage} contentFit="cover" transition={140} cachePolicy="memory-disk" /> : <ListingImageFallback type={transaction.listing.type} size={26} color={colors.primary} />}
                   </View>
                   <View style={[styles.itemBody, mobile && styles.itemBodyMobile]}>
                     <View style={styles.itemEyebrowRow}>
